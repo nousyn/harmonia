@@ -120,6 +120,54 @@ export interface DocReviewState {
     comment?: string;
 }
 
+// ─── Session & Dispatch Tracking (<data_dir>/<project_name>/sessions.json, dispatches.json) ───
+
+export type SessionStatus = 'active' | 'idle' | 'closed' | 'lost';
+
+export interface SessionRecord {
+    /** Harmonia-generated session ID, e.g. "ses-001" */
+    id: string;
+    /** Role this session belongs to */
+    role: string;
+    /** Actual session ID from the host agent (e.g. OpenCode session ID) */
+    agentSessionId?: string;
+    /** Agent type used for this session */
+    agentType?: AgentType;
+    /** Current session status */
+    status: SessionStatus;
+    /** PM-defined label, e.g. "dev-auth-module" */
+    label?: string;
+    /** When this session was created */
+    createdAt: string;
+    /** When this session was last active */
+    lastActiveAt: string;
+}
+
+export type DispatchStatus = 'dispatched' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface DispatchRecord {
+    /** Auto-incremented dispatch ID, e.g. "dispatch-001" */
+    id: string;
+    /** Role dispatched */
+    role: string;
+    /** Associated session ID (set when agent is launched) */
+    sessionId?: string;
+    /** Task description for the dispatched role */
+    taskBrief: string;
+    /** Current dispatch status */
+    status: DispatchStatus;
+    /** Expected output doc IDs from this dispatch */
+    expectedOutputs: string[];
+    /** When this dispatch was created */
+    createdAt: string;
+    /** Last updated timestamp */
+    updatedAt: string;
+    /** When this dispatch was completed */
+    completedAt?: string;
+    /** Failure reason or notes */
+    note?: string;
+}
+
 // ─── Override Configuration ───
 
 export type OverrideToolType = 'skill' | 'mcp';

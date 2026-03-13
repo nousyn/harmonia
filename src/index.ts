@@ -27,6 +27,7 @@ import { registerGetProjectStatus } from './tools/get-project-status.js';
 import { registerApproveDoc } from './tools/approve-doc.js';
 import { registerOverrideTools } from './tools/override-tools.js';
 import { registerDispatchRole } from './tools/dispatch-role.js';
+import { registerReportDispatch } from './tools/report-dispatch.js';
 import { registerSetupProject } from './tools/setup-project.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +50,7 @@ registerGetProjectStatus(server, WORKFLOWS_DIR);
 registerApproveDoc(server);
 registerOverrideTools(server);
 registerDispatchRole(server, WORKFLOWS_DIR);
+registerReportDispatch(server);
 registerSetupProject(server);
 
 // Connect via stdio

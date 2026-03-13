@@ -3,7 +3,11 @@
  *
  * Prepare all data needed to hand off a task to a team member role.
  * Returns: role prompt (with overrides injected), frontmatter config,
- * input documents, and task brief.
+ * input documents, task brief, and dispatch tracking info.
+ *
+ * Automatically:
+ * - Creates a dispatch record for tracking
+ * - Searches for reusable idle sessions and provides guidance
  *
  * This tool does NOT launch agents — it only prepares the data.
  * The host agent (PM) decides how to pass this to the team member.
@@ -14,8 +18,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loadWorkflow } from '../core/workflow.js';
 import { readState } from '../core/state.js';
 import { readDoc } from '../core/docs.js';
-import { getMergedOverrides, resolveCapabilityOverride, resolveRoleConfig } from '../core/overrides.js';
-import type { CapabilityOverride, OverrideConfig, PhaseDefinition, RoleDefinition } from '../core/types.js';
+import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
+import { createDispatch, findIdleSession } from '../core/dispatch.js';
+import type { CapabilityOverride, OverrideConfig, PhaseDefinition, WorkflowDefinition } from '../core/types.js';
 
 /**
  * Build override instructions to inject into the role prompt.
@@ -68,10 +73,30 @@ function findCurrentPhase(phases: PhaseDefinition[], currentPhaseId: string): Ph
     return phases.find((p) => p.id === currentPhaseId);
 }
 
+/**
+ * Resolve expected output doc IDs for a dispatch.
+ * Uses the current phase's outputs, filtering out external and scale-skipped docs.
+ */
+function resolveExpectedOutputs(
+    currentPhase: PhaseDefinition | undefined,
+    workflowDef: WorkflowDefinition,
+    scale: string,
+): string[] {
+    if (!currentPhase) return [];
+    return currentPhase.outputs.filter((docId) => {
+        const docDef = workflowDef.docs[docId];
+        if (!docDef) return false;
+        if (docDef.external) return false;
+        const scaleVal = docDef.scale[scale];
+        if (scaleVal === 'skip') return false;
+        return true;
+    });
+}
+
 export function registerDispatchRole(server: McpServer, workflowsDir: string): void {
     server.tool(
         'dispatch_role',
-        "Prepare all data needed to dispatch a task to a team member. Returns the role's prompt (with capability overrides), configuration, input documents, and a task brief. Does NOT launch agents — you (PM) decide how to pass this to the team member.",
+        "Prepare all data needed to dispatch a task to a team member. Returns the role's prompt (with capability overrides), configuration, input documents, task brief, and a dispatch tracking ID. Automatically searches for reusable sessions and provides guidance. Does NOT launch agents — you (PM) decide how to pass this to the team member. After launching, call report_dispatch to register the session.",
         {
             project_name: z.string().describe('Project name'),
             role: z.string().describe('Role ID to dispatch (e.g. architect, developer, tester)'),
@@ -135,36 +160,34 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 // Resolve agent/model overrides
                 const roleConfig = resolveRoleConfig(role, overrides);
 
-                // Build the response
-                const result: Record<string, unknown> = {
-                    role: role,
-                    config: {
-                        model: roleConfig.model ?? roleDef.frontmatter.model,
-                        session: roleDef.frontmatter.session,
-                        parallel: roleDef.frontmatter.parallel,
-                        ...(roleConfig.agent ? { agent: roleConfig.agent } : {}),
-                    },
-                    prompt: fullPrompt,
-                    task_brief: task_brief,
-                    project: {
-                        name: project_name,
-                        dir: state.projectDir,
-                        workflow: state.workflow,
-                        scale: state.scale,
-                        current_phase: state.currentPhase,
-                    },
-                    input_docs: inputDocs,
-                };
+                // Resolve expected outputs for this dispatch
+                const expectedOutputs = resolveExpectedOutputs(currentPhase, wf.definition, state.scale);
 
-                if (missingDocs.length > 0) {
-                    result.missing_docs = missingDocs;
-                }
+                // Check for reusable idle session
+                const idleSession = await findIdleSession(project_name, role);
+
+                // Create dispatch record
+                const dispatch = await createDispatch(project_name, role, task_brief, expectedOutputs, idleSession?.id);
+
+                // Build session guidance
+                const sessionGuidance = buildSessionGuidance(
+                    idleSession,
+                    roleDef.frontmatter.session,
+                    roleConfig.agent,
+                );
 
                 // Build human-readable summary for the agent
                 const agentLine = roleConfig.agent ? `\n- Agent: ${roleConfig.agent}` : '';
                 const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
                 const summary = [
                     `# Dispatch: ${role}`,
+                    ``,
+                    `## Dispatch Tracking`,
+                    `- Dispatch ID: \`${dispatch.id}\``,
+                    `- Status: ${dispatch.status}`,
+                    ``,
+                    `## Session Guidance`,
+                    sessionGuidance,
                     ``,
                     `## Task Brief`,
                     task_brief,
@@ -191,7 +214,16 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     summary.push(``, `### Missing Documents`, ...missingDocs.map((d) => `- ${d}`));
                 }
 
-                summary.push(``, `## Role Prompt`, ``, fullPrompt);
+                summary.push(
+                    ``,
+                    `## Next Step`,
+                    `After launching the agent, call \`report_dispatch\` with dispatch_id="${dispatch.id}" and the agent's session ID.`,
+                    `When the agent finishes, call \`report_dispatch\` again with status="completed" (or "failed").`,
+                    ``,
+                    `## Role Prompt`,
+                    ``,
+                    fullPrompt,
+                );
 
                 return {
                     content: [
@@ -214,4 +246,41 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
             }
         },
     );
+}
+
+/**
+ * Build session guidance text based on whether an idle session exists.
+ */
+function buildSessionGuidance(
+    idleSession: Awaited<ReturnType<typeof findIdleSession>>,
+    sessionType: string,
+    agentOverride?: string,
+): string {
+    if (idleSession) {
+        const agentId = idleSession.agentSessionId
+            ? `Agent session ID: \`${idleSession.agentSessionId}\``
+            : 'Agent session ID: not recorded';
+        const label = idleSession.label ? ` (${idleSession.label})` : '';
+        return [
+            `**Reusable session found**: ${idleSession.id}${label}`,
+            `- ${agentId}`,
+            `- Agent type: ${idleSession.agentType ?? 'unknown'}`,
+            `- Last active: ${idleSession.lastActiveAt}`,
+            ``,
+            `**Action**: Resume this session instead of launching a new agent.`,
+            idleSession.agentSessionId
+                ? `Use \`--resume ${idleSession.agentSessionId}\` or \`--session ${idleSession.agentSessionId}\` to restore the conversation.`
+                : `Note: No agent session ID was recorded for this session. You may need to launch a new agent.`,
+        ].join('\n');
+    }
+
+    return [
+        `**No reusable session found** for this role.`,
+        `Session type: ${sessionType}`,
+        ``,
+        `**Action**: Launch a new agent for this role.`,
+        agentOverride ? `Configured agent type: ${agentOverride}` : '',
+    ]
+        .filter(Boolean)
+        .join('\n');
 }

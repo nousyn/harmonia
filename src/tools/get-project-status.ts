@@ -1,6 +1,8 @@
 /**
  * MCP Tool: get_project_status
  * Read the current project status with rich context for PM decision-making.
+ * Includes phase progress, documents, pending reviews, dispatch records,
+ * active sessions, and intelligent next-step suggestions.
  */
 
 import { z } from 'zod';
@@ -9,17 +11,27 @@ import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/workflow.js';
 import { listDocs } from '../core/docs.js';
 import { readReviews } from '../core/reviews.js';
-import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
-import type { DocReviewState, LoadedWorkflow, PhaseDefinition, PhaseState, ProjectState } from '../core/types.js';
+import { getMergedOverrides } from '../core/overrides.js';
+import { readDispatches, readSessions } from '../core/dispatch.js';
+import type {
+    DispatchRecord,
+    DocReviewState,
+    LoadedWorkflow,
+    PhaseDefinition,
+    ProjectState,
+    SessionRecord,
+} from '../core/types.js';
 
 /**
- * Derive next-step suggestions based on current project state.
+ * Derive next-step suggestions based on current project state, including dispatch awareness.
  */
 function deriveNextSteps(
     state: ProjectState,
     wf: LoadedWorkflow,
     existingDocs: string[],
     pendingReviews: DocReviewState[],
+    dispatches: DispatchRecord[],
+    sessions: SessionRecord[],
 ): string[] {
     const suggestions: string[] = [];
     const currentPhaseDef = wf.definition.phases.find((p) => p.id === state.currentPhase);
@@ -34,6 +46,39 @@ function deriveNextSteps(
         );
     }
 
+    // Check dispatch states — find dispatches that need attention
+    const activeDispatches = dispatches.filter((d) => d.status === 'dispatched' || d.status === 'running');
+    const dispatchedNotRunning = dispatches.filter((d) => d.status === 'dispatched');
+    const runningDispatches = dispatches.filter((d) => d.status === 'running');
+    const failedDispatches = dispatches.filter((d) => d.status === 'failed');
+
+    if (dispatchedNotRunning.length > 0) {
+        for (const d of dispatchedNotRunning) {
+            suggestions.push(
+                `Dispatch ${d.id} (${d.role}) is created but not yet launched. Launch the agent and call report_dispatch to register it.`,
+            );
+        }
+    }
+
+    if (runningDispatches.length > 0) {
+        for (const d of runningDispatches) {
+            const session = sessions.find((s) => s.id === d.sessionId);
+            const agentInfo = session?.agentSessionId ? ` (agent session: ${session.agentSessionId})` : '';
+            suggestions.push(
+                `Dispatch ${d.id} (${d.role}) is running${agentInfo}. Check if the agent has finished, then call report_dispatch with status="completed" or "failed".`,
+            );
+        }
+    }
+
+    if (failedDispatches.length > 0) {
+        for (const d of failedDispatches) {
+            const reason = d.note ? ` Reason: ${d.note}` : '';
+            suggestions.push(
+                `Dispatch ${d.id} (${d.role}) failed.${reason} Consider re-dispatching with dispatch_role.`,
+            );
+        }
+    }
+
     // Check which phase outputs are still missing
     // Skip external outputs (e.g. "code") and docs that are "skip" at the current scale
     const missingOutputs = currentPhaseDef.outputs.filter((o) => {
@@ -44,22 +89,32 @@ function deriveNextSteps(
     });
 
     if (missingOutputs.length > 0) {
-        const currentPhaseState = state.phases.find((p) => p.id === state.currentPhase);
-
-        // If current phase has specific roles (not PM), suggest dispatching
+        // Only suggest dispatching if there are no active dispatches already covering this
+        const alreadyDispatched = activeDispatches.length > 0;
         const nonPmRoles = currentPhaseDef.roles.filter((r) => r !== 'pm');
-        if (nonPmRoles.length > 0) {
+
+        if (nonPmRoles.length > 0 && !alreadyDispatched) {
             suggestions.push(
                 `Dispatch ${nonPmRoles.join(', ')} to produce: ${missingOutputs.join(', ')}. Use dispatch_role to prepare task data.`,
             );
-        } else {
+        } else if (nonPmRoles.length === 0) {
             suggestions.push(`Produce remaining documents: ${missingOutputs.join(', ')}. Use write_doc for each.`);
         }
-    } else if (pendingReviews.length === 0) {
-        // All outputs exist, no pending reviews — can advance
+    } else if (pendingReviews.length === 0 && activeDispatches.length === 0) {
+        // All outputs exist, no pending reviews, no active dispatches — can advance
         suggestions.push(
             `All outputs for "${currentPhaseDef.name}" are complete. Advance with: update_phase(project_name, "${state.currentPhase}", "completed")`,
         );
+    }
+
+    // Check for lost sessions
+    const lostSessions = sessions.filter((s) => s.status === 'lost');
+    if (lostSessions.length > 0) {
+        for (const s of lostSessions) {
+            suggestions.push(
+                `Session ${s.id} (${s.role}) is marked as lost. The agent may have crashed. Consider re-dispatching this role.`,
+            );
+        }
     }
 
     // If no suggestions yet, provide a generic one
@@ -70,10 +125,41 @@ function deriveNextSteps(
     return suggestions;
 }
 
+/**
+ * Format a dispatch record for display.
+ */
+function formatDispatch(d: DispatchRecord, sessions: SessionRecord[]): string {
+    const statusIcon =
+        d.status === 'completed'
+            ? '✓'
+            : d.status === 'running'
+              ? '→'
+              : d.status === 'failed'
+                ? '✗'
+                : d.status === 'cancelled'
+                  ? '—'
+                  : '○';
+    const session = sessions.find((s) => s.id === d.sessionId);
+    const sessionInfo = session?.agentSessionId ? ` session:${session.agentSessionId}` : '';
+    const note = d.note ? ` (${d.note})` : '';
+    const brief = d.taskBrief.length > 60 ? d.taskBrief.slice(0, 57) + '...' : d.taskBrief;
+    return `  ${statusIcon} ${d.id}  ${d.role.padEnd(12)} [${d.status}]  ${brief}${sessionInfo}${note}`;
+}
+
+/**
+ * Format a session record for display.
+ */
+function formatSession(s: SessionRecord): string {
+    const agentInfo = s.agentSessionId ? `agent:${s.agentSessionId}` : 'no agent ID';
+    const label = s.label ? ` (${s.label})` : '';
+    const agentType = s.agentType ? ` via ${s.agentType}` : '';
+    return `  ${s.id}  ${s.role.padEnd(12)} [${s.status}]  ${agentInfo}${agentType}${label}`;
+}
+
 export function registerGetProjectStatus(server: McpServer, workflowsDir: string): void {
     server.tool(
         'get_project_status',
-        'Get the current project status including phase progress, documents, pending reviews, and next-step suggestions.',
+        'Get the current project status including phase progress, documents, pending reviews, dispatch records, active sessions, and next-step suggestions.',
         {
             project_name: z.string().describe('Project name'),
         },
@@ -84,6 +170,8 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                 const docs = await listDocs(project_name);
                 const reviews = await readReviews(project_name);
                 const overrides = await getMergedOverrides(project_name);
+                const dispatches = await readDispatches(project_name);
+                const sessions = await readSessions(project_name);
 
                 // Phase summary
                 const phasesSummary = state.phases
@@ -99,15 +187,6 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
 
                 // Categorize documents
                 const pendingReviews = Object.values(reviews).filter((r) => r.status === 'pending');
-                const approvedDocs = Object.values(reviews)
-                    .filter((r) => r.status === 'approved')
-                    .map((r) => r.docId);
-                const rejectedDocs = Object.values(reviews)
-                    .filter((r) => r.status === 'rejected')
-                    .map((r) => r.docId);
-
-                // Docs that don't have review state (either no review required or not yet submitted)
-                const docsWithoutReview = docs.filter((d) => !reviews[d]);
 
                 // Build pending reviews section
                 const pendingSection =
@@ -129,8 +208,17 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                               .join('\n')
                         : '(none yet)';
 
-                // Derive next steps
-                const nextSteps = deriveNextSteps(state, wf, docs, pendingReviews);
+                // Build sessions section
+                const activeSessions = sessions.filter((s) => s.status !== 'closed');
+                const sessionsSection =
+                    activeSessions.length > 0 ? activeSessions.map((s) => formatSession(s)).join('\n') : '(none)';
+
+                // Build dispatches section
+                const dispatchesSection =
+                    dispatches.length > 0 ? dispatches.map((d) => formatDispatch(d, sessions)).join('\n') : '(none)';
+
+                // Derive next steps (now dispatch-aware)
+                const nextSteps = deriveNextSteps(state, wf, docs, pendingReviews, dispatches, sessions);
 
                 return {
                     content: [
@@ -161,6 +249,12 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                           })
                                           .join(', ')}`
                                     : '',
+                                ``,
+                                `## Sessions`,
+                                sessionsSection,
+                                ``,
+                                `## Dispatches`,
+                                dispatchesSection,
                                 ``,
                                 `## Pending Reviews`,
                                 pendingSection,
