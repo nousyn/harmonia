@@ -35,6 +35,7 @@ export function registerUpdatePhase(server: McpServer, workflowsDir: string): vo
                             const docDef = wf.definition.docs[o];
                             if (!docDef) return false; // unknown output, skip
                             if (docDef.external) return false; // external outputs not managed by write_doc
+                            if (docDef.scale[currentState.scale] === 'skip') return false; // not required at this scale
                             return !existingDocs.includes(o);
                         });
 

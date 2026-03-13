@@ -34,10 +34,12 @@ function deriveNextSteps(
         );
     }
 
-    // Check which phase outputs are still missing (skip external outputs like "code")
+    // Check which phase outputs are still missing
+    // Skip external outputs (e.g. "code") and docs that are "skip" at the current scale
     const missingOutputs = currentPhaseDef.outputs.filter((o) => {
         const docDef = wf.definition.docs[o];
         if (docDef?.external) return false;
+        if (docDef?.scale[state.scale] === 'skip') return false;
         return !existingDocs.includes(o);
     });
 
@@ -152,7 +154,12 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                     : 'Unknown',
                                 currentPhaseDef?.roles ? `Roles: ${currentPhaseDef.roles.join(', ')}` : '',
                                 currentPhaseDef?.outputs
-                                    ? `Expected outputs: ${currentPhaseDef.outputs.join(', ')}`
+                                    ? `Expected outputs: ${currentPhaseDef.outputs
+                                          .filter((o) => {
+                                              const d = wf.definition.docs[o];
+                                              return !d || d.scale[state.scale] !== 'skip';
+                                          })
+                                          .join(', ')}`
                                     : '',
                                 ``,
                                 `## Pending Reviews`,
