@@ -1,6 +1,6 @@
 /**
  * MCP Tools: write_doc / read_doc / list_docs
- * Read and write project documents under ~/.harmonia/<project_name>/docs/
+ * Read and write project documents under <data_dir>/<project_name>/docs/
  *
  * write_doc checks review configuration and auto-submits for review if needed.
  */
@@ -71,7 +71,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
 
     server.tool(
         'read_doc',
-        'Read a project document from ~/.harmonia/<project_name>/docs/.',
+        'Read a project document from the project docs directory.',
         {
             project_name: z.string().describe('Project name'),
             doc_id: z.string().describe('Document ID to read'),
@@ -103,7 +103,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
 
     server.tool(
         'list_docs',
-        'List all project documents in ~/.harmonia/<project_name>/docs/.',
+        'List all project documents in the project docs directory.',
         {
             project_name: z.string().describe('Project name'),
         },

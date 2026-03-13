@@ -76,7 +76,7 @@ export interface LoadedWorkflow {
     roles: Record<string, RoleDefinition>;
 }
 
-// ─── Project State (~/.harmonia/<project_name>/state.json) ───
+// ─── Project State (<data_dir>/<project_name>/state.json) ───
 
 export type PhaseStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'review';
 export type ProjectScale = 'small' | 'medium' | 'large';
@@ -108,7 +108,7 @@ export interface ProjectState {
     updatedAt: string;
 }
 
-// ─── Document Review State (~/.harmonia/<project_name>/reviews.json) ───
+// ─── Document Review State (<data_dir>/<project_name>/reviews.json) ───
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
 
@@ -151,7 +151,7 @@ export interface RoleOverride {
 }
 
 /**
- * Override configuration file structure (~/.harmonia/overrides.json or project-level).
+ * Override configuration file structure (<data_dir>/overrides.json or project-level).
  *
  * review: boolean | Record<docId, boolean>
  *   - boolean: global toggle for all docs

@@ -11,12 +11,12 @@ describe('document review system', () => {
 
     beforeEach(async () => {
         harmoniaHome = await mkdtemp(join(tmpdir(), 'harmonia-review-test-'));
-        process.env.HARMONIA_HOME = harmoniaHome;
+        process.env.HARMONIA_DATA_DIR = harmoniaHome;
         await mkdir(join(harmoniaHome, TEST_PROJECT), { recursive: true });
     });
 
     afterEach(async () => {
-        delete process.env.HARMONIA_HOME;
+        delete process.env.HARMONIA_DATA_DIR;
         await rm(harmoniaHome, { recursive: true, force: true });
     });
 

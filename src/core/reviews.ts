@@ -1,5 +1,5 @@
 /**
- * Document review state management — ~/.harmonia/<project_name>/reviews.json
+ * Document review state management — <data_dir>/<project_name>/reviews.json
  *
  * Tracks which documents are pending review, approved, or rejected.
  */

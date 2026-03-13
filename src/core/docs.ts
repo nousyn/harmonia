@@ -1,5 +1,5 @@
 /**
- * Document management — read/write files under ~/.harmonia/<project_name>/docs/
+ * Document management — read/write files under <data_dir>/<project_name>/docs/
  *
  * Supports both .md and .html files based on doc format configuration.
  */
@@ -21,7 +21,7 @@ function getDocExtension(docDef?: DocDefinition): string {
 }
 
 /**
- * Write a document to ~/.harmonia/<project_name>/docs/<docId>.<ext>
+ * Write a document to <data_dir>/<project_name>/docs/<docId>.<ext>
  */
 export async function writeDoc(
     projectName: string,
@@ -38,7 +38,7 @@ export async function writeDoc(
 }
 
 /**
- * Read a document from ~/.harmonia/<project_name>/docs/<docId>.<ext>
+ * Read a document from <data_dir>/<project_name>/docs/<docId>.<ext>
  * Tries both .md and .html extensions.
  */
 export async function readDoc(projectName: string, docId: string): Promise<string> {
@@ -57,7 +57,7 @@ export async function readDoc(projectName: string, docId: string): Promise<strin
 }
 
 /**
- * List all documents in ~/.harmonia/<project_name>/docs/
+ * List all documents in <data_dir>/<project_name>/docs/
  */
 export async function listDocs(projectName: string): Promise<string[]> {
     const dir = docsDir(projectName);

@@ -4,8 +4,8 @@
  * Priority: project-level > global-level > workflow defaults
  *
  * Files:
- *   ~/.harmonia/overrides.json                    (global)
- *   ~/.harmonia/<project_name>/overrides.json     (project)
+ *   <data_dir>/overrides.json                    (global)
+ *   <data_dir>/<project_name>/overrides.json     (project)
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -28,14 +28,14 @@ async function readOverrideFile(filePath: string): Promise<OverrideConfig> {
 }
 
 /**
- * Read global overrides (~/.harmonia/overrides.json).
+ * Read global overrides (<data_dir>/overrides.json).
  */
 export async function readGlobalOverrides(): Promise<OverrideConfig> {
     return readOverrideFile(join(getGlobalDir(), OVERRIDES_FILE));
 }
 
 /**
- * Read project-level overrides (~/.harmonia/<project_name>/overrides.json).
+ * Read project-level overrides (<data_dir>/<project_name>/overrides.json).
  */
 export async function readProjectOverrides(projectName: string): Promise<OverrideConfig> {
     return readOverrideFile(join(getProjectDataDir(projectName), OVERRIDES_FILE));

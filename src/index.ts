@@ -3,11 +3,11 @@
 /**
  * Harmonia — Multi-agent orchestration MCP server with pluggable workflows.
  *
- * All project data is stored under ~/.harmonia/<project_name>/ (global directory).
+ * All project data is stored under the Harmonia data directory (platform-specific).
  * Project source directories contain code only — no Harmonia artifacts.
  *
  * Provides tools for managing projects:
- * - project_init: Register a project and create ~/.harmonia/<project_name>/ data dirs
+ * - project_init: Register a project and create <data_dir>/<project_name>/ data dirs
  * - get_project_status: View current project phase and progress
  * - get_role_prompt: Get role prompts for agent setup
  * - update_phase: Advance project phases

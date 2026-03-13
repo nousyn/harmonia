@@ -13,9 +13,9 @@ import type { ProjectScale } from '../core/types.js';
 export function registerProjectInit(server: McpServer, workflowsDir: string): void {
     server.tool(
         'project_init',
-        "Initialize a new Harmonia project. Registers the project in ~/.harmonia/, creates data directories for documents/state, and creates the project source directory if it doesn't exist.",
+        "Initialize a new Harmonia project. Registers the project in the global data directory, creates data directories for documents/state, and creates the project source directory if it doesn't exist.",
         {
-            project_name: z.string().describe('Unique project name (used as directory name under ~/.harmonia/)'),
+            project_name: z.string().describe('Unique project name (used as directory name in the data directory)'),
             project_dir: z
                 .string()
                 .describe("Absolute path to the project source directory (will be created if it doesn't exist)"),

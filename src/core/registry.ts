@@ -1,8 +1,14 @@
 /**
- * Global registry — manages ~/.harmonia/ and project name → directory mappings.
+ * Global registry — manages Harmonia data directory and project name → directory mappings.
+ *
+ * Data directory follows system conventions (see getGlobalDir()):
+ *   macOS:   ~/Library/Application Support/harmonia
+ *   Linux:   $XDG_DATA_HOME/harmonia  (defaults to ~/.local/share/harmonia)
+ *   Windows: %APPDATA%/harmonia
+ *   Override: HARMONIA_DATA_DIR env var
  *
  * Structure:
- *   ~/.harmonia/
+ *   <data_dir>/
  *   ├── registry.json        # { projects: { "my-app": { dir: "/path/to/src", ... } } }
  *   ├── overrides.json       # global overrides (optional)
  *   ├── my-app/
@@ -18,8 +24,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { platform } from 'node:os';
 
-const HARMONIA_DIR_NAME = '.harmonia';
 const REGISTRY_FILE = 'registry.json';
 
 export interface ProjectEntry {
@@ -36,11 +42,30 @@ export interface Registry {
 }
 
 /**
- * Get the global Harmonia directory path.
- * Supports HARMONIA_HOME env var override for testing.
+ * Get the global Harmonia data directory, following system conventions.
+ *
+ * Resolution order:
+ *   1. HARMONIA_DATA_DIR env var (explicit override)
+ *   2. Platform default:
+ *      - macOS:   ~/Library/Application Support/harmonia
+ *      - Windows: %APPDATA%/harmonia
+ *      - Linux:   $XDG_DATA_HOME/harmonia (defaults to ~/.local/share/harmonia)
  */
 export function getGlobalDir(): string {
-    return process.env.HARMONIA_HOME ?? join(homedir(), HARMONIA_DIR_NAME);
+    const envDir = process.env.HARMONIA_DATA_DIR;
+    if (envDir) return envDir;
+
+    const home = homedir();
+
+    switch (platform()) {
+        case 'darwin':
+            return join(home, 'Library', 'Application Support', 'harmonia');
+        case 'win32':
+            return join(process.env.APPDATA || join(home, 'AppData', 'Roaming'), 'harmonia');
+        default:
+            // Linux and others: follow XDG Base Directory spec
+            return join(process.env.XDG_DATA_HOME || join(home, '.local', 'share'), 'harmonia');
+    }
 }
 
 /**

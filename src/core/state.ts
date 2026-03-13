@@ -1,5 +1,5 @@
 /**
- * Project state management — manages ~/.harmonia/<project_name>/state.json
+ * Project state management — manages <data_dir>/<project_name>/state.json
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
