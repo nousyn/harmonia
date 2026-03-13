@@ -1,0 +1,50 @@
+{
+  "name": "@s_s/harmonia",
+  "version": "0.1.0",
+  "description": "Multi-agent orchestration MCP server with pluggable workflows",
+  "type": "module",
+  "main": "./build/index.js",
+  "bin": {
+    "harmonia": "build/index.js"
+  },
+  "files": [
+    "build",
+    "workflows"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js",
+    "prettier": "prettier --check \"**/*\"",
+    "prettier:fix": "prettier -c --write \"**/*\"",
+    "prettier:staged": "prettier --write",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "release": "bash scripts/release.sh",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "mcp",
+    "agent",
+    "orchestration",
+    "workflow",
+    "multi-agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.2",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "lint-staged": {
+    "**/*.{js,ts,md}": "npm run prettier:staged --"
+  }
+}

@@ -1,0 +1,113 @@
+{
+    "name": "dev",
+    "description": "软件开发流程",
+    "phases": [
+        {
+            "id": "clarify",
+            "name": "需求澄清",
+            "roles": ["pm"],
+            "outputs": ["prd", "user-stories"],
+            "description": "与用户沟通，明确需求范围、功能点、约束条件"
+        },
+        {
+            "id": "design",
+            "name": "方案设计",
+            "roles": ["architect"],
+            "inputs": ["prd", "user-stories"],
+            "outputs": ["tech-design", "task-breakdown"],
+            "description": "分析代码库，制定技术方案，拆解开发任务"
+        },
+        {
+            "id": "develop",
+            "name": "开发",
+            "roles": ["developer"],
+            "inputs": ["task-breakdown", "tech-design"],
+            "outputs": ["code"],
+            "description": "按任务拆解编码实现"
+        },
+        {
+            "id": "test",
+            "name": "测试",
+            "roles": ["tester"],
+            "inputs": ["code", "prd", "user-stories"],
+            "outputs": ["test-report"],
+            "description": "编写测试、执行测试、输出测试报告"
+        },
+        {
+            "id": "deliver",
+            "name": "交付验收",
+            "roles": ["pm"],
+            "inputs": ["test-report", "code"],
+            "outputs": ["retrospective"],
+            "description": "验收成果，确认需求满足，输出复盘记录"
+        }
+    ],
+    "docs": {
+        "prd": {
+            "name": "需求文档",
+            "scale": { "small": "lite", "medium": "full", "large": "full" }
+        },
+        "user-stories": {
+            "name": "用户故事 + 验收标准",
+            "scale": { "small": "full", "medium": "full", "large": "full" }
+        },
+        "fsd": {
+            "name": "功能规格",
+            "scale": { "small": "skip", "medium": "full", "large": "full" }
+        },
+        "interaction": {
+            "name": "交互/原型说明",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        },
+        "project-plan": {
+            "name": "项目计划",
+            "scale": { "small": "skip", "medium": "full", "large": "full" }
+        },
+        "tech-design": {
+            "name": "技术方案",
+            "scale": { "small": "lite", "medium": "full", "large": "full" }
+        },
+        "data-model": {
+            "name": "数据模型设计",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        },
+        "api-design": {
+            "name": "API 设计",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        },
+        "task-breakdown": {
+            "name": "任务拆解",
+            "scale": { "small": "full", "medium": "full", "large": "full" }
+        },
+        "risk-assessment": {
+            "name": "技术风险评估",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        },
+        "test-plan": {
+            "name": "测试计划",
+            "scale": { "small": "skip", "medium": "full", "large": "full" }
+        },
+        "test-report": {
+            "name": "测试报告",
+            "scale": { "small": "skip", "medium": "full", "large": "full" }
+        },
+        "deploy": {
+            "name": "部署文档",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        },
+        "retrospective": {
+            "name": "复盘记录",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        }
+    },
+    "scale_criteria": {
+        "description": "PM 根据以下维度判断项目规模",
+        "dimensions": {
+            "feature_count": { "small": "1-3", "medium": "4-10", "large": "10+" },
+            "frontend_backend_split": { "small": false, "medium": "maybe", "large": true },
+            "data_persistence": { "small": "none_or_simple", "medium": "yes", "large": "complex" },
+            "external_integrations": { "small": "none", "medium": "few", "large": "many" },
+            "parallel_developers": { "small": 1, "medium": "1-2", "large": "3+" }
+        }
+    }
+}

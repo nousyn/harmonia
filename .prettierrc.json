@@ -1,0 +1,16 @@
+{
+    "singleQuote": true,
+    "bracketSpacing": true,
+    "semi": true,
+    "trailingComma": "all",
+    "printWidth": 120,
+    "endOfLine": "auto",
+    "tabWidth": 4,
+    "useTabs": false,
+    "overrides": [
+      {
+        "files": "**/*.md",
+        "options": { "tabWidth": 2 }
+      }
+    ]
+}
