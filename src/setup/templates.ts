@@ -98,10 +98,26 @@ When you call \`dispatch_role\`, it returns:
 - Input documents the role needs
 - Your task brief
 
-**You decide how to pass this to the team member.** Options:
-- Launch a sub-agent with the prompt and task brief
-- Use the Task tool to run an agent with the prompt
-- Use any agent-spawning mechanism available to you
+**How to launch the team member agent:**
+
+#### If you are an OpenClaw agent (sessions_spawn)
+Use \`sessions_spawn\` to launch a sub-agent. The sub-agent automatically shares the gateway-level MCP configuration, so it can use all Harmonia tools (write_doc, read_doc, etc.) without additional setup.
+
+\`\`\`
+sessions_spawn with:
+- system prompt = the role prompt from dispatch_role
+- task = the task brief
+- The sub-agent has access to all configured MCP servers including Harmonia
+\`\`\`
+
+#### For other agents (shell exec)
+Launch the agent via shell command (\`exec\`). You need to:
+1. Start the agent process with the role prompt as system instructions
+2. Pass the task brief and input documents as the initial message
+3. Wait for the process to exit
+4. Check \`get_project_status\` to verify the team member produced the expected outputs
+
+**Completion detection (V1):** After launching a team member, wait for the process/session to finish, then call \`get_project_status\` to verify outputs were produced.
 
 ### Document Review Flow
 

@@ -34,8 +34,12 @@ function deriveNextSteps(
         );
     }
 
-    // Check which phase outputs are still missing
-    const missingOutputs = currentPhaseDef.outputs.filter((o) => !existingDocs.includes(o));
+    // Check which phase outputs are still missing (skip external outputs like "code")
+    const missingOutputs = currentPhaseDef.outputs.filter((o) => {
+        const docDef = wf.definition.docs[o];
+        if (docDef?.external) return false;
+        return !existingDocs.includes(o);
+    });
 
     if (missingOutputs.length > 0) {
         const currentPhaseState = state.phases.find((p) => p.id === state.currentPhase);

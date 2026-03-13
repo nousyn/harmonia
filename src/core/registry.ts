@@ -4,10 +4,12 @@
  * Structure:
  *   ~/.harmonia/
  *   ├── registry.json        # { projects: { "my-app": { dir: "/path/to/src", ... } } }
+ *   ├── overrides.json       # global overrides (optional)
  *   ├── my-app/
  *   │   ├── state.json
  *   │   ├── docs/
- *   │   ├── sessions/
+ *   │   ├── reviews.json
+ *   │   ├── overrides.json   # project-level overrides (optional)
  *   │   └── ...
  *   └── another-project/
  *       └── ...
@@ -90,10 +92,6 @@ export async function registerProject(projectName: string, projectDir: string, w
     // Create project data directory structure under global dir
     const dataDir = getProjectDataDir(projectName);
     await mkdir(join(dataDir, 'docs'), { recursive: true });
-    await mkdir(join(dataDir, 'adr'), { recursive: true });
-    await mkdir(join(dataDir, 'sessions'), { recursive: true });
-    await mkdir(join(dataDir, 'messages'), { recursive: true });
-    await mkdir(join(dataDir, 'tasks'), { recursive: true });
 
     // Create the project source directory if it doesn't exist
     await mkdir(projectDir, { recursive: true });

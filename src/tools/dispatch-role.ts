@@ -119,10 +119,12 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 const currentPhase = findCurrentPhase(wf.definition.phases, state.currentPhase);
                 const docIds = input_doc_ids ?? currentPhase?.inputs ?? [];
 
-                // Read input documents
+                // Read input documents (skip external docs like "code" — not managed by write_doc)
                 const inputDocs: Record<string, string> = {};
                 const missingDocs: string[] = [];
                 for (const docId of docIds) {
+                    const docDef = wf.definition.docs[docId];
+                    if (docDef?.external) continue; // external outputs not stored as docs
                     try {
                         inputDocs[docId] = await readDoc(project_name, docId);
                     } catch {

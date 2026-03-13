@@ -23,6 +23,8 @@ export interface DocDefinition {
     format?: 'md' | 'html';
     /** Whether this doc requires user review/approval after creation */
     review?: boolean;
+    /** External output — not managed by write_doc (e.g. code written directly to project dir) */
+    external?: boolean;
 }
 
 export interface ScaleDimension {

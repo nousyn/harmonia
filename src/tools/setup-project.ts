@@ -56,7 +56,7 @@ export function registerSetupProject(server: McpServer): void {
                                 ``,
                                 `## What was injected`,
                                 `- Project Manager role definition and responsibilities`,
-                                `- Full tool reference (${12} Harmonia tools)`,
+                                `- Full tool reference (${14} Harmonia tools)`,
                                 `- Phase-by-phase workflow guide`,
                                 `- Document review flow`,
                                 `- Team member dispatch guide`,

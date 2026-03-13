@@ -43,7 +43,7 @@ const server = new McpServer({
 // Register all tools
 registerProjectInit(server, WORKFLOWS_DIR);
 registerGetRolePrompt(server, WORKFLOWS_DIR);
-registerUpdatePhase(server);
+registerUpdatePhase(server, WORKFLOWS_DIR);
 registerDocTools(server, WORKFLOWS_DIR);
 registerGetProjectStatus(server, WORKFLOWS_DIR);
 registerApproveDoc(server);

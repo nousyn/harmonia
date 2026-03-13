@@ -113,6 +113,12 @@
             "name": "复盘记录",
             "scale": { "small": "skip", "medium": "optional", "large": "full" },
             "review": false
+        },
+        "code": {
+            "name": "代码实现",
+            "external": true,
+            "scale": { "small": "full", "medium": "full", "large": "full" },
+            "review": false
         }
     },
     "scale_criteria": {
