@@ -27,6 +27,7 @@ import { registerGetProjectStatus } from './tools/get-project-status.js';
 import { registerApproveDoc } from './tools/approve-doc.js';
 import { registerOverrideTools } from './tools/override-tools.js';
 import { registerDispatchRole } from './tools/dispatch-role.js';
+import { registerSetupProject } from './tools/setup-project.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,6 +49,7 @@ registerGetProjectStatus(server, WORKFLOWS_DIR);
 registerApproveDoc(server);
 registerOverrideTools(server);
 registerDispatchRole(server, WORKFLOWS_DIR);
+registerSetupProject(server);
 
 // Connect via stdio
 async function main(): Promise<void> {
