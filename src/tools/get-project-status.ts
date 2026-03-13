@@ -80,11 +80,12 @@ function deriveNextSteps(
     }
 
     // Check which phase outputs are still missing
-    // Skip external outputs (e.g. "code") and docs that are "skip" at the current scale
+    // Skip external outputs (e.g. "code"), docs that are "skip", and "optional" docs at the current scale
     const missingOutputs = currentPhaseDef.outputs.filter((o) => {
         const docDef = wf.definition.docs[o];
         if (docDef?.external) return false;
-        if (docDef?.scale[state.scale] === 'skip') return false;
+        const scaleVal = docDef?.scale[state.scale];
+        if (scaleVal === 'skip' || scaleVal === 'optional') return false;
         return !existingDocs.includes(o);
     });
 
@@ -245,7 +246,9 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                     ? `Expected outputs: ${currentPhaseDef.outputs
                                           .filter((o) => {
                                               const d = wf.definition.docs[o];
-                                              return !d || d.scale[state.scale] !== 'skip';
+                                              if (!d) return true;
+                                              const sv = d.scale[state.scale];
+                                              return sv !== 'skip' && sv !== 'optional';
                                           })
                                           .join(', ')}`
                                     : '',

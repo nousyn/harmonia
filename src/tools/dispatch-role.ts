@@ -20,7 +20,13 @@ import { readState } from '../core/state.js';
 import { readDoc } from '../core/docs.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession } from '../core/dispatch.js';
-import type { CapabilityOverride, OverrideConfig, PhaseDefinition, WorkflowDefinition } from '../core/types.js';
+import type {
+    CapabilityOverride,
+    OverrideConfig,
+    PhaseDefinition,
+    ProjectScale,
+    WorkflowDefinition,
+} from '../core/types.js';
 
 /**
  * Build override instructions to inject into the role prompt.
@@ -75,12 +81,12 @@ function findCurrentPhase(phases: PhaseDefinition[], currentPhaseId: string): Ph
 
 /**
  * Resolve expected output doc IDs for a dispatch.
- * Uses the current phase's outputs, filtering out external and scale-skipped docs.
+ * Uses the current phase's outputs, filtering out external, scale-skipped, and optional docs.
  */
 function resolveExpectedOutputs(
     currentPhase: PhaseDefinition | undefined,
     workflowDef: WorkflowDefinition,
-    scale: string,
+    scale: ProjectScale,
 ): string[] {
     if (!currentPhase) return [];
     return currentPhase.outputs.filter((docId) => {
@@ -88,7 +94,7 @@ function resolveExpectedOutputs(
         if (!docDef) return false;
         if (docDef.external) return false;
         const scaleVal = docDef.scale[scale];
-        if (scaleVal === 'skip') return false;
+        if (scaleVal === 'skip' || scaleVal === 'optional') return false;
         return true;
     });
 }

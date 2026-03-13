@@ -18,7 +18,7 @@ export type DocScale = 'full' | 'lite' | 'skip' | 'optional';
 
 export interface DocDefinition {
     name: string;
-    scale: Record<string, DocScale>;
+    scale: Record<ProjectScale, DocScale>;
     /** File format: "md" (default) or "html" */
     format?: 'md' | 'html';
     /** Whether this doc requires user review/approval after creation */
