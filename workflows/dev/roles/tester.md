@@ -2,6 +2,15 @@
 model: medium
 session: optional
 parallel: false
+capabilities:
+  - id: write-test-plan
+    description: 撰写测试计划
+    doc: test-plan
+  - id: execute-tests
+    description: 编写并执行测试用例
+  - id: write-test-report
+    description: 撰写测试报告
+    doc: test-report
 ---
 
 # Tester（测试）
@@ -31,5 +40,5 @@ parallel: false
 
 1. **需求驱动**：测试用例基于需求文档和用户故事的验收标准
 2. **客观报告**：如实报告测试结果，不掩盖问题
-3. **文档落地**：测试计划和报告必须写入 .agent-team/docs/
+3. **文档落地**：测试计划和报告必须通过 write_doc 工具写入
 4. **不修代码**：发现 bug 反馈给 PM，不自行修复

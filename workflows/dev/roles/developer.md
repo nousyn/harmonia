@@ -2,6 +2,13 @@
 model: medium
 session: persistent
 parallel: true
+capabilities:
+  - id: implement-code
+    description: 按任务拆解编码实现功能
+  - id: write-unit-tests
+    description: 为关键逻辑编写单元测试
+  - id: ensure-quality
+    description: 代码质量保障（lint、类型检查、规范）
 ---
 
 # Developer（开发者）

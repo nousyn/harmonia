@@ -53,4 +53,27 @@ describe('document management', () => {
     it('should throw when reading non-existent document', async () => {
         await expect(readDoc(TEST_PROJECT, 'nonexistent')).rejects.toThrow();
     });
+
+    it('should write and read an HTML document', async () => {
+        const html = '<html><body><h1>Prototype</h1></body></html>';
+        await writeDoc(TEST_PROJECT, 'prototype', html, {
+            name: 'Prototype',
+            format: 'html',
+            scale: { small: 'skip', medium: 'optional', large: 'full' },
+        });
+        const result = await readDoc(TEST_PROJECT, 'prototype');
+        expect(result).toBe(html);
+    });
+
+    it('should list both md and html documents', async () => {
+        await writeDoc(TEST_PROJECT, 'prd', '# PRD');
+        await writeDoc(TEST_PROJECT, 'prototype', '<html></html>', {
+            name: 'Prototype',
+            format: 'html',
+            scale: { small: 'skip', medium: 'optional', large: 'full' },
+        });
+
+        const docs = await listDocs(TEST_PROJECT);
+        expect(docs.sort()).toEqual(['prd', 'prototype']);
+    });
 });

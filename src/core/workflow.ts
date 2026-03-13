@@ -5,7 +5,8 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join, parse } from 'node:path';
-import type { LoadedWorkflow, RoleDefinition, RoleFrontmatter, WorkflowDefinition } from './types.js';
+import YAML from 'yaml';
+import type { LoadedWorkflow, RoleCapability, RoleDefinition, RoleFrontmatter, WorkflowDefinition } from './types.js';
 
 /**
  * Parse a role markdown file.
@@ -26,27 +27,19 @@ function parseRoleFile(id: string, content: string): RoleDefinition {
     const yamlBlock = match[1];
     const prompt = match[2].trim();
 
-    // Simple YAML key: value parser (no nested objects needed)
-    const frontmatter: Record<string, string | boolean> = {};
-    for (const line of yamlBlock.split('\n')) {
-        const colonIdx = line.indexOf(':');
-        if (colonIdx === -1) continue;
-        const key = line.slice(0, colonIdx).trim();
-        const rawVal = line.slice(colonIdx + 1).trim();
-        if (rawVal === 'true') frontmatter[key] = true;
-        else if (rawVal === 'false') frontmatter[key] = false;
-        else frontmatter[key] = rawVal;
-    }
+    const parsed = YAML.parse(yamlBlock) as Record<string, unknown> | null;
+    const fm = parsed ?? {};
 
-    return {
-        id,
-        frontmatter: {
-            model: (frontmatter.model as string) ?? 'medium',
-            session: (frontmatter.session as RoleFrontmatter['session']) ?? 'none',
-            parallel: (frontmatter.parallel as boolean) ?? false,
-        },
-        prompt,
+    const capabilities = Array.isArray(fm.capabilities) ? (fm.capabilities as RoleCapability[]) : undefined;
+
+    const frontmatter: RoleFrontmatter = {
+        model: (fm.model as string) ?? 'medium',
+        session: (fm.session as RoleFrontmatter['session']) ?? 'none',
+        parallel: (fm.parallel as boolean) ?? false,
+        ...(capabilities ? { capabilities } : {}),
     };
+
+    return { id, frontmatter, prompt };
 }
 
 /**

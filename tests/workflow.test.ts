@@ -63,4 +63,42 @@ describe('workflow loader', () => {
     it('should throw on non-existent workflow', async () => {
         await expect(loadWorkflow(WORKFLOWS_DIR, 'nonexistent')).rejects.toThrow();
     });
+
+    it('should parse role capabilities from frontmatter', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+
+        const pm = wf.roles['pm'];
+        expect(pm.frontmatter.capabilities).toBeDefined();
+        expect(pm.frontmatter.capabilities!.length).toBeGreaterThan(0);
+
+        // Check a specific capability
+        const writePrd = pm.frontmatter.capabilities!.find((c) => c.id === 'write-prd');
+        expect(writePrd).toBeDefined();
+        expect(writePrd!.doc).toBe('prd');
+        expect(writePrd!.description).toBeTruthy();
+    });
+
+    it('should parse architect capabilities', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+
+        const architect = wf.roles['architect'];
+        expect(architect.frontmatter.capabilities).toBeDefined();
+
+        const ids = architect.frontmatter.capabilities!.map((c) => c.id);
+        expect(ids).toContain('analyze-codebase');
+        expect(ids).toContain('write-tech-design');
+        expect(ids).toContain('write-task-breakdown');
+    });
+
+    it('should have doc format defined for prototype', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        expect(wf.definition.docs['prototype'].format).toBe('html');
+    });
+
+    it('should have review flags on appropriate docs', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        expect(wf.definition.docs['prd'].review).toBe(true);
+        expect(wf.definition.docs['prototype'].review).toBe(true);
+        expect(wf.definition.docs['user-stories'].review).toBe(false);
+    });
 });

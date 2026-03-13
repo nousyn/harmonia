@@ -45,59 +45,74 @@
     "docs": {
         "prd": {
             "name": "需求文档",
-            "scale": { "small": "lite", "medium": "full", "large": "full" }
+            "scale": { "small": "lite", "medium": "full", "large": "full" },
+            "review": true
         },
         "user-stories": {
             "name": "用户故事 + 验收标准",
-            "scale": { "small": "full", "medium": "full", "large": "full" }
+            "scale": { "small": "full", "medium": "full", "large": "full" },
+            "review": false
         },
         "fsd": {
             "name": "功能规格",
-            "scale": { "small": "skip", "medium": "full", "large": "full" }
+            "scale": { "small": "skip", "medium": "full", "large": "full" },
+            "review": false
         },
-        "interaction": {
-            "name": "交互/原型说明",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+        "prototype": {
+            "name": "高保真原型",
+            "format": "html",
+            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "review": true
         },
         "project-plan": {
             "name": "项目计划",
-            "scale": { "small": "skip", "medium": "full", "large": "full" }
+            "scale": { "small": "skip", "medium": "full", "large": "full" },
+            "review": false
         },
         "tech-design": {
             "name": "技术方案",
-            "scale": { "small": "lite", "medium": "full", "large": "full" }
+            "scale": { "small": "lite", "medium": "full", "large": "full" },
+            "review": false
         },
         "data-model": {
             "name": "数据模型设计",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "review": false
         },
         "api-design": {
             "name": "API 设计",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "review": false
         },
         "task-breakdown": {
             "name": "任务拆解",
-            "scale": { "small": "full", "medium": "full", "large": "full" }
+            "scale": { "small": "full", "medium": "full", "large": "full" },
+            "review": false
         },
         "risk-assessment": {
             "name": "技术风险评估",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "review": false
         },
         "test-plan": {
             "name": "测试计划",
-            "scale": { "small": "skip", "medium": "full", "large": "full" }
+            "scale": { "small": "skip", "medium": "full", "large": "full" },
+            "review": false
         },
         "test-report": {
             "name": "测试报告",
-            "scale": { "small": "skip", "medium": "full", "large": "full" }
+            "scale": { "small": "skip", "medium": "full", "large": "full" },
+            "review": false
         },
         "deploy": {
             "name": "部署文档",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "review": false
         },
         "retrospective": {
             "name": "复盘记录",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" }
+            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "review": false
         }
     },
     "scale_criteria": {

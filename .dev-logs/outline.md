@@ -1,15 +1,12 @@
-# Agent Team 完整设计大纲
+# Harmonia 完整设计大纲
 
 ## 一、定位
 
-一个独立的 OpenClaw Skill（名为 `agent-team`），通过 `coding-agent` 能力拉起多个 AI coding agent 组成虚拟开发团队，按软件工程流程协作完成项目。
+一个 MCP Server（名为 `harmonia`），通过 coding agent 拉起多个 AI coding agent 组成虚拟开发团队，按软件工程流程协作完成项目。
 
 ## 二、安装方式
 
-独立技能包，不与 OpenClaw 源码耦合。通过以下任一方式加载：
-
-- `skills.load.extraDirs` 指向技能包目录
-- Symlink 到 `~/.openclaw/skills/`
+独立 MCP Server，通过 MCP 协议接入宿主 agent（OpenCode / Claude Code 等）。
 
 ## 三、角色设计
 
@@ -92,60 +89,65 @@ PM 根据项目规模自动裁剪文档集（不是每个项目都需要全部�
 ### 目录结构
 
 ```
-.agent-team/
-├── state.json                  # 项目状态（当前阶段、角色状态、阻塞项）
-├── docs/
-│   ├── prd.md                  # 需求文档
-│   ├── user-stories.md         # 用户故事 + 验收标准
-│   ├── fsd.md                  # 功能规格
-│   ├── interaction.md          # 交互/原型说明
-│   ├── project-plan.md         # 项目计划
-│   ├── tech-design.md          # 技术方案
-│   ├── data-model.md           # 数据模型设计
-│   ├── api-design.md           # API 设计
-│   ├── task-breakdown.md       # 任务拆解
-│   ├── risk-assessment.md      # 技术风险评估
-│   ├── test-plan.md            # 测试计划
-│   ├── test-report.md          # 测试报告
-│   ├── deploy.md               # 部署文档
-│   └── retrospective.md        # 复盘记录
-├── adr/                        # 架构决策记录
-│   ├── 001-xxx.md
-│   └── ...
-├── sessions/                   # 角色会话管理
-│   ├── architect.json          # { agent, sessionId, model, status }
-│   ├── dev-module-a.json
-│   └── ...
-├── messages/                   # 角色间通信 / 透传消息
-│   └── ...
-└── tasks/                      # 任务分配与状态
-    └── ...
+~/.harmonia/
+├── registry.json               # 全局项目注册表
+├── overrides.json              # 全局配置覆盖
+└── <project_name>/
+    ├── state.json              # 项目状态（当前阶段、角色状态、阻塞项）
+    ├── overrides.json          # 项目级配置覆盖
+    ├── reviews.json            # 文档审核状态
+    ├── docs/
+    │   ├── prd.md              # 需求文档
+    │   ├── user-stories.md     # 用户故事 + 验收标准
+    │   ├── fsd.md              # 功能规格
+    │   ├── prototype.html      # 高保真 HTML 原型
+    │   ├── project-plan.md     # 项目计划
+    │   ├── tech-design.md      # 技术方案
+    │   ├── data-model.md       # 数据模型设计
+    │   ├── api-design.md       # API 设计
+    │   ├── task-breakdown.md   # 任务拆解
+    │   ├── risk-assessment.md  # 技术风险评估
+    │   ├── test-plan.md        # 测试计划
+    │   ├── test-report.md      # 测试报告
+    │   ├── deploy.md           # 部署文档
+    │   └── retrospective.md    # 复盘记录
+    ├── adr/                    # 架构决策记录
+    │   ├── 001-xxx.md
+    │   └── ...
+    ├── sessions/               # 角色会话管理
+    │   ├── architect.json      # { agent, sessionId, model, status }
+    │   ├── dev-module-a.json
+    │   └── ...
+    ├── messages/               # 角色间通信 / 透传消息
+    │   └── ...
+    └── tasks/                  # 任务分配与状态
+        └── ...
 ```
 
 ## 七、通信机制
 
-| 机制             | 用途                       | 方式                                                  |
-| ---------------- | -------------------------- | ----------------------------------------------------- |
-| **文件传递**     | 角色间传递文档、方案、报告 | `.agent-team/docs/`、`.agent-team/tasks/`             |
-| **Event 通知**   | Agent 完成/出错时通知 PM   | `openclaw system event --text "Done: ..." --mode now` |
-| **透传**         | 用户直接与某角色沟通       | `@角色名 消息内容`，PM 原文传递，原文返回             |
-| **Session 恢复** | 多轮交互保持上下文         | `--session/--resume` + `.agent-team/sessions/` 管理   |
+| 机制             | 用途                       | 方式                                                          |
+| ---------------- | -------------------------- | ------------------------------------------------------------- |
+| **文件传递**     | 角色间传递文档、方案、报告 | `~/.harmonia/<project>/docs/`、`~/.harmonia/<project>/tasks/` |
+| **Event 通知**   | Agent 完成/出错时通知 PM   | 待定（进程退出 / 状态轮询 / 事件机制）                        |
+| **透传**         | 用户直接与某角色沟通       | `@角色名 消息内容`，PM 原文传递，原文返回                     |
+| **Session 恢复** | 多轮交互保持上下文         | `--session/--resume` + `~/.harmonia/<project>/sessions/` 管理 |
 
 ## 八、流程管理
 
 - Prompt 内置流程定义（阶段、角色、检查点）
-- `state.json` 记录当前阶段和状态，防止长会话中迷失
+- `state.json` 记录当前阶段和状态，防止长会话中迷失（存储在 `~/.harmonia/<project>/`）
 - 每个阶段有明确的入口条件和出口条件
 
 ## 九、实现优先级
 
-| 优先级 | 内容                                                        | 状态 |
-| ------ | ----------------------------------------------------------- | ---- |
-| **P0** | PM 角色 prompt + 项目流程定义 + 文档目录结构 + 文档裁剪规则 | 当前 |
-| **P1** | 架构师角色 + 拉起/通信机制                                  | 待定 |
-| **P2** | Developer 角色 + 并行任务分派 + 会话保持                    | 待定 |
-| **P3** | Tester 角色 + 测试流程                                      | 待定 |
-| **P4** | 透传机制（`@角色名`）                                       | 待定 |
-| **P5** | v2 扩展角色（Reviewer/DevOps/Tech Writer）                  | 待定 |
+| 优先级 | 内容                                                                                                         | 状态   |
+| ------ | ------------------------------------------------------------------------------------------------------------ | ------ |
+| **P0** | PM 角色 prompt + 项目流程定义 + 文档目录结构 + 文档裁剪规则 + 全局目录架构 + review 机制 + override 三层配置 | 已完成 |
+| **P1** | 角色职能讨论 → 架构师角色 + 拉起独立 agent 能力                                                              | 当前   |
+| **P2** | Developer 角色 + 并行任务分派 + 会话保持                                                                     | 待定   |
+| **P3** | Tester 角色 + 测试流程                                                                                       | 待定   |
+| **P4** | 透传机制（`@角色名`）                                                                                        | 待定   |
+| **P5** | v2 扩展角色（Reviewer/DevOps/Tech Writer）                                                                   | 待定   |
 
 > P1 及以后的优先级在 P0 完成后根据实际情况决定——可能优化 PM 角色，也可能推进其他功能。
