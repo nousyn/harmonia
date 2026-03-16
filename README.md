@@ -100,7 +100,7 @@ npm install -g @s_s/harmonia
 
 ```bash
 cd your-project
-harmonia setup
+harmonia setup --agent openclaw
 ```
 
 `harmonia setup` 一键完成：
@@ -122,11 +122,11 @@ harmonia --version      显示版本号
 
 `setup` 选项：
 
-| 选项                | 说明                                                          | 默认值     |
-| ------------------- | ------------------------------------------------------------- | ---------- |
-| `--name <name>`     | 项目名称                                                      | 当前目录名 |
-| `--workflow <name>` | 工作流名称                                                    | `dev`      |
-| `--agent <type>`    | agent 类型：`opencode` / `claude-code` / `codex` / `openclaw` | 自动检测   |
+| 选项                | 说明                                                          | 默认值                                                     |
+| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| `--name <name>`     | 项目名称                                                      | 当前目录名                                                 |
+| `--workflow <name>` | 工作流名称                                                    | `dev`                                                      |
+| `--agent <type>`    | agent 类型：`opencode` / `claude-code` / `codex` / `openclaw` | 建议显式指定。省略时通过 cwd 和 `~` 下的配置文件自动检测。 |
 
 ## 配置
 
