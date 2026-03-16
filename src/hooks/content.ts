@@ -102,7 +102,6 @@ export const CODE_EXTENSIONS = [
  */
 export const HARMONIA_TOOLS = [
     'project_init',
-    'project_setup',
     'project_status',
     'phase_update',
     'role_dispatch',

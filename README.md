@@ -54,7 +54,6 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 | ----------------- | ------------------------------------------ |
 | `project_init`    | 注册项目，创建数据目录，初始化工作流       |
 | `project_status`  | 查看当前阶段、文档状态、步骤进度           |
-| `project_setup`   | 为 AI 编程助手安装 hook 脚本               |
 | `phase_update`    | 推进项目阶段                               |
 | `doc_write`       | 写入文档（自动 schema 校验，支持逐步写入） |
 | `doc_read`        | 读取文档内容                               |
@@ -101,7 +100,7 @@ npm install -g @s_s/harmonia
 
 ```bash
 cd your-project
-harmonia setup --scale medium
+harmonia setup
 ```
 
 `harmonia setup` 一键完成：
@@ -127,7 +126,6 @@ harmonia --version      显示版本号
 | ------------------- | ------------------------------------------------------------- | ---------- |
 | `--name <name>`     | 项目名称                                                      | 当前目录名 |
 | `--workflow <name>` | 工作流名称                                                    | `dev`      |
-| `--scale <size>`    | 项目规模：`small` / `medium` / `large`                        | `small`    |
 | `--agent <type>`    | agent 类型：`opencode` / `claude-code` / `codex` / `openclaw` | 自动检测   |
 
 ## 配置
@@ -137,13 +135,13 @@ harmonia --version      显示版本号
 <details>
 <summary><strong>Claude Code</strong></summary>
 
-Via CLI:
+通过命令行：
 
 ```bash
 claude mcp add --transport stdio harmonia -- harmonia
 ```
 
-Or add to `.mcp.json`:
+或添加到 `.mcp.json`：
 
 ```json
 {
@@ -160,7 +158,7 @@ Or add to `.mcp.json`:
 <details>
 <summary><strong>OpenCode</strong></summary>
 
-Add to `opencode.json`:
+添加到 `opencode.json`：
 
 ```json
 {
@@ -178,13 +176,13 @@ Add to `opencode.json`:
 <details>
 <summary><strong>Codex</strong></summary>
 
-Via CLI:
+通过命令行：
 
 ```bash
 codex mcp add harmonia -- harmonia
 ```
 
-Or add to `~/.codex/config.toml`:
+或添加到 `~/.codex/config.toml`：
 
 ```toml
 [mcp_servers.harmonia]
@@ -194,9 +192,9 @@ command = "harmonia"
 </details>
 
 <details>
-<summary><strong>OpenClaw</strong> (via mcporter)</summary>
+<summary><strong>OpenClaw</strong>（通过 mcporter）</summary>
 
-Add to `config/mcporter.json` (or `~/.mcporter/mcporter.json` for global):
+添加到 `config/mcporter.json`（全局配置用 `~/.mcporter/mcporter.json`）：
 
 ```json
 {
@@ -208,7 +206,7 @@ Add to `config/mcporter.json` (or `~/.mcporter/mcporter.json` for global):
 }
 ```
 
-Or via mcporter CLI:
+或通过 mcporter 命令行：
 
 ```bash
 mcporter config add harmonia --command harmonia --scope home

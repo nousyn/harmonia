@@ -44,7 +44,6 @@ Usage:
 Setup options:
   --name <name>           Project name (default: directory name)
   --workflow <name>        Workflow to use (default: dev)
-  --scale <size>           small | medium | large (default: small)
   --agent <type>           opencode | claude-code | codex | openclaw (default: auto-detect)
 `);
 } else if (subcommand && subcommand !== '--version' && subcommand !== '-v') {
@@ -73,8 +72,6 @@ Setup options:
     const { registerOverrideTools } = await import('./tools/override-tools.js');
     const { registerDispatchRole } = await import('./tools/dispatch-role.js');
     const { registerReportDispatch } = await import('./tools/report-dispatch.js');
-    const { registerSetupProject } = await import('./tools/setup-project.js');
-
     const server = new McpServer({
         name: 'harmonia',
         version: '0.1.0',
@@ -90,7 +87,6 @@ Setup options:
     registerOverrideTools(server);
     registerDispatchRole(server, WORKFLOWS_DIR);
     registerReportDispatch(server, WORKFLOWS_DIR);
-    registerSetupProject(server);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

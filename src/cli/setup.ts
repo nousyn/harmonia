@@ -1,8 +1,7 @@
 /**
  * CLI command: harmonia setup
  *
- * One-shot project initialization from the terminal.
- * Equivalent to project_init + project_setup via MCP, but for humans.
+ * One-shot project initialization + prompt injection + hook install.
  *
  * Usage:
  *   harmonia setup [options]
@@ -10,26 +9,22 @@
  * Options:
  *   --name <name>       Project name (default: directory name)
  *   --workflow <name>    Workflow to use (default: dev)
- *   --scale <size>       Project scale: small | medium | large (default: small)
  *   --agent <type>       Agent type: opencode | claude-code | codex | openclaw (default: auto-detect)
  */
 
 import { resolve, basename } from 'node:path';
 import type { AgentType } from '@s_s/agent-kit';
 import { loadWorkflow } from '../core/workflow.js';
-import { initProjectState, readState, projectStateExists } from '../core/state.js';
+import { initProjectState, readState } from '../core/state.js';
 import { registerProject, getProject, getGlobalDir } from '../core/registry.js';
 import { detectHostAgent, injectPrompt } from '../setup/inject.js';
 import { installHooks } from '../hooks/install.js';
-import type { ProjectScale } from '../core/types.js';
 
-const VALID_SCALES = ['small', 'medium', 'large'] as const;
 const VALID_AGENTS = ['opencode', 'claude-code', 'codex', 'openclaw'] as const;
 
 interface SetupOptions {
     name?: string;
     workflow: string;
-    scale: ProjectScale;
     agent?: AgentType;
     workflowsDir: string;
 }
@@ -38,7 +33,6 @@ interface SetupOptions {
 export function parseSetupArgs(args: string[]): Omit<SetupOptions, 'workflowsDir'> {
     const opts: Omit<SetupOptions, 'workflowsDir'> = {
         workflow: 'dev',
-        scale: 'small',
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -56,13 +50,6 @@ export function parseSetupArgs(args: string[]): Omit<SetupOptions, 'workflowsDir
                 opts.workflow = next;
                 i++;
                 break;
-            case '--scale':
-                if (!next || !(VALID_SCALES as readonly string[]).includes(next)) {
-                    throw new Error(`--scale must be one of: ${VALID_SCALES.join(', ')}`);
-                }
-                opts.scale = next as ProjectScale;
-                i++;
-                break;
             case '--agent':
                 if (!next || !(VALID_AGENTS as readonly string[]).includes(next)) {
                     throw new Error(`--agent must be one of: ${VALID_AGENTS.join(', ')}`);
@@ -72,7 +59,7 @@ export function parseSetupArgs(args: string[]): Omit<SetupOptions, 'workflowsDir
                 break;
             default:
                 throw new Error(
-                    `Unknown option: ${arg}\n\nUsage: harmonia setup [--name <name>] [--workflow <name>] [--scale small|medium|large] [--agent opencode|claude-code|codex|openclaw]`,
+                    `Unknown option: ${arg}\n\nUsage: harmonia setup [--name <name>] [--workflow <name>] [--agent opencode|claude-code|codex|openclaw]`,
                 );
         }
     }
@@ -90,7 +77,6 @@ export async function runSetup(opts: SetupOptions): Promise<void> {
     console.log(`  Project:  ${projectName}`);
     console.log(`  Dir:      ${projectDir}`);
     console.log(`  Workflow: ${opts.workflow}`);
-    console.log(`  Scale:    ${opts.scale}`);
 
     // 1. Load workflow
     const wf = await loadWorkflow(opts.workflowsDir, opts.workflow);
@@ -101,7 +87,8 @@ export async function runSetup(opts: SetupOptions): Promise<void> {
         console.log(`\n  [skip] Project already registered.`);
     } else {
         await registerProject(projectName, projectDir, opts.workflow);
-        await initProjectState(projectName, projectDir, wf, opts.scale);
+        // Default scale to 'small' — PM will evaluate and adjust after requirements clarification
+        await initProjectState(projectName, projectDir, wf, 'small');
         console.log(`\n  [done] Project initialized.`);
     }
 

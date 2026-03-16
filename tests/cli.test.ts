@@ -15,7 +15,6 @@ describe('parseSetupArgs', () => {
     it('should return defaults with no args', () => {
         const opts = parseSetupArgs([]);
         expect(opts.workflow).toBe('dev');
-        expect(opts.scale).toBe('small');
         expect(opts.name).toBeUndefined();
         expect(opts.agent).toBeUndefined();
     });
@@ -30,26 +29,16 @@ describe('parseSetupArgs', () => {
         expect(opts.workflow).toBe('custom');
     });
 
-    it('should parse --scale', () => {
-        const opts = parseSetupArgs(['--scale', 'large']);
-        expect(opts.scale).toBe('large');
-    });
-
     it('should parse --agent', () => {
         const opts = parseSetupArgs(['--agent', 'claude-code']);
         expect(opts.agent).toBe('claude-code');
     });
 
     it('should parse all options together', () => {
-        const opts = parseSetupArgs(['--name', 'foo', '--workflow', 'dev', '--scale', 'medium', '--agent', 'opencode']);
+        const opts = parseSetupArgs(['--name', 'foo', '--workflow', 'dev', '--agent', 'opencode']);
         expect(opts.name).toBe('foo');
         expect(opts.workflow).toBe('dev');
-        expect(opts.scale).toBe('medium');
         expect(opts.agent).toBe('opencode');
-    });
-
-    it('should throw on invalid --scale', () => {
-        expect(() => parseSetupArgs(['--scale', 'huge'])).toThrow('--scale must be one of');
     });
 
     it('should throw on invalid --agent', () => {
@@ -112,7 +101,6 @@ describe('runSetup', () => {
         await runSetup({
             name: 'test-project',
             workflow: 'dev',
-            scale: 'small',
             agent: 'opencode',
             workflowsDir,
         });
@@ -121,7 +109,7 @@ describe('runSetup', () => {
         const stateContent = await readFile(join(tempDir, 'test-project', 'state.json'), 'utf-8');
         const state = JSON.parse(stateContent);
         expect(state.projectName).toBe('test-project');
-        expect(state.scale).toBe('small');
+        expect(state.scale).toBe('small'); // default internal value
         expect(state.workflow).toBe('dev');
 
         // Check prompt was injected
@@ -140,7 +128,6 @@ describe('runSetup', () => {
         await runSetup({
             name: 'test-project',
             workflow: 'dev',
-            scale: 'small',
             agent: 'opencode',
             workflowsDir,
         });
@@ -151,7 +138,6 @@ describe('runSetup', () => {
         await runSetup({
             name: 'test-project',
             workflow: 'dev',
-            scale: 'small',
             agent: 'opencode',
             workflowsDir,
         });
@@ -164,7 +150,6 @@ describe('runSetup', () => {
         // Don't pass name — should use basename of cwd
         await runSetup({
             workflow: 'dev',
-            scale: 'medium',
             agent: 'opencode',
             workflowsDir,
         });
