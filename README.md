@@ -31,6 +31,50 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 
 基于 MCP tool 级别的硬性约束。为每个角色定义允许使用的工具白名单/黑名单，在 agent 层面强制执行，防止角色越权操作。
 
+### 覆盖配置体系（overrides.json）
+
+三层合并的配置覆盖系统，优先级：**项目级 > 全局级 > 工作流默认值**。
+
+```
+<data_dir>/harmonia/overrides.json                   # 全局覆盖
+<data_dir>/harmonia/<project_name>/overrides.json     # 项目级覆盖
+```
+
+支持覆盖的配置项：
+
+- **审批规则** — 控制哪些文档需要审批（review）
+  - `review: true` — 全局开启所有文档审批
+  - `review: { "prd": true, "tech-design": false }` — 按文档类型逐一配置
+  - 通过 `review_set_rule` 工具设置
+- **角色配置** — 为每个角色指定 agent 类型和模型
+  - `agent` — 执行角色的 agent 类型（opencode / claude-code / openclaw / codex）
+  - `model` — 模型覆盖（如使用不同能力级别的模型）
+  - 通过 `guard_set` 工具设置
+- **能力映射** — 将角色的抽象能力映射到具体工具
+  - `capabilities.{capId}` — 指定工具类型（skill / mcp）、工具名、服务器名、静态参数
+  - 通过 `guard_set` 工具设置
+
+示例 `overrides.json`：
+
+```json
+{
+  "review": { "prd": true },
+  "roles": {
+    "developer": {
+      "agent": "opencode",
+      "model": "claude-sonnet-4-20250514",
+      "capabilities": {
+        "read_file": {
+          "type": "mcp",
+          "tool": "read_file",
+          "server": "filesystem"
+        }
+      }
+    }
+  }
+}
+```
+
 ### 跨 Agent 边界守卫
 
 为 AI 编程助手安装 hook 脚本，在工具调用前拦截越界操作：
@@ -101,7 +145,6 @@ npm install -g @s_s/harmonia
 ## 快速开始
 
 ```bash
-cd your-project
 harmonia setup --agent openclaw
 ```
 
@@ -220,17 +263,21 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 数据目录结构：
 
 ```
-<data_dir>/harmonia/<project_name>/
-├── state.json          # 项目状态（当前阶段、规模等）
-├── steps.json          # 文档步骤进度
-├── docs/               # 文档产出物
-│   ├── prd.md
-│   ├── prd.requirements.json    # 步骤产出物
-│   ├── tech-design.md
-│   └── ...
-├── reviews/            # 审批记录
-├── dispatch/           # 调度记录
-└── overrides/          # 工具约束配置
+<data_dir>/harmonia/
+├── overrides.json              # 全局覆盖配置
+├── <project_name>/
+│   ├── state.json              # 项目状态（当前阶段、规模等）
+│   ├── steps.json              # 文档步骤进度
+│   ├── overrides.json          # 项目级覆盖配置
+│   ├── docs/                   # 文档产出物
+│   │   ├── prd.md
+│   │   ├── prd.requirements.json    # 步骤产出物
+│   │   ├── tech-design.md
+│   │   └── ...
+│   ├── reviews/                # 审批记录
+│   └── dispatch/               # 调度记录
+└── <other_project>/
+    └── ...
 ```
 
 ## 项目结构
