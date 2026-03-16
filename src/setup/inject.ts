@@ -8,7 +8,7 @@
  * written to the agent's global config directory (e.g. ~/.openclaw/workspace/AGENTS.md).
  */
 
-import { createKit, detectAgent, resolveConfigPath, type AgentType } from '@s_s/agent-kit';
+import { createKit, detectAgent, type AgentType } from '@s_s/agent-kit';
 import { readFile } from 'node:fs/promises';
 import { generatePmPrompt } from './templates.js';
 
@@ -53,7 +53,7 @@ export async function injectPrompt(
     const hasExisting = await kit.hasPromptInjected(agentType, globalScope);
 
     // Resolve the actual file path for reporting
-    const filePath = resolveConfigPath(agentType, globalScope);
+    const { configFile: filePath } = kit.resolvePaths(agentType, globalScope);
 
     // Determine if the config file exists (for created flag)
     let fileExists = true;
