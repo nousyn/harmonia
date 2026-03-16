@@ -23,10 +23,12 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { platform } from 'node:os';
+import { createKit } from '@s_s/agent-kit';
 
 const REGISTRY_FILE = 'registry.json';
+
+/** Shared kit instance for data directory resolution */
+const kit = createKit('harmonia');
 
 export interface ProjectEntry {
     /** Absolute path to the project source directory */
@@ -44,7 +46,7 @@ export interface Registry {
 /**
  * Get the global Harmonia data directory, following system conventions.
  *
- * Resolution order:
+ * Delegates to @s_s/agent-kit which handles:
  *   1. HARMONIA_DATA_DIR env var (explicit override)
  *   2. Platform default:
  *      - macOS:   ~/Library/Application Support/harmonia
@@ -52,20 +54,7 @@ export interface Registry {
  *      - Linux:   $XDG_DATA_HOME/harmonia (defaults to ~/.local/share/harmonia)
  */
 export function getGlobalDir(): string {
-    const envDir = process.env.HARMONIA_DATA_DIR;
-    if (envDir) return envDir;
-
-    const home = homedir();
-
-    switch (platform()) {
-        case 'darwin':
-            return join(home, 'Library', 'Application Support', 'harmonia');
-        case 'win32':
-            return join(process.env.APPDATA || join(home, 'AppData', 'Roaming'), 'harmonia');
-        default:
-            // Linux and others: follow XDG Base Directory spec
-            return join(process.env.XDG_DATA_HOME || join(home, '.local', 'share'), 'harmonia');
-    }
+    return kit.getDataDir();
 }
 
 /**

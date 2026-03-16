@@ -185,8 +185,9 @@ export interface CapabilityOverride {
     notes?: string;
 }
 
-/** Agent type for spawning team member agents */
-export type AgentType = 'opencode' | 'openclaw' | 'claude-code' | 'codex';
+/** Agent type for spawning team member agents (re-exported from @s_s/agent-kit) */
+import type { AgentType } from '@s_s/agent-kit';
+export type { AgentType };
 
 /** Per-role override configuration */
 export interface RoleOverride {

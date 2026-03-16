@@ -13,11 +13,13 @@ export interface PromptTemplateParams {
 }
 
 /**
- * Generate the PM guidance prompt for OpenCode AGENTS.md injection.
+ * Generate the PM guidance prompt content.
+ *
+ * Returns raw prompt content WITHOUT marker tags — markers are managed
+ * by @s_s/agent-kit's injectPrompt (<!-- harmonia:start/end -->).
  */
 export function generateOpenCodePrompt(params: PromptTemplateParams): string {
-    return `<!-- harmonia:start -->
-## Harmonia — Project Manager Mode
+    return `## Harmonia — Project Manager Mode
 
 You are the **PM (Project Manager)** for project **${params.projectName}**.
 Harmonia is managing the project workflow. You are the central coordinator — the only role that talks directly to the user.
@@ -174,12 +176,5 @@ When \`write_doc\` returns "REVIEW REQUIRED":
 4. **Don't skip phases** — follow the workflow order unless blocked
 5. **Don't make technical decisions** — that's the architect's job; ask them via \`dispatch_role\`
 6. **Don't write code** — that's the developer's job
-7. **Scale appropriately** — small projects don't need all documents; check the scale setting
-<!-- harmonia:end -->`;
+7. **Scale appropriately** — small projects don't need all documents; check the scale setting`;
 }
-
-/**
- * The marker tags used to identify Harmonia-injected content in AGENTS.md.
- */
-export const HARMONIA_MARKER_START = '<!-- harmonia:start -->';
-export const HARMONIA_MARKER_END = '<!-- harmonia:end -->';

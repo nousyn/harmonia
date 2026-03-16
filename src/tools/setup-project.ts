@@ -8,7 +8,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readState } from '../core/state.js';
-import { detectHostAgent, injectPrompt, type HostAgentType } from '../setup/inject.js';
+import { detectHostAgent, injectPrompt } from '../setup/inject.js';
+import type { AgentType } from '@s_s/agent-kit';
 
 export function registerSetupProject(server: McpServer): void {
     server.tool(
@@ -27,7 +28,7 @@ export function registerSetupProject(server: McpServer): void {
                 const state = await readState(project_name);
 
                 // Detect or use specified agent type
-                const detectedType: HostAgentType = agent_type ?? (await detectHostAgent(state.projectDir));
+                const detectedType: AgentType = agent_type ?? (await detectHostAgent(state.projectDir));
 
                 // Inject the prompt
                 const result = await injectPrompt(state.projectDir, detectedType, {
