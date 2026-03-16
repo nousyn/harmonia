@@ -16,6 +16,18 @@ export interface PhaseDefinition {
 
 export type DocScale = 'full' | 'lite' | 'skip' | 'optional';
 
+/** Step definition within a doc (for sequential mode) */
+export interface DocStepDefinition {
+    /** Step ID, e.g. "requirements", "draft", "final" */
+    id: string;
+    /** Human-readable name */
+    name: string;
+    /** Output format for this step's artifact */
+    format: 'json' | 'md';
+    /** Description shown to agent */
+    description: string;
+}
+
 export interface DocDefinition {
     name: string;
     scale: Record<ProjectScale, DocScale>;
@@ -25,6 +37,8 @@ export interface DocDefinition {
     review?: boolean;
     /** External output — not managed by write_doc (e.g. code written directly to project dir) */
     external?: boolean;
+    /** Sequential steps — when defined and scale >= medium, write_doc requires step parameter */
+    steps?: DocStepDefinition[];
 }
 
 export interface ScaleDimension {
@@ -69,8 +83,25 @@ export interface DocSchema {
     sections?: DocSchemaSection[];
     /** Required HTML tags for html-format documents (e.g. ["html", "body", "nav"]) */
     htmlTags?: string[];
+    /** Required top-level JSON fields (for JSON step artifacts) */
+    jsonFields?: DocSchemaJsonField[];
     /** Minimum content length in characters (optional) */
     minLength?: number;
+}
+
+/**
+ * A required top-level field in a JSON document.
+ * Used for validating structured step artifacts.
+ */
+export interface DocSchemaJsonField {
+    /** Field name (top-level key in JSON) */
+    field: string;
+    /** Per-scale requirement: true = required, false = optional */
+    required: Record<ProjectScale, boolean>;
+    /** Expected type: "string", "array", "object", "number", "boolean" */
+    type?: string;
+    /** If type is "array", minimum number of items */
+    minItems?: number;
 }
 
 // ─── Role Definition (loaded from workflows/<name>/roles/*.md) ───
@@ -245,4 +276,28 @@ export interface OverrideConfig {
     review?: boolean | Record<string, boolean>;
     /** Role overrides (agent, model, capabilities) */
     roles?: Record<string, RoleOverride>;
+}
+
+// ─── Sequential Step State (<data_dir>/<project_name>/steps.json) ───
+
+/** Step completion record */
+export interface DocStepRecord {
+    /** Step ID */
+    stepId: string;
+    /** When this step was completed */
+    completedAt: string;
+    /** File path of the step artifact (relative to project data dir) */
+    artifactPath: string;
+}
+
+/** Per-doc step tracking state */
+export interface DocStepState {
+    /** Doc ID */
+    docId: string;
+    /** Completed steps (in order) */
+    completedSteps: DocStepRecord[];
+    /** Whether the final doc has been written (last step completed + merged) */
+    finalized: boolean;
+    /** Finalized at timestamp */
+    finalizedAt?: string;
 }

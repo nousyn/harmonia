@@ -2,6 +2,7 @@
  * Document management — read/write files under <data_dir>/<project_name>/docs/
  *
  * Supports both .md and .html files based on doc format configuration.
+ * Also supports step artifact files for sequential mode (e.g. prd.requirements.json).
  */
 
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
@@ -67,4 +68,45 @@ export async function listDocs(projectName: string): Promise<string[]> {
     } catch {
         return [];
     }
+}
+
+// ─── Step Artifact I/O ───
+
+/**
+ * Write a step artifact to <data_dir>/<project_name>/docs/<docId>.<stepId>.<ext>
+ *
+ * @param format - "json" or "md" (determines file extension)
+ * @returns The file path written
+ */
+export async function writeStepArtifact(
+    projectName: string,
+    docId: string,
+    stepId: string,
+    content: string,
+    format: 'json' | 'md',
+): Promise<string> {
+    const dir = docsDir(projectName);
+    await mkdir(dir, { recursive: true });
+    const ext = format === 'json' ? '.json' : '.md';
+    const filePath = join(dir, `${docId}.${stepId}${ext}`);
+    await writeFile(filePath, content, 'utf-8');
+    return filePath;
+}
+
+/**
+ * Read a step artifact from <data_dir>/<project_name>/docs/<docId>.<stepId>.<ext>
+ * Tries .json first, then .md.
+ */
+export async function readStepArtifact(projectName: string, docId: string, stepId: string): Promise<string> {
+    const dir = docsDir(projectName);
+
+    for (const ext of ['.json', '.md']) {
+        try {
+            return await readFile(join(dir, `${docId}.${stepId}${ext}`), 'utf-8');
+        } catch {
+            // try next extension
+        }
+    }
+
+    throw new Error(`Step artifact "${docId}.${stepId}" not found`);
 }

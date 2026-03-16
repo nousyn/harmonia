@@ -1,0 +1,20 @@
+{
+    "jsonFields": [
+        {
+            "field": "dependencies",
+            "required": { "small": true, "medium": true, "large": true },
+            "type": "array"
+        },
+        {
+            "field": "executionOrder",
+            "required": { "small": false, "medium": true, "large": true },
+            "type": "array",
+            "minItems": 1
+        },
+        {
+            "field": "parallelGroups",
+            "required": { "small": false, "medium": false, "large": true },
+            "type": "array"
+        }
+    ]
+}

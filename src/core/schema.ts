@@ -14,6 +14,8 @@ import type { DocSchema, DocSchemaSection, ProjectScale } from './types.js';
 /**
  * Load a document schema from the workflow's schemas directory.
  * Returns undefined if no schema file exists for this doc_id.
+ *
+ * For step schemas, pass a composite id like "prd.requirements".
  */
 export async function loadDocSchema(
     workflowsDir: string,
@@ -33,7 +35,15 @@ export async function loadDocSchema(
 
 export interface ValidationError {
     /** Error type */
-    type: 'missing_section' | 'missing_html_tag' | 'content_too_short' | 'empty_content';
+    type:
+        | 'missing_section'
+        | 'missing_html_tag'
+        | 'content_too_short'
+        | 'empty_content'
+        | 'missing_json_field'
+        | 'invalid_json'
+        | 'wrong_json_type'
+        | 'json_array_too_short';
     /** Human-readable message */
     message: string;
 }
@@ -95,16 +105,18 @@ function sectionPresent(section: DocSchemaSection, headings: string[]): boolean 
 /**
  * Validate document content against a schema.
  *
- * @param content  - Document content (markdown or HTML)
+ * @param content  - Document content (markdown, HTML, or JSON)
  * @param schema   - Schema definition
  * @param scale    - Project scale (affects which sections are required)
  * @param isHtml   - Whether the document is HTML format
+ * @param isJson   - Whether the document is JSON format (for step artifacts)
  */
 export function validateDoc(
     content: string,
     schema: DocSchema,
     scale: ProjectScale,
     isHtml: boolean = false,
+    isJson: boolean = false,
 ): ValidationResult {
     const errors: ValidationError[] = [];
 
@@ -126,7 +138,7 @@ export function validateDoc(
     }
 
     // Markdown section checks
-    if (schema.sections && !isHtml) {
+    if (schema.sections && !isHtml && !isJson) {
         const headings = extractHeadings(content);
 
         for (const section of schema.sections) {
@@ -151,6 +163,56 @@ export function validateDoc(
                     type: 'missing_html_tag',
                     message: `缺少必需的 HTML 标签: <${tag}>`,
                 });
+            }
+        }
+    }
+
+    // JSON field checks
+    if (schema.jsonFields && isJson) {
+        let parsed: Record<string, unknown> | null = null;
+        try {
+            parsed = JSON.parse(content) as Record<string, unknown>;
+        } catch {
+            errors.push({
+                type: 'invalid_json',
+                message: '内容不是合法的 JSON 格式',
+            });
+        }
+
+        if (parsed) {
+            for (const fieldDef of schema.jsonFields) {
+                const isRequired = fieldDef.required[scale];
+                if (!isRequired) continue;
+
+                const value = parsed[fieldDef.field];
+
+                if (value === undefined || value === null) {
+                    errors.push({
+                        type: 'missing_json_field',
+                        message: `缺少必需的 JSON 字段: "${fieldDef.field}"`,
+                    });
+                    continue;
+                }
+
+                // Type check
+                if (fieldDef.type) {
+                    const actualType = Array.isArray(value) ? 'array' : typeof value;
+                    if (actualType !== fieldDef.type) {
+                        errors.push({
+                            type: 'wrong_json_type',
+                            message: `字段 "${fieldDef.field}" 类型错误: 期望 ${fieldDef.type}，实际 ${actualType}`,
+                        });
+                        continue;
+                    }
+                }
+
+                // Array minItems check
+                if (fieldDef.minItems && Array.isArray(value) && value.length < fieldDef.minItems) {
+                    errors.push({
+                        type: 'json_array_too_short',
+                        message: `字段 "${fieldDef.field}" 数组元素过少: 最少 ${fieldDef.minItems} 个，实际 ${value.length} 个`,
+                    });
+                }
             }
         }
     }

@@ -1,0 +1,20 @@
+{
+    "jsonFields": [
+        {
+            "field": "endpoints",
+            "required": { "small": true, "medium": true, "large": true },
+            "type": "array",
+            "minItems": 1
+        },
+        {
+            "field": "dataModels",
+            "required": { "small": false, "medium": true, "large": true },
+            "type": "array"
+        },
+        {
+            "field": "errorCodes",
+            "required": { "small": false, "medium": false, "large": true },
+            "type": "array"
+        }
+    ]
+}

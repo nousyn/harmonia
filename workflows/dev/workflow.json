@@ -46,7 +46,33 @@
         "prd": {
             "name": "需求文档",
             "scale": { "small": "lite", "medium": "full", "large": "full" },
-            "review": true
+            "review": true,
+            "steps": [
+                {
+                    "id": "requirements",
+                    "name": "需求结构化",
+                    "format": "json",
+                    "description": "将用户需求整理为结构化 JSON：功能列表、优先级、约束条件"
+                },
+                {
+                    "id": "completeness-check",
+                    "name": "完整性校验",
+                    "format": "json",
+                    "description": "检查需求覆盖率、遗漏项、冲突项，输出校验报告"
+                },
+                {
+                    "id": "draft",
+                    "name": "PRD 文档草稿",
+                    "format": "md",
+                    "description": "基于结构化需求生成完整 PRD 文档"
+                },
+                {
+                    "id": "final",
+                    "name": "PRD 最终版",
+                    "format": "md",
+                    "description": "根据校验结果修订，产出最终 PRD"
+                }
+            ]
         },
         "user-stories": {
             "name": "用户故事 + 验收标准",
@@ -72,7 +98,33 @@
         "tech-design": {
             "name": "技术方案",
             "scale": { "small": "lite", "medium": "full", "large": "full" },
-            "review": false
+            "review": false,
+            "steps": [
+                {
+                    "id": "analysis",
+                    "name": "架构分析",
+                    "format": "json",
+                    "description": "分析现有代码结构、技术约束、可行方案，输出结构化分析报告"
+                },
+                {
+                    "id": "api-contract",
+                    "name": "API 契约定义",
+                    "format": "json",
+                    "description": "定义 API 端点、请求/响应格式、错误码，输出契约文档"
+                },
+                {
+                    "id": "draft",
+                    "name": "技术方案草稿",
+                    "format": "md",
+                    "description": "基于分析和契约生成完整技术方案文档"
+                },
+                {
+                    "id": "final",
+                    "name": "技术方案最终版",
+                    "format": "md",
+                    "description": "修订并产出最终技术方案"
+                }
+            ]
         },
         "data-model": {
             "name": "数据模型设计",
@@ -87,7 +139,33 @@
         "task-breakdown": {
             "name": "任务拆解",
             "scale": { "small": "full", "medium": "full", "large": "full" },
-            "review": false
+            "review": false,
+            "steps": [
+                {
+                    "id": "coarse",
+                    "name": "粗粒度拆分",
+                    "format": "json",
+                    "description": "按功能模块拆分为主要任务块，标注预估工作量"
+                },
+                {
+                    "id": "dependencies",
+                    "name": "依赖分析",
+                    "format": "json",
+                    "description": "分析任务间依赖关系、确定执行顺序和并行可能性"
+                },
+                {
+                    "id": "detailed",
+                    "name": "细化任务",
+                    "format": "md",
+                    "description": "将粗粒度任务细化为可执行的开发任务"
+                },
+                {
+                    "id": "final",
+                    "name": "任务拆解最终版",
+                    "format": "md",
+                    "description": "整合依赖关系，产出最终任务拆解文档"
+                }
+            ]
         },
         "risk-assessment": {
             "name": "技术风险评估",

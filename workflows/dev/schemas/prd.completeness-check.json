@@ -1,0 +1,24 @@
+{
+    "jsonFields": [
+        {
+            "field": "coverage",
+            "required": { "small": true, "medium": true, "large": true },
+            "type": "object"
+        },
+        {
+            "field": "missing",
+            "required": { "small": false, "medium": true, "large": true },
+            "type": "array"
+        },
+        {
+            "field": "conflicts",
+            "required": { "small": false, "medium": true, "large": true },
+            "type": "array"
+        },
+        {
+            "field": "verdict",
+            "required": { "small": true, "medium": true, "large": true },
+            "type": "string"
+        }
+    ]
+}
