@@ -97,6 +97,39 @@ deliver (交付验收)      → PM 验收成果、输出复盘记录
 npm install -g @s_s/harmonia
 ```
 
+## 快速开始
+
+```bash
+cd your-project
+harmonia setup --scale medium
+```
+
+`harmonia setup` 一键完成：
+
+1. 注册项目到 Harmonia 数据目录
+2. 注入 PM 提示词到 agent 配置文件（AGENTS.md / CLAUDE.md）
+3. 安装 agent hook 脚本（边界守卫 + 主动提醒）
+
+之后启动你的 AI 编程助手，调用 `project_status` 即可开始。
+
+### CLI 命令
+
+```
+harmonia                启动 MCP stdio 服务器（供 agent 调用）
+harmonia setup          在当前目录初始化项目
+harmonia --help         显示帮助信息
+harmonia --version      显示版本号
+```
+
+`setup` 选项：
+
+| 选项                | 说明                                                          | 默认值     |
+| ------------------- | ------------------------------------------------------------- | ---------- |
+| `--name <name>`     | 项目名称                                                      | 当前目录名 |
+| `--workflow <name>` | 工作流名称                                                    | `dev`      |
+| `--scale <size>`    | 项目规模：`small` / `medium` / `large`                        | `small`    |
+| `--agent <type>`    | agent 类型：`opencode` / `claude-code` / `codex` / `openclaw` | 自动检测   |
+
 ## 配置
 
 将 Harmonia 注册为 MCP 服务器。
@@ -209,6 +242,8 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 harmonia/
 ├── src/
 │   ├── index.ts              # 入口，注册所有 MCP 工具
+│   ├── cli/
+│   │   └── setup.ts          # CLI setup 命令
 │   ├── core/
 │   │   ├── types.ts          # 核心类型定义
 │   │   ├── state.ts          # 项目状态管理
@@ -235,7 +270,7 @@ harmonia/
 │       ├── workflow.json     # 工作流定义
 │       ├── roles/            # 角色提示词 (pm.md, architect.md, ...)
 │       └── schemas/          # 文档 + 步骤 Schema
-├── tests/                    # 测试 (243 tests, 12 files)
+├── tests/                    # 测试 (256 tests, 13 files)
 └── .dev-logs/                # 开发日志
 ```
 
