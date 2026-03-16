@@ -8,7 +8,9 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readState } from '../core/state.js';
+import { getGlobalDir } from '../core/registry.js';
 import { detectHostAgent, injectPrompt } from '../setup/inject.js';
+import { installHooks } from '../hooks/install.js';
 import type { AgentType } from '@s_s/agent-kit';
 
 export function registerSetupProject(server: McpServer): void {
@@ -18,7 +20,7 @@ export function registerSetupProject(server: McpServer): void {
         {
             project_name: z.string().describe('Project name (must be initialized)'),
             agent_type: z
-                .enum(['opencode', 'claude-code', 'codex'])
+                .enum(['opencode', 'claude-code', 'codex', 'openclaw'])
                 .optional()
                 .describe('Host agent type. If not specified, auto-detects based on project directory contents.'),
         },
@@ -37,6 +39,26 @@ export function registerSetupProject(server: McpServer): void {
                     workflow: state.workflow,
                     scale: state.scale,
                 });
+
+                // Install agent hooks (boundary guard + proactive reminders)
+                let hookStatus = '';
+                try {
+                    const hookResult = await installHooks(detectedType, {
+                        dataDir: getGlobalDir(),
+                        projectName: state.projectName,
+                        projectDir: state.projectDir,
+                    });
+                    if (hookResult.success) {
+                        hookStatus = `Installed (${hookResult.filesWritten.length} files)`;
+                        if (hookResult.warnings.length > 0) {
+                            hookStatus += ` — warnings: ${hookResult.warnings.join('; ')}`;
+                        }
+                    } else {
+                        hookStatus = `Failed: ${hookResult.error ?? 'unknown error'}`;
+                    }
+                } catch (hookErr) {
+                    hookStatus = `Error: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`;
+                }
 
                 const action = result.created ? 'Created' : result.replaced ? 'Updated' : 'Appended to';
 
@@ -62,6 +84,11 @@ export function registerSetupProject(server: McpServer): void {
                                 `- Document review flow`,
                                 `- Team member dispatch guide`,
                                 `- Important rules for PM behavior`,
+                                ``,
+                                `## Agent Hooks`,
+                                `- Status: ${hookStatus}`,
+                                `- Boundary guard: prevents PM from directly modifying code or running dev commands`,
+                                `- Proactive reminders: dispatch timeout, idle phase, pending reviews`,
                                 ``,
                                 `## Next Steps`,
                                 `The host agent will now follow the PM workflow automatically.`,
