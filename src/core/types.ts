@@ -50,6 +50,8 @@ export interface ScaleDimension {
 export interface WorkflowDefinition {
     name: string;
     description: string;
+    version?: string;
+    author?: string;
     phases: PhaseDefinition[];
     docs: Record<string, DocDefinition>;
     scale_criteria: {

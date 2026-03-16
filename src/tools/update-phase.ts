@@ -18,7 +18,7 @@ import { readReviews } from '../core/reviews.js';
 import { readDispatches } from '../core/dispatch.js';
 import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
 
-export function registerUpdatePhase(server: McpServer, workflowsDir: string): void {
+export function registerUpdatePhase(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'phase_update',
         'Update the status of a project phase. When a phase is completed, the next phase is automatically started. Completing a phase checks that all required doc outputs exist.',
@@ -34,7 +34,7 @@ export function registerUpdatePhase(server: McpServer, workflowsDir: string): vo
                 // ── Completion guards ──
                 if (status === 'completed' && !force) {
                     const currentState = await readState(project_name);
-                    const wf = await loadWorkflow(workflowsDir, currentState.workflow);
+                    const wf = await loadWorkflow(builtinDir, customDir, currentState.workflow);
                     const existingDocs = await listDocs(project_name);
 
                     const phaseDef = wf.definition.phases.find((p) => p.id === phase_id);

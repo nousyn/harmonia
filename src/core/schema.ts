@@ -1,13 +1,14 @@
 /**
  * Document schema loader and validator.
  *
- * Loads schema definitions from workflows/<name>/schemas/<docId>.json
+ * Loads schema definitions from the resolved workflow directory's schemas/ subdirectory
  * and validates document content against them before writing.
  */
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DocSchema, DocSchemaSection, ProjectScale } from './types.js';
+import { resolveWorkflowDir } from './workflow.js';
 
 // ─── Schema Loading ───
 
@@ -18,11 +19,13 @@ import type { DocSchema, DocSchemaSection, ProjectScale } from './types.js';
  * For step schemas, pass a composite id like "prd.requirements".
  */
 export async function loadDocSchema(
-    workflowsDir: string,
+    builtinDir: string,
+    customDir: string,
     workflowName: string,
     docId: string,
 ): Promise<DocSchema | undefined> {
-    const schemaPath = join(workflowsDir, workflowName, 'schemas', `${docId}.json`);
+    const workflowDir = await resolveWorkflowDir(builtinDir, customDir, workflowName);
+    const schemaPath = join(workflowDir, 'schemas', `${docId}.json`);
     try {
         const raw = await readFile(schemaPath, 'utf-8');
         return JSON.parse(raw) as DocSchema;

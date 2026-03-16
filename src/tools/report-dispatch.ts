@@ -28,7 +28,7 @@ import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/workflow.js';
 import type { AgentType, DispatchRecord, SessionRecord } from '../core/types.js';
 
-export function registerReportDispatch(server: McpServer, workflowsDir: string): void {
+export function registerReportDispatch(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'dispatch_report',
         'Report dispatch status after launching or completing a team member agent. Call with agent_session_id after launching to register the session. Call with status="completed" or "failed" when the agent finishes.',
@@ -143,7 +143,7 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                 if (effectiveStatus === 'completed' && dispatch.expectedOutputs.length > 0) {
                     const existingDocs = await listDocs(project_name);
                     const state = await readState(project_name);
-                    const wf = await loadWorkflow(workflowsDir, state.workflow);
+                    const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
 
                     const missingOutputs = dispatch.expectedOutputs.filter((docId) => {
                         const docDef = wf.definition.docs[docId];

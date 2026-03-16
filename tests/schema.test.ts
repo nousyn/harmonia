@@ -210,10 +210,13 @@ describe('validateDoc', () => {
 
 describe('loadDocSchema', () => {
     let tempDir: string;
+    const NO_CUSTOM_DIR = '/nonexistent-custom-workflows';
 
     beforeEach(async () => {
         tempDir = await mkdtemp(join(tmpdir(), 'harmonia-schema-test-'));
         await mkdir(join(tempDir, 'dev', 'schemas'), { recursive: true });
+        // resolveWorkflowDir checks for workflow.json existence
+        await writeFile(join(tempDir, 'dev', 'workflow.json'), JSON.stringify({ name: 'dev', description: 'test' }));
     });
 
     afterEach(async () => {
@@ -232,12 +235,12 @@ describe('loadDocSchema', () => {
         };
         await writeFile(join(tempDir, 'dev', 'schemas', 'test-doc.json'), JSON.stringify(schema));
 
-        const loaded = await loadDocSchema(tempDir, 'dev', 'test-doc');
+        const loaded = await loadDocSchema(tempDir, NO_CUSTOM_DIR, 'dev', 'test-doc');
         expect(loaded).toEqual(schema);
     });
 
     it('should return undefined for non-existent schema', async () => {
-        const loaded = await loadDocSchema(tempDir, 'dev', 'nonexistent');
+        const loaded = await loadDocSchema(tempDir, NO_CUSTOM_DIR, 'dev', 'nonexistent');
         expect(loaded).toBeUndefined();
     });
 });

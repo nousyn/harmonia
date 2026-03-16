@@ -35,7 +35,7 @@ function isSequentialActive(docDef: DocDefinition, scale: ProjectScale | null): 
     return scale !== null && !!docDef.steps?.length && SEQUENTIAL_SCALES.has(scale);
 }
 
-export function registerDocTools(server: McpServer, workflowsDir: string): void {
+export function registerDocTools(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'doc_write',
         'Write or update a project document. For documents with sequential steps (PRD, tech-design, task-breakdown) at medium/large scale, you MUST specify the step parameter. Automatically checks review configuration — if review is required, the document is submitted for user approval.',
@@ -55,7 +55,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
         async ({ project_name, doc_id, content, step }) => {
             // Load workflow to get doc definition (format, review defaults)
             const state = await readState(project_name);
-            const wf = await loadWorkflow(workflowsDir, state.workflow);
+            const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
             const docDef = wf.definition.docs[doc_id];
             const isHtml = docDef?.format === 'html';
 
@@ -104,7 +104,8 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
             // ─── Sequential Mode ───
             if (isSequentialActive(docDef, state.scale)) {
                 return handleSequentialWrite(
-                    workflowsDir,
+                    builtinDir,
+                    customDir,
                     state.workflow,
                     project_name,
                     doc_id,
@@ -123,7 +124,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
             }
 
             // Schema validation — reject write if content doesn't meet requirements
-            const schema = await loadDocSchema(workflowsDir, state.workflow, doc_id);
+            const schema = await loadDocSchema(builtinDir, customDir, state.workflow, doc_id);
             if (schema) {
                 const result = validateDoc(content, schema, state.scale, isHtml);
                 if (!result.valid) {
@@ -241,7 +242,8 @@ type ToolResult = {
 };
 
 async function handleSequentialWrite(
-    workflowsDir: string,
+    builtinDir: string,
+    customDir: string,
     workflowName: string,
     projectName: string,
     docId: string,
@@ -310,7 +312,7 @@ async function handleSequentialWrite(
     // Step schema validation
     const isJson = stepDef.format === 'json';
     const stepSchemaId = `${docId}.${step}`;
-    const stepSchema = await loadDocSchema(workflowsDir, workflowName, stepSchemaId);
+    const stepSchema = await loadDocSchema(builtinDir, customDir, workflowName, stepSchemaId);
     if (stepSchema) {
         const result = validateDoc(content, stepSchema, scale, false, isJson);
         if (!result.valid) {
@@ -336,7 +338,17 @@ async function handleSequentialWrite(
 
     if (isLastStep) {
         // Auto-merge: validate against final doc schema, write formal doc, trigger review
-        return handleFinalStep(workflowsDir, workflowName, projectName, docId, content, docDef, scale, stepDef);
+        return handleFinalStep(
+            builtinDir,
+            customDir,
+            workflowName,
+            projectName,
+            docId,
+            content,
+            docDef,
+            scale,
+            stepDef,
+        );
     }
 
     // Not the last step — return progress info
@@ -357,7 +369,8 @@ async function handleSequentialWrite(
 }
 
 async function handleFinalStep(
-    workflowsDir: string,
+    builtinDir: string,
+    customDir: string,
     workflowName: string,
     projectName: string,
     docId: string,
@@ -369,7 +382,7 @@ async function handleFinalStep(
     const isHtml = docDef.format === 'html';
 
     // Validate against the final document schema (e.g. prd.json)
-    const finalSchema = await loadDocSchema(workflowsDir, workflowName, docId);
+    const finalSchema = await loadDocSchema(builtinDir, customDir, workflowName, docId);
     if (finalSchema) {
         const isJson = stepDef.format === 'json';
         const result = validateDoc(content, finalSchema, scale, isHtml, isJson);

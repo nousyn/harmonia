@@ -1,6 +1,8 @@
 {
     "name": "dev",
     "description": "软件开发流程",
+    "version": "1.0.0",
+    "author": "harmonia",
     "phases": [
         {
             "id": "clarify",

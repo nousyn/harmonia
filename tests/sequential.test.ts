@@ -102,6 +102,7 @@ describe('validateDoc — JSON mode', () => {
 describe('doc_write — sequential mode', () => {
     let tempDir: string;
     let workflowsDir: string;
+    let noCustomDir: string;
     let projectDir: string;
     let client: Client;
     let server: McpServer;
@@ -156,6 +157,7 @@ describe('doc_write — sequential mode', () => {
         tempDir = await mkdtemp(join(tmpdir(), 'harmonia-seq-test-'));
         projectDir = join(tempDir, 'test-project');
         workflowsDir = join(tempDir, 'workflows');
+        noCustomDir = join(tempDir, 'no-custom-workflows');
 
         // Setup project data dir
         await mkdir(projectDir, { recursive: true });
@@ -216,7 +218,7 @@ describe('doc_write — sequential mode', () => {
 
         // Setup MCP server + client
         server = new McpServer({ name: 'test', version: '0.0.1' });
-        registerDocTools(server, workflowsDir);
+        registerDocTools(server, workflowsDir, noCustomDir);
         client = new Client({ name: 'test-client', version: '0.0.1' });
         const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
         await server.connect(serverTransport);

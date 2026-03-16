@@ -17,8 +17,8 @@ import { dirname, join, resolve } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Workflows directory is at the package root, sibling to build/
-const WORKFLOWS_DIR = process.env.HARMONIA_WORKFLOWS_DIR ?? resolve(join(__dirname, '..', 'workflows'));
+// Built-in workflows directory (package root, sibling to build/)
+const BUILTIN_WORKFLOWS_DIR = resolve(join(__dirname, '..', 'workflows'));
 
 const subcommand = process.argv[2];
 
@@ -60,6 +60,7 @@ Setup options:
     // Default: MCP stdio server mode
     const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
+    const { getGlobalDir } = await import('./core/registry.js');
 
     const { registerProjectInit } = await import('./tools/project-init.js');
     const { registerSetScale } = await import('./tools/set-scale.js');
@@ -71,22 +72,26 @@ Setup options:
     const { registerOverrideTools } = await import('./tools/override-tools.js');
     const { registerDispatchRole } = await import('./tools/dispatch-role.js');
     const { registerReportDispatch } = await import('./tools/report-dispatch.js');
+
+    // Custom workflows directory: <data_dir>/.workflows
+    const CUSTOM_WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
+
     const server = new McpServer({
         name: 'harmonia',
         version: '0.1.0',
     });
 
     // Register all tools
-    registerProjectInit(server, WORKFLOWS_DIR);
-    registerSetScale(server, WORKFLOWS_DIR);
-    registerGetRolePrompt(server, WORKFLOWS_DIR);
-    registerUpdatePhase(server, WORKFLOWS_DIR);
-    registerDocTools(server, WORKFLOWS_DIR);
-    registerGetProjectStatus(server, WORKFLOWS_DIR);
+    registerProjectInit(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerSetScale(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerGetRolePrompt(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerUpdatePhase(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerDocTools(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerGetProjectStatus(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerApproveDoc(server);
     registerOverrideTools(server);
-    registerDispatchRole(server, WORKFLOWS_DIR);
-    registerReportDispatch(server, WORKFLOWS_DIR);
+    registerDispatchRole(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerReportDispatch(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

@@ -7,6 +7,7 @@ import { loadWorkflow } from '../src/core/workflow.js';
 import { resolve } from 'node:path';
 
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
+const NO_CUSTOM_DIR = join(WORKFLOWS_DIR, '..', '.workflows-nonexistent');
 const TEST_PROJECT = 'test-project';
 const TEST_PROJECT_DIR = '/tmp/harmonia-test-src';
 
@@ -30,7 +31,7 @@ describe('project state', () => {
     });
 
     it('should initialize a project with null scale', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         const state = await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         expect(state.projectName).toBe(TEST_PROJECT);
@@ -44,13 +45,13 @@ describe('project state', () => {
     });
 
     it('should report project exists after init', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
         expect(await projectStateExists(TEST_PROJECT)).toBe(true);
     });
 
     it('should read state after init', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
         const state = await readState(TEST_PROJECT);
 
@@ -59,7 +60,7 @@ describe('project state', () => {
     });
 
     it('should update a phase status', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         const state = await updatePhaseStatus(TEST_PROJECT, 'clarify', 'completed');
@@ -73,7 +74,7 @@ describe('project state', () => {
     });
 
     it('should handle blocked status', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         const state = await updatePhaseStatus(TEST_PROJECT, 'clarify', 'blocked', 'Waiting for user input');
@@ -84,7 +85,7 @@ describe('project state', () => {
     });
 
     it('should throw on updating non-existent phase', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         await expect(updatePhaseStatus(TEST_PROJECT, 'nonexistent', 'completed')).rejects.toThrow(
@@ -93,7 +94,7 @@ describe('project state', () => {
     });
 
     it('should auto-advance through multiple phases', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         await updatePhaseStatus(TEST_PROJECT, 'clarify', 'completed');
@@ -105,7 +106,7 @@ describe('project state', () => {
     });
 
     it('should set scale on a project with null scale', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         const state = await setScale(TEST_PROJECT, 'medium');
@@ -117,7 +118,7 @@ describe('project state', () => {
     });
 
     it('should reject setScale when scale is already set', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
         await setScale(TEST_PROJECT, 'small');
 

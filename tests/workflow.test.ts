@@ -3,15 +3,16 @@ import { loadWorkflow, listWorkflows } from '../src/core/workflow.js';
 import { resolve, join } from 'node:path';
 
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
+const NO_CUSTOM_DIR = join(WORKFLOWS_DIR, '..', '.workflows-nonexistent');
 
 describe('workflow loader', () => {
     it('should list available workflows', async () => {
-        const workflows = await listWorkflows(WORKFLOWS_DIR);
+        const workflows = await listWorkflows(WORKFLOWS_DIR, NO_CUSTOM_DIR);
         expect(workflows).toContain('dev');
     });
 
     it('should load the dev workflow definition', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         expect(wf.definition.name).toBe('dev');
         expect(wf.definition.phases).toHaveLength(5);
@@ -20,14 +21,14 @@ describe('workflow loader', () => {
     });
 
     it('should load all dev workflow roles', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         const roleIds = Object.keys(wf.roles).sort();
 
         expect(roleIds).toEqual(['architect', 'developer', 'pm', 'tester']);
     });
 
     it('should parse role frontmatter correctly', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         const pm = wf.roles['pm'];
         expect(pm.frontmatter.model).toBe('medium');
@@ -44,7 +45,7 @@ describe('workflow loader', () => {
     });
 
     it('should parse role prompts as non-empty strings', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         for (const [id, role] of Object.entries(wf.roles)) {
             expect(role.prompt.length).toBeGreaterThan(0);
@@ -53,7 +54,7 @@ describe('workflow loader', () => {
     });
 
     it('should have docs with scale definitions', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         expect(wf.definition.docs['prd']).toBeDefined();
         expect(wf.definition.docs['prd'].scale.small).toBe('lite');
@@ -61,11 +62,11 @@ describe('workflow loader', () => {
     });
 
     it('should throw on non-existent workflow', async () => {
-        await expect(loadWorkflow(WORKFLOWS_DIR, 'nonexistent')).rejects.toThrow();
+        await expect(loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'nonexistent')).rejects.toThrow();
     });
 
     it('should parse role capabilities from frontmatter', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         const pm = wf.roles['pm'];
         expect(pm.frontmatter.capabilities).toBeDefined();
@@ -79,7 +80,7 @@ describe('workflow loader', () => {
     });
 
     it('should parse architect capabilities', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         const architect = wf.roles['architect'];
         expect(architect.frontmatter.capabilities).toBeDefined();
@@ -91,14 +92,20 @@ describe('workflow loader', () => {
     });
 
     it('should have doc format defined for prototype', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         expect(wf.definition.docs['prototype'].format).toBe('html');
     });
 
     it('should have review flags on appropriate docs', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         expect(wf.definition.docs['prd'].review).toBe(true);
         expect(wf.definition.docs['prototype'].review).toBe(true);
         expect(wf.definition.docs['user-stories'].review).toBe(false);
+    });
+
+    it('should have version and author metadata', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
+        expect(wf.definition.version).toBe('1.0.0');
+        expect(wf.definition.author).toBe('harmonia');
     });
 });

@@ -10,7 +10,7 @@ import { loadWorkflow } from '../core/workflow.js';
 import { readReviews } from '../core/reviews.js';
 import type { ProjectScale } from '../core/types.js';
 
-export function registerSetScale(server: McpServer, workflowsDir: string): void {
+export function registerSetScale(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'project_set_scale',
         'Set the project scale after PRD approval. Scale determines which documents are required (full/lite/skip) and enables sequential mode for medium/large projects. Scale is immutable once set — if requirements change significantly, redo the PRD.',
@@ -56,7 +56,7 @@ export function registerSetScale(server: McpServer, workflowsDir: string): void 
                 const updated = await setScale(project_name, scale as ProjectScale);
 
                 // Build doc list based on scale
-                const wf = await loadWorkflow(workflowsDir, state.workflow);
+                const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
                 const requiredDocs = Object.entries(wf.definition.docs)
                     .filter(([, doc]) => {
                         const s = doc.scale[scale];

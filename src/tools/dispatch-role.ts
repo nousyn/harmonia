@@ -102,7 +102,7 @@ function resolveExpectedOutputs(
     });
 }
 
-export function registerDispatchRole(server: McpServer, workflowsDir: string): void {
+export function registerDispatchRole(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'role_dispatch',
         "Prepare all data needed to dispatch a task to a team member. Returns the role's prompt (with capability overrides), configuration, input documents, task brief, and a dispatch tracking ID. Automatically searches for reusable sessions and provides guidance. Does NOT launch agents — you (PM) decide how to pass this to the team member. After launching, call dispatch_report to register the session.",
@@ -125,7 +125,7 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
             try {
                 // Load project state and workflow
                 const state = await readState(project_name);
-                const wf = await loadWorkflow(workflowsDir, state.workflow);
+                const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
 
                 // Validate role exists
                 const roleDef = wf.roles[role];

@@ -54,7 +54,7 @@ function buildOverridePromptSection(roleId: string, overrides: OverrideConfig): 
     return lines.join('\n');
 }
 
-export function registerGetRolePrompt(server: McpServer, workflowsDir: string): void {
+export function registerGetRolePrompt(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'role_prompt',
         "Get the system prompt and configuration for a specific role in the workflow. Includes any capability overrides configured at global or project level. Use this to understand what a role does or to set up an agent with the role's prompt.",
@@ -67,7 +67,7 @@ export function registerGetRolePrompt(server: McpServer, workflowsDir: string): 
                 .describe('Project name — if provided, includes project-specific capability overrides in the prompt'),
         },
         async ({ workflow: workflowName, role, project_name }) => {
-            const wf = await loadWorkflow(workflowsDir, workflowName);
+            const wf = await loadWorkflow(builtinDir, customDir, workflowName);
             const roleDef = wf.roles[role];
 
             if (!roleDef) {

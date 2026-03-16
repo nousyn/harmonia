@@ -245,7 +245,7 @@ async function buildProjectList(): Promise<string> {
     ].join('\n');
 }
 
-export function registerGetProjectStatus(server: McpServer, workflowsDir: string): void {
+export function registerGetProjectStatus(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'project_status',
         '查看项目状态。不传 project_name 则返回所有项目的摘要列表；传入 project_name 则返回该项目的详细状态（阶段、文档、dispatch、session、下一步建议）。',
@@ -262,7 +262,7 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
             // Detail mode — specific project
             try {
                 const state = await readState(project_name);
-                const wf = await loadWorkflow(workflowsDir, state.workflow);
+                const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
                 const docs = await listDocs(project_name);
                 const reviews = await readReviews(project_name);
                 const overrides = await getMergedOverrides(project_name);

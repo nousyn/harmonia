@@ -256,15 +256,20 @@ mcporter config add harmonia --command harmonia --scope home
 
 </details>
 
-## 数据存储
+## 全局目录
 
 Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [agent-kit](https://github.com/anthropics/agent-kit) 管理），**不会在项目源码目录中创建任何文件**。
 
-数据目录结构：
+全局目录结构：
 
 ```
 <data_dir>/harmonia/
 ├── overrides.json              # 全局覆盖配置
+├── .workflows/                 # 自定义工作流目录
+│   └── <workflow_name>/
+│       ├── workflow.json
+│       ├── roles/
+│       └── schemas/
 ├── <project_name>/
 │   ├── state.json              # 项目状态（当前阶段、规模等）
 │   ├── steps.json              # 文档步骤进度
@@ -279,6 +284,53 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 └── <other_project>/
     └── ...
 ```
+
+## 自定义工作流
+
+Harmonia 使用两层工作流查找机制：
+
+1. **自定义目录**（高优先级）：`<data_dir>/harmonia/.workflows/<name>/`
+2. **内置目录**（回退）：`<package>/workflows/<name>/`
+
+自定义工作流会覆盖同名的内置工作流。内置工作流随包版本自动更新，零维护。
+
+### 创建自定义工作流
+
+在全局数据目录下创建 `.workflows/<name>/` 目录：
+
+```
+<data_dir>/harmonia/.workflows/
+└── my-workflow/
+    ├── workflow.json      # 工作流定义（阶段、角色、文档类型）
+    ├── roles/             # 角色提示词
+    │   ├── pm.md
+    │   └── ...
+    └── schemas/           # 文档 Schema（可选）
+        ├── prd.json
+        ├── prd.requirements.json   # 步骤 Schema
+        └── ...
+```
+
+### workflow.json 格式
+
+```json
+{
+  "name": "my-workflow",
+  "description": "自定义工作流描述",
+  "version": "1.0.0",
+  "author": "your-name",
+  "phases": [ ... ],
+  "docs": { ... }
+}
+```
+
+可参考内置 `dev` 工作流（`node_modules/@s_s/harmonia/workflows/dev/`）作为模板。
+
+### project_init 工作流选择
+
+- 只有一个可用工作流时自动选中
+- 多个可用工作流时，需在 `project_init` 中指定 `workflow` 参数
+- 示例：`project_init(project_name="my-app", project_dir="/path/to/src", workflow="my-workflow")`
 
 ## 项目结构
 
@@ -314,7 +366,7 @@ harmonia/
 │       ├── workflow.json     # 工作流定义
 │       ├── roles/            # 角色提示词 (pm.md, architect.md, ...)
 │       └── schemas/          # 文档 + 步骤 Schema
-├── tests/                    # 测试 (260 tests, 13 files)
+├── tests/                    # 测试 (261 tests, 13 files)
 └── .dev-logs/                # 开发日志
 ```
 
@@ -338,28 +390,6 @@ npm run test:watch
 
 # 代码格式化
 npm run prettier:fix
-```
-
-## 自定义工作流
-
-通过设置环境变量 `HARMONIA_WORKFLOWS_DIR` 指向自定义工作流目录：
-
-```bash
-HARMONIA_WORKFLOWS_DIR=/path/to/workflows npx @s_s/harmonia
-```
-
-工作流目录结构需符合：
-
-```
-<workflow_name>/
-├── workflow.json      # 工作流定义（阶段、角色、文档类型）
-├── roles/             # 角色提示词
-│   ├── pm.md
-│   └── ...
-└── schemas/           # 文档 Schema（可选）
-    ├── prd.json
-    ├── prd.requirements.json   # 步骤 Schema
-    └── ...
 ```
 
 ## License
