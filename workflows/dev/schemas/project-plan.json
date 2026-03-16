@@ -1,0 +1,20 @@
+{
+    "sections": [
+        {
+            "heading": "## 项目计划",
+            "required": { "small": true, "medium": true, "large": true },
+            "aliases": ["## Project Plan", "## 计划概述"]
+        },
+        {
+            "heading": "## 里程碑",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Milestones", "## 关键节点"]
+        },
+        {
+            "heading": "## 时间安排",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Timeline", "## 排期", "## 时间线"]
+        }
+    ],
+    "minLength": 100
+}

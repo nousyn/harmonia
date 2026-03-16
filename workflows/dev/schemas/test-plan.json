@@ -1,0 +1,20 @@
+{
+    "sections": [
+        {
+            "heading": "## 测试范围",
+            "required": { "small": true, "medium": true, "large": true },
+            "aliases": ["## Test Scope", "## 测试目标"]
+        },
+        {
+            "heading": "## 测试策略",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Test Strategy", "## 测试方法"]
+        },
+        {
+            "heading": "## 测试用例",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Test Cases", "## 用例列表"]
+        }
+    ],
+    "minLength": 100
+}

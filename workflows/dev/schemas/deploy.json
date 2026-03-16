@@ -1,0 +1,20 @@
+{
+    "sections": [
+        {
+            "heading": "## 部署环境",
+            "required": { "small": true, "medium": true, "large": true },
+            "aliases": ["## Deployment Environment", "## 环境要求", "## 运行环境"]
+        },
+        {
+            "heading": "## 部署步骤",
+            "required": { "small": true, "medium": true, "large": true },
+            "aliases": ["## Deployment Steps", "## 部署流程", "## 安装步骤"]
+        },
+        {
+            "heading": "## 配置说明",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Configuration", "## 环境配置", "## 配置项"]
+        }
+    ],
+    "minLength": 100
+}

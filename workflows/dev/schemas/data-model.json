@@ -1,0 +1,20 @@
+{
+    "sections": [
+        {
+            "heading": "## 数据模型",
+            "required": { "small": true, "medium": true, "large": true },
+            "aliases": ["## Data Model", "## 数据设计", "## 数据结构"]
+        },
+        {
+            "heading": "## 实体关系",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Entity Relationships", "## ER 图", "## 关系设计"]
+        },
+        {
+            "heading": "## 字段定义",
+            "required": { "small": false, "medium": true, "large": true },
+            "aliases": ["## Field Definitions", "## 字段说明", "## 表结构"]
+        }
+    ],
+    "minLength": 100
+}

@@ -44,6 +44,35 @@ export interface WorkflowDefinition {
     };
 }
 
+// ─── Document Schema (loaded from workflows/<name>/schemas/*.json) ───
+
+/**
+ * A required section (heading) in a markdown document.
+ * Validation checks that the document contains a heading matching the primary
+ * pattern or one of the aliases.
+ */
+export interface DocSchemaSection {
+    /** Primary heading text, e.g. "## 项目概述" */
+    heading: string;
+    /** Per-scale requirement: true = required, false = optional */
+    required: Record<ProjectScale, boolean>;
+    /** Alternative heading texts that satisfy this requirement */
+    aliases?: string[];
+}
+
+/**
+ * Schema definition for a document type.
+ * Used by write_doc to validate content structure before writing.
+ */
+export interface DocSchema {
+    /** Required sections for markdown documents */
+    sections?: DocSchemaSection[];
+    /** Required HTML tags for html-format documents (e.g. ["html", "body", "nav"]) */
+    htmlTags?: string[];
+    /** Minimum content length in characters (optional) */
+    minLength?: number;
+}
+
 // ─── Role Definition (loaded from workflows/<name>/roles/*.md) ───
 
 export interface RoleCapability {

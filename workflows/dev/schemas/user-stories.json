@@ -1,0 +1,10 @@
+{
+    "sections": [
+        {
+            "heading": "## 用户故事",
+            "required": { "small": true, "medium": true, "large": true },
+            "aliases": ["## User Stories", "## 用户场景"]
+        }
+    ],
+    "minLength": 100
+}
