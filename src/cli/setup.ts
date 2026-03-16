@@ -55,14 +55,13 @@ export async function runSetup(opts: SetupOptions): Promise<void> {
 
     console.log(`\nHarmonia Setup`);
     console.log(`──────────────────────────────`);
-    console.log(`  Dir: ${projectDir}`);
 
     // 1. Detect agent
     const agentType: AgentType = opts.agent ?? (await detectHostAgent(projectDir));
     console.log(`  Agent: ${agentType}`);
 
-    // 2. Inject prompt (project-agnostic — no params needed)
-    const result = await injectPrompt(projectDir, agentType);
+    // 2. Inject prompt (global scope — project-agnostic)
+    const result = await injectPrompt(agentType);
 
     const action = result.created ? 'Created' : result.replaced ? 'Updated' : 'Appended to';
     console.log(`  [done] ${action} ${result.filePath}`);

@@ -47,17 +47,22 @@ describe('runSetup', () => {
     let consoleLogs: string[];
 
     let originalDataDir: string | undefined;
+    let originalHome: string | undefined;
 
     beforeEach(async () => {
         tempDir = await mkdtemp(join(tmpdir(), 'harmonia-cli-test-'));
         projectDir = join(tempDir, 'test-project');
         await mkdir(projectDir, { recursive: true });
 
-        // Override data dir via env var (agent-kit reads this)
+        // Override data dir via env var (harmonia's getGlobalDir reads this)
         originalDataDir = process.env.HARMONIA_DATA_DIR;
         process.env.HARMONIA_DATA_DIR = tempDir;
 
-        // Mock cwd to our temp project dir
+        // Override HOME so agent-kit's resolveConfigPath writes to tempDir
+        originalHome = process.env.HOME;
+        process.env.HOME = tempDir;
+
+        // Mock cwd to our temp project dir (for agent detection)
         vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
 
         // Capture console.log
@@ -69,28 +74,43 @@ describe('runSetup', () => {
 
     afterEach(async () => {
         vi.restoreAllMocks();
-        // Restore env var
+        // Restore env vars
         if (originalDataDir === undefined) {
             delete process.env.HARMONIA_DATA_DIR;
         } else {
             process.env.HARMONIA_DATA_DIR = originalDataDir;
         }
+        if (originalHome === undefined) {
+            delete process.env.HOME;
+        } else {
+            process.env.HOME = originalHome;
+        }
         await rm(tempDir, { recursive: true, force: true });
     });
 
-    it('should inject prompt and install hooks', async () => {
+    it('should inject prompt to global config dir and install hooks', async () => {
         await runSetup({
             agent: 'opencode',
         });
 
-        // Check prompt was injected
-        const agentsFile = await readFile(join(projectDir, 'AGENTS.md'), 'utf-8');
+        // opencode global path: ~/.config/opencode/AGENTS.md → tempDir/.config/opencode/AGENTS.md
+        const agentsFile = await readFile(join(tempDir, '.config', 'opencode', 'AGENTS.md'), 'utf-8');
         expect(agentsFile).toContain('harmonia');
 
         // Check console output
         const output = consoleLogs.join('\n');
         expect(output).toContain('[done]');
         expect(output).toContain('Ready');
+    });
+
+    it('should not create AGENTS.md in project directory', async () => {
+        await runSetup({
+            agent: 'opencode',
+        });
+
+        // No AGENTS.md should exist in the project directory
+        const projectAgentsFile = await readFile(join(projectDir, 'AGENTS.md'), 'utf-8').catch(() => null);
+        expect(projectAgentsFile).toBeNull();
     });
 
     it('should not register project or initialize state', async () => {

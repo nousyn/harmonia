@@ -3,10 +3,13 @@
  *
  * Delegates to @s_s/agent-kit for agent detection, prompt injection, and
  * marker management. Harmonia provides the prompt content via templates.ts.
+ *
+ * Always uses global scope — PM prompt is project-agnostic and should be
+ * written to the agent's global config directory (e.g. ~/.openclaw/workspace/AGENTS.md).
  */
 
+import { createKit, detectAgent, resolveConfigPath, type AgentType } from '@s_s/agent-kit';
 import { readFile } from 'node:fs/promises';
-import { createKit, detectAgent, type AgentType } from '@s_s/agent-kit';
 import { generatePmPrompt } from './templates.js';
 
 /** Shared kit instance — binds all marker tags to "harmonia" */
@@ -29,39 +32,42 @@ export async function detectHostAgent(projectDir: string): Promise<AgentType> {
 }
 
 /**
- * Inject the Harmonia PM guidance block into a config file.
+ * Inject the Harmonia PM guidance block into the agent's **global** config file.
  * If a harmonia block already exists, it is replaced (idempotent).
  * If the file doesn't exist, it is created.
  *
- * Uses agent-kit's injectPrompt which manages <!-- harmonia:start/end --> markers.
+ * Uses global scope because PM prompt is project-agnostic.
+ * This writes to the agent's global config directory:
+ *   - opencode:    ~/.config/opencode/AGENTS.md
+ *   - claude-code: ~/.claude/CLAUDE.md
+ *   - openclaw:    ~/.openclaw/workspace/AGENTS.md
+ *   - codex:       ~/.codex/AGENTS.md
  */
 export async function injectPrompt(
-    projectDir: string,
     agentType: AgentType,
 ): Promise<{ filePath: string; created: boolean; replaced: boolean }> {
     const prompt = generatePmPrompt();
+    const globalScope = { scope: 'global' as const };
 
     // Check pre-existing state for return value
-    const hasExisting = await kit.hasPromptInjected(agentType, { scope: 'project', projectRoot: projectDir });
+    const hasExisting = await kit.hasPromptInjected(agentType, globalScope);
+
+    // Resolve the actual file path for reporting
+    const filePath = resolveConfigPath(agentType, globalScope);
 
     // Determine if the config file exists (for created flag)
     let fileExists = true;
     try {
-        // agent-kit resolves the config path internally; we replicate the check
-        // by looking for an existing injection or reading the resolved file
-        const configFileName = agentType === 'claude-code' ? 'CLAUDE.md' : 'AGENTS.md';
-        await readFile(`${projectDir}/${configFileName}`, 'utf-8');
+        await readFile(filePath, 'utf-8');
     } catch {
         fileExists = false;
     }
 
     // Inject via agent-kit (handles create, append, and idempotent replace)
-    await kit.injectPrompt(agentType, prompt, { scope: 'project', projectRoot: projectDir });
-
-    const configFileName = agentType === 'claude-code' ? 'CLAUDE.md' : 'AGENTS.md';
+    await kit.injectPrompt(agentType, prompt, globalScope);
 
     return {
-        filePath: `${projectDir}/${configFileName}`,
+        filePath,
         created: !fileExists,
         replaced: hasExisting,
     };
