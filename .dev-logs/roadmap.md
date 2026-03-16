@@ -1,5 +1,92 @@
 Roadmap
 
+---
+
+# Superpowers vs Harmonia 对比分析
+
+> 日期: 2026-03-17
+> 参考: https://github.com/obra/superpowers (88k stars)
+
+## 本质区别
+
+| 维度         | Superpowers                          | Harmonia                                       |
+| ------------ | ------------------------------------ | ---------------------------------------------- |
+| **定位**     | Prompt 注入框架（纯文本技能包）      | MCP Server（结构化工具 + 状态管理）            |
+| **实现**     | Markdown 文件 + Shell 脚本，零代码   | TypeScript 服务，提供 MCP tools                |
+| **安装**     | 注入到 agent 的 system prompt 中     | 作为 MCP server 运行，agent 调用 tools         |
+| **状态**     | 无状态（依赖 git + 文件系统）        | 有状态（JSON 持久化：项目、dispatch、session） |
+| **多 agent** | agent 自己决定何时启动子代理         | PM 通过 dispatch_role 工具协调                 |
+| **触发**     | Skill 自动触发（prompt 指令 + hook） | 工具需 PM 主动调用（prompt 引导）              |
+
+## Superpowers 核心工作流
+
+```
+using-superpowers (元技能，路由入口，每次会话自动加载)
+    → brainstorming (构思设计，硬门控：设计批准前不写代码)
+        → writing-plans (编写实施计划，极细粒度任务 2-5 分钟/步)
+            → subagent-driven-development (首选) 或 executing-plans (退路)
+                → requesting-code-review (两阶段：spec 合规 + 代码质量)
+                    → finishing-a-development-branch (收尾)
+
+横切关注点：
+  - test-driven-development (RED-GREEN-REFACTOR 铁律，贯穿所有实现)
+  - dispatching-parallel-agents (并行解决独立问题)
+```
+
+## 关键设计亮点
+
+### 1. Session Start Hook — 上下文自动注入
+
+- `hooks/session-start` 在每次会话开始时（包括 resume/clear/compact）自动注入 `using-superpowers` skill
+- 这个 skill 包含完整的技能路由决策流程图，agent 据此自动判断应激活哪个 skill
+- **Harmonia 差距：** PM 新会话无法自动恢复项目上下文
+
+### 2. 两阶段代码审查
+
+- 每个任务完成后先派 spec-reviewer（规格合规），再派 code-quality-reviewer（代码质量）
+- **Harmonia 差距：** approve-doc 只做单轮审批
+
+### 3. 子代理上下文隔离
+
+- 子代理永远不继承控制器会话上下文，由控制器精确构造所需信息
+- **Harmonia 已有：** dispatch_role 返回精心构造的 data package，理念一致
+
+### 4. 防 AI 走捷径的"红旗思维"检测
+
+- 多个 skill 中列出"AI 会找的借口"对照表，系统性阻止偷懒
+- **Harmonia 差距：** PM prompt 有流程引导但无反合理化防护
+
+### 5. Skill 的自动触发机制
+
+- using-superpowers 元技能强制加载后，agent 根据上下文自动激活 skill
+- 不是"建议"而是"必须"——"哪怕只有 1% 的可能性某技能适用，就必须调用它"
+- **Harmonia 差距：** 工具需 PM 主动调用，仅有 prompt 引导
+
+### 6. 模型选择策略（subagent-driven-development）
+
+- 机械性任务 → 便宜/快速模型
+- 集成和判断型任务 → 标准模型
+- 架构、设计、审查 → 最强模型
+- **Harmonia 已有：** role frontmatter 中的 model 字段（high/medium/low）
+
+## Harmonia 的优势
+
+- **结构化状态管理：** 项目、阶段、文档、dispatch、session 的完整追踪，Superpowers 完全没有
+- **MCP 工具接口：** 标准化的工具协议，不依赖特定 agent 平台的 prompt 注入能力
+- **多 agent 协调：** 真正的 PM 协调机制，而非 agent 自行决定
+- **平台无关：** MCP 协议支持任何 MCP 客户端，不需要为每个平台写适配层
+
+## 对 Harmonia 的启发总结
+
+| 优先级 | 启发点                        | 建议                                                     |
+| ------ | ----------------------------- | -------------------------------------------------------- |
+| **高** | Session 恢复 / 上下文自动注入 | 实现 session-start 机制，自动恢复项目状态                |
+| **中** | 防 AI 合理化的 prompt 防护    | 在 PM prompt 和角色 prompt 中加入红旗思维检测            |
+| **中** | 两阶段审查                    | 考虑在 workflow 定义中支持多轮审批                       |
+| **低** | Skill 自动触发                | Harmonia 通过 MCP tools 已有显式调用，自动触发的需求不强 |
+
+---
+
 # 协作机制自定义
 
 > 状态: 规划（未开始）
