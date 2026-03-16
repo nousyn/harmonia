@@ -1,5 +1,5 @@
 /**
- * MCP Tool: approve_doc
+ * MCP Tool: doc_approve / review_list
  * Approve or reject a document that is pending review.
  */
 
@@ -9,7 +9,7 @@ import { resolveReview, getPendingReviews } from '../core/reviews.js';
 
 export function registerApproveDoc(server: McpServer): void {
     server.tool(
-        'approve_doc',
+        'doc_approve',
         'Approve or reject a document pending review. Call this after the user has reviewed the document and confirmed (or requested changes).',
         {
             project_name: z.string().describe('Project name'),
@@ -39,7 +39,7 @@ export function registerApproveDoc(server: McpServer): void {
                                 text: [
                                     `Document "${doc_id}" rejected.`,
                                     comment ? `User feedback: ${comment}` : '',
-                                    `Please revise the document based on the feedback and call write_doc again.`,
+                                    `Please revise the document based on the feedback and call doc_write again.`,
                                 ].join('\n'),
                             },
                         ],
@@ -60,7 +60,7 @@ export function registerApproveDoc(server: McpServer): void {
     );
 
     server.tool(
-        'list_pending_reviews',
+        'review_list',
         'List all documents currently pending user review.',
         {
             project_name: z.string().describe('Project name'),

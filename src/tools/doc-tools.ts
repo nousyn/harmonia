@@ -1,14 +1,14 @@
 /**
- * MCP Tools: write_doc / read_doc / list_docs
+ * MCP Tools: doc_write / doc_read / doc_list
  * Read and write project documents under <data_dir>/<project_name>/docs/
  *
- * write_doc validates content against document schemas and checks review
+ * doc_write validates content against document schemas and checks review
  * configuration. If validation fails, the write is rejected with specific
  * error details. If review is required, the document is submitted for
  * user approval.
  *
  * Sequential mode (P3): When a document has `steps` defined in workflow.json
- * and the project scale is >= medium, write_doc requires a `step` parameter.
+ * and the project scale is >= medium, doc_write requires a `step` parameter.
  * Each step is validated independently, and the final step automatically
  * writes the formal document and triggers the review flow.
  */
@@ -36,7 +36,7 @@ function isSequentialActive(docDef: DocDefinition, scale: ProjectScale): boolean
 
 export function registerDocTools(server: McpServer, workflowsDir: string): void {
     server.tool(
-        'write_doc',
+        'doc_write',
         'Write or update a project document. For documents with sequential steps (PRD, tech-design, task-breakdown) at medium/large scale, you MUST specify the step parameter. Automatically checks review configuration — if review is required, the document is submitted for user approval.',
         {
             project_name: z.string().describe('Project name'),
@@ -48,7 +48,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
                 .string()
                 .optional()
                 .describe(
-                    'Sequential step ID (required for docs with steps at medium/large scale). Use get_project_status to see available steps.',
+                    'Sequential step ID (required for docs with steps at medium/large scale). Use project_status to see available steps.',
                 ),
         },
         async ({ project_name, doc_id, content, step }) => {
@@ -74,13 +74,13 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
                 };
             }
 
-            // Guard: reject external doc types (should be produced outside write_doc)
+            // Guard: reject external doc types (should be produced outside doc_write)
             if (docDef.external) {
                 return {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `文档 "${doc_id}" 是外部产出类型，不应通过 write_doc 写入。`,
+                            text: `文档 "${doc_id}" 是外部产出类型，不应通过 doc_write 写入。`,
                         },
                     ],
                     isError: true,
@@ -158,8 +158,8 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
                                 `** REVIEW REQUIRED **`,
                                 `This document requires user approval before the workflow can proceed.`,
                                 `Please present the document content to the user and ask for their confirmation.`,
-                                `After user approval, call approve_doc with project_name="${project_name}" and doc_id="${doc_id}".`,
-                                `If the user requests changes, revise the document and call write_doc again.`,
+                                `After user approval, call doc_approve with project_name="${project_name}" and doc_id="${doc_id}".`,
+                                `If the user requests changes, revise the document and call doc_write again.`,
                             ].join('\n'),
                         },
                     ],
@@ -178,7 +178,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
     );
 
     server.tool(
-        'read_doc',
+        'doc_read',
         'Read a project document from the project docs directory.',
         {
             project_name: z.string().describe('Project name'),
@@ -200,7 +200,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
                     content: [
                         {
                             type: 'text' as const,
-                            text: `Document "${doc_id}" not found. Use list_docs to see available documents.`,
+                            text: `Document "${doc_id}" not found. Use doc_list to see available documents.`,
                         },
                     ],
                     isError: true,
@@ -210,7 +210,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
     );
 
     server.tool(
-        'list_docs',
+        'doc_list',
         'List all project documents in the project docs directory.',
         {
             project_name: z.string().describe('Project name'),
@@ -348,7 +348,7 @@ async function handleSequentialWrite(
                     `步骤 "${step}" (${stepDef.name}) 完成，产物已写入 ${artifactPath}`,
                     ``,
                     `下一步: ${nextStep.id} — ${nextStep.description}`,
-                    `请调用 write_doc(project_name="${projectName}", doc_id="${docId}", step="${nextStep.id}", content=...)`,
+                    `请调用 doc_write(project_name="${projectName}", doc_id="${docId}", step="${nextStep.id}", content=...)`,
                 ].join('\n'),
             },
         ],
@@ -413,8 +413,8 @@ async function handleFinalStep(
                         `** REVIEW REQUIRED **`,
                         `This document requires user approval before the workflow can proceed.`,
                         `Please present the document content to the user and ask for their confirmation.`,
-                        `After user approval, call approve_doc with project_name="${projectName}" and doc_id="${docId}".`,
-                        `If the user requests changes, revise the document and call write_doc again with the appropriate step.`,
+                        `After user approval, call doc_approve with project_name="${projectName}" and doc_id="${docId}".`,
+                        `If the user requests changes, revise the document and call doc_write again with the appropriate step.`,
                     ].join('\n'),
                 },
             ],

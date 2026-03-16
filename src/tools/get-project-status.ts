@@ -1,5 +1,5 @@
 /**
- * MCP Tool: get_project_status
+ * MCP Tool: project_status
  * Read the current project status with rich context for PM decision-making.
  * Includes phase progress, documents, pending reviews, dispatch records,
  * active sessions, and intelligent next-step suggestions.
@@ -46,7 +46,7 @@ function deriveNextSteps(
     if (pendingReviews.length > 0) {
         const docNames = pendingReviews.map((r) => r.docId).join(', ');
         suggestions.push(
-            `Review pending documents: ${docNames}. Present them to the user and call approve_doc after user feedback.`,
+            `Review pending documents: ${docNames}. Present them to the user and call doc_approve after user feedback.`,
         );
     }
 
@@ -59,7 +59,7 @@ function deriveNextSteps(
     if (dispatchedNotRunning.length > 0) {
         for (const d of dispatchedNotRunning) {
             suggestions.push(
-                `Dispatch ${d.id} (${d.role}) is created but not yet launched. Launch the agent and call report_dispatch to register it.`,
+                `Dispatch ${d.id} (${d.role}) is created but not yet launched. Launch the agent and call dispatch_report to register it.`,
             );
         }
     }
@@ -69,7 +69,7 @@ function deriveNextSteps(
             const session = sessions.find((s) => s.id === d.sessionId);
             const agentInfo = session?.agentSessionId ? ` (agent session: ${session.agentSessionId})` : '';
             suggestions.push(
-                `Dispatch ${d.id} (${d.role}) is running${agentInfo}. Check if the agent has finished, then call report_dispatch with status="completed" or "failed".`,
+                `Dispatch ${d.id} (${d.role}) is running${agentInfo}. Check if the agent has finished, then call dispatch_report with status="completed" or "failed".`,
             );
         }
     }
@@ -78,7 +78,7 @@ function deriveNextSteps(
         for (const d of failedDispatches) {
             const reason = d.note ? ` Reason: ${d.note}` : '';
             suggestions.push(
-                `Dispatch ${d.id} (${d.role}) failed.${reason} Consider re-dispatching with dispatch_role.`,
+                `Dispatch ${d.id} (${d.role}) failed.${reason} Consider re-dispatching with role_dispatch.`,
             );
         }
     }
@@ -100,15 +100,15 @@ function deriveNextSteps(
 
         if (nonPmRoles.length > 0 && !alreadyDispatched) {
             suggestions.push(
-                `Dispatch ${nonPmRoles.join(', ')} to produce: ${missingOutputs.join(', ')}. Use dispatch_role to prepare task data.`,
+                `Dispatch ${nonPmRoles.join(', ')} to produce: ${missingOutputs.join(', ')}. Use role_dispatch to prepare task data.`,
             );
         } else if (nonPmRoles.length === 0) {
-            suggestions.push(`Produce remaining documents: ${missingOutputs.join(', ')}. Use write_doc for each.`);
+            suggestions.push(`Produce remaining documents: ${missingOutputs.join(', ')}. Use doc_write for each.`);
         }
     } else if (pendingReviews.length === 0 && activeDispatches.length === 0) {
         // All outputs exist, no pending reviews, no active dispatches — can advance
         suggestions.push(
-            `All outputs for "${currentPhaseDef.name}" are complete. Advance with: update_phase(project_name, "${state.currentPhase}", "completed")`,
+            `All outputs for "${currentPhaseDef.name}" are complete. Advance with: phase_update(project_name, "${state.currentPhase}", "completed")`,
         );
     }
 
@@ -198,7 +198,7 @@ function formatStepProgress(docDef: DocDefinition, stepState: DocStepState | und
 
 export function registerGetProjectStatus(server: McpServer, workflowsDir: string): void {
     server.tool(
-        'get_project_status',
+        'project_status',
         'Get the current project status including phase progress, documents, pending reviews, dispatch records, active sessions, and next-step suggestions.',
         {
             project_name: z.string().describe('Project name'),

@@ -58,11 +58,11 @@ describe('hook shared constants', () => {
 
     it('HARMONIA_TOOLS should include all MCP tools', () => {
         expect(HARMONIA_TOOLS).toContain('project_init');
-        expect(HARMONIA_TOOLS).toContain('setup_project');
-        expect(HARMONIA_TOOLS).toContain('dispatch_role');
-        expect(HARMONIA_TOOLS).toContain('write_doc');
-        expect(HARMONIA_TOOLS).toContain('read_doc');
-        expect(HARMONIA_TOOLS).toContain('approve_doc');
+        expect(HARMONIA_TOOLS).toContain('project_setup');
+        expect(HARMONIA_TOOLS).toContain('role_dispatch');
+        expect(HARMONIA_TOOLS).toContain('doc_write');
+        expect(HARMONIA_TOOLS).toContain('doc_read');
+        expect(HARMONIA_TOOLS).toContain('doc_approve');
     });
 
     it('timeout thresholds should be positive numbers', () => {

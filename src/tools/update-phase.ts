@@ -1,5 +1,5 @@
 /**
- * MCP Tool: update_phase
+ * MCP Tool: phase_update
  * Advance or update the status of a project phase.
  *
  * Guards (when completing a phase with force!=true):
@@ -20,7 +20,7 @@ import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
 
 export function registerUpdatePhase(server: McpServer, workflowsDir: string): void {
     server.tool(
-        'update_phase',
+        'phase_update',
         'Update the status of a project phase. When a phase is completed, the next phase is automatically started. Completing a phase checks that all required doc outputs exist.',
         {
             project_name: z.string().describe('Project name'),

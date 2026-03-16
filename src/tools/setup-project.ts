@@ -1,5 +1,5 @@
 /**
- * MCP Tool: setup_project
+ * MCP Tool: project_setup
  *
  * Inject Harmonia PM guidance into the host agent's config file (e.g. AGENTS.md).
  * This makes the host agent aware of Harmonia tools and the PM workflow.
@@ -15,7 +15,7 @@ import type { AgentType } from '@s_s/agent-kit';
 
 export function registerSetupProject(server: McpServer): void {
     server.tool(
-        'setup_project',
+        'project_setup',
         "Inject Harmonia PM guidance into the host agent's config file (AGENTS.md / CLAUDE.md). Makes the host agent aware of all Harmonia tools and the PM workflow. Requires project_init to be called first. Idempotent — safe to call multiple times.",
         {
             project_name: z.string().describe('Project name (must be initialized)'),
@@ -92,7 +92,7 @@ export function registerSetupProject(server: McpServer): void {
                                 ``,
                                 `## Next Steps`,
                                 `The host agent will now follow the PM workflow automatically.`,
-                                `Start by calling \`get_project_status\` to see where the project stands.`,
+                                `Start by calling \`project_status\` to see where the project stands.`,
                             ].join('\n'),
                         },
                     ],
@@ -106,7 +106,7 @@ export function registerSetupProject(server: McpServer): void {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Project "${project_name}" not initialized. Call project_init first, then setup_project.`,
+                                text: `Project "${project_name}" not initialized. Call project_init first, then project_setup.`,
                             },
                         ],
                         isError: true,

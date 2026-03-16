@@ -20,9 +20,9 @@ describe('setup', () => {
         expect(prompt).toContain('/home/user/my-app');
         expect(prompt).toContain('dev');
         expect(prompt).toContain('medium');
-        expect(prompt).toContain('dispatch_role');
-        expect(prompt).toContain('get_project_status');
-        expect(prompt).toContain('write_doc');
-        expect(prompt).toContain('approve_doc');
+        expect(prompt).toContain('role_dispatch');
+        expect(prompt).toContain('project_status');
+        expect(prompt).toContain('doc_write');
+        expect(prompt).toContain('doc_approve');
     });
 });

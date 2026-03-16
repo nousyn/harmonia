@@ -1,8 +1,10 @@
 # Harmonia
 
-> 多智能体编排 MCP 服务器 — 让不同角色和谐协作
+> _众声喧哗之中，和谐不是沉默，而是各得其所。_
 
-Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 的多智能体编排服务器。它为 AI 编程助手（Claude Code、OpenCode、OpenClaw 等）提供项目管理工具，让多个 AI agent 在预定义的工作流中按角色协作完成软件开发任务。
+Multi-agent orchestration MCP server with pluggable workflows.
+
+Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 的智能体编排服务器。它为 AI 编程助手（Claude Code、OpenCode、OpenClaw、Codex）提供项目管理工具，让多个 AI agent 在预定义的工作流中按角色协作完成软件开发任务。
 
 ## 核心理念
 
@@ -18,50 +20,53 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 - 5 个阶段：需求澄清 → 方案设计 → 开发 → 测试 → 交付验收
 - 4 个角色：PM / 架构师 / 开发者 / 测试
 - 15 种文档类型，按项目规模（small / medium / large）自动调整
-- 角色调度与报告机制（`dispatch_role` / `report_dispatch`）
+- 角色调度与报告机制（`role_dispatch` / `dispatch_report`）
 
-### P0 — 文档 Schema 校验
+### 文档结构校验
 
-对文档内容进行结构化校验，包括 Markdown 标题结构和 JSON 字段/类型验证。每次 `write_doc` 时自动执行，确保产出物符合预期格式。
+对文档内容进行结构化校验，包括 Markdown 标题结构和 JSON 字段/类型验证。每次 `doc_write` 时自动执行，确保产出物符合预期格式。
 
-### P1 — Tool Guard（工具约束）
+### 工具访问控制
 
-基于 MCP tool 级别的硬性约束。通过 `override_tools` 为每个角色定义允许使用的工具白名单/黑名单，在 agent 层面强制执行。
+基于 MCP tool 级别的硬性约束。为每个角色定义允许使用的工具白名单/黑名单，在 agent 层面强制执行，防止角色越权操作。
 
-### P2 — Agent Hook（边界守卫）
+### 跨 Agent 边界守卫
 
 为 AI 编程助手安装 hook 脚本，在工具调用前拦截越界操作：
 
-- **Claude Code** — Shell hook，通过 exit code 阻断
+- **Claude Code / Codex** — Shell hook，通过 exit code 阻断
 - **OpenCode** — TypeScript plugin hook
 - **OpenClaw** — handler.ts hook
 
 同时提供主动提醒机制，在角色提示词中注入当前约束上下文。
 
-### P3 — Sequential Mode（逐步写入）
+### 逐步文档写入
 
 大型文档拆分为多个步骤（steps），每步独立写入并校验。支持：
 
 - 每步独立的 JSON Schema 校验
 - 步骤回滚（重写某步时自动清除后续步骤记录）
-- `get_project_status` 中展示步骤进度
+- `project_status` 中展示步骤进度
 
 ## MCP 工具一览
 
-| 工具                 | 说明                                       |
-| -------------------- | ------------------------------------------ |
-| `project_init`       | 注册项目，创建数据目录，初始化工作流       |
-| `get_project_status` | 查看当前阶段、文档状态、步骤进度           |
-| `get_role_prompt`    | 获取角色提示词（含约束上下文注入）         |
-| `update_phase`       | 推进项目阶段                               |
-| `write_doc`          | 写入文档（自动 schema 校验，支持逐步写入） |
-| `read_doc`           | 读取文档内容                               |
-| `list_docs`          | 列出项目所有文档                           |
-| `approve_doc`        | 审批需要 review 的文档（如 PRD）           |
-| `dispatch_role`      | 调度角色执行任务                           |
-| `report_dispatch`    | 角色报告任务完成状态                       |
-| `override_tools`     | 设置角色的工具白名单/黑名单                |
-| `setup_project`      | 为 AI 编程助手安装 hook 脚本               |
+| 工具              | 说明                                       |
+| ----------------- | ------------------------------------------ |
+| `project_init`    | 注册项目，创建数据目录，初始化工作流       |
+| `project_status`  | 查看当前阶段、文档状态、步骤进度           |
+| `project_setup`   | 为 AI 编程助手安装 hook 脚本               |
+| `phase_update`    | 推进项目阶段                               |
+| `doc_write`       | 写入文档（自动 schema 校验，支持逐步写入） |
+| `doc_read`        | 读取文档内容                               |
+| `doc_list`        | 列出项目所有文档                           |
+| `doc_approve`     | 审批需要 review 的文档（如 PRD）           |
+| `review_list`     | 列出待审批的文档                           |
+| `review_set_rule` | 设置审批规则覆盖                           |
+| `role_prompt`     | 获取角色提示词（含约束上下文注入）         |
+| `role_dispatch`   | 调度角色执行任务                           |
+| `dispatch_report` | 角色报告任务完成状态                       |
+| `guard_set`       | 设置角色的工具白名单/黑名单                |
+| `guard_get`       | 查看当前工具约束配置                       |
 
 ## 工作流结构
 
@@ -89,33 +94,94 @@ deliver (交付验收)      → PM 验收成果、输出复盘记录
 ## 安装
 
 ```bash
-npm install @s_s/harmonia
+npm install -g @s_s/harmonia
 ```
 
 ## 配置
 
-在你的 AI 编程助手中将 Harmonia 注册为 MCP 服务器：
+将 Harmonia 注册为 MCP 服务器。
 
-### Claude Code
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+Via CLI:
+
+```bash
+claude mcp add --transport stdio harmonia -- harmonia
+```
+
+Or add to `.mcp.json`:
 
 ```json
-// .mcp.json
 {
   "mcpServers": {
     "harmonia": {
-      "command": "npx",
-      "args": ["@s_s/harmonia"]
+      "command": "harmonia"
     }
   }
 }
 ```
 
-### OpenCode
+</details>
 
-```yaml
-# opencode.json
-{ 'mcp': { 'harmonia': { 'type': 'stdio', 'command': 'npx', 'args': ['@s_s/harmonia'] } } }
+<details>
+<summary><strong>OpenCode</strong></summary>
+
+Add to `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "harmonia": {
+      "type": "local",
+      "command": ["harmonia"]
+    }
+  }
+}
 ```
+
+</details>
+
+<details>
+<summary><strong>Codex</strong></summary>
+
+Via CLI:
+
+```bash
+codex mcp add harmonia -- harmonia
+```
+
+Or add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.harmonia]
+command = "harmonia"
+```
+
+</details>
+
+<details>
+<summary><strong>OpenClaw</strong> (via mcporter)</summary>
+
+Add to `config/mcporter.json` (or `~/.mcporter/mcporter.json` for global):
+
+```json
+{
+  "mcpServers": {
+    "harmonia": {
+      "command": "harmonia"
+    }
+  }
+}
+```
+
+Or via mcporter CLI:
+
+```bash
+mcporter config add harmonia --command harmonia --scope home
+```
+
+</details>
 
 ## 数据存储
 

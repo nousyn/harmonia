@@ -1,5 +1,5 @@
 /**
- * MCP Tool: get_role_prompt
+ * MCP Tool: role_prompt
  * Retrieve the prompt and configuration for a specific role,
  * with capability overrides injected into the prompt.
  */
@@ -56,7 +56,7 @@ function buildOverridePromptSection(roleId: string, overrides: OverrideConfig): 
 
 export function registerGetRolePrompt(server: McpServer, workflowsDir: string): void {
     server.tool(
-        'get_role_prompt',
+        'role_prompt',
         "Get the system prompt and configuration for a specific role in the workflow. Includes any capability overrides configured at global or project level. Use this to understand what a role does or to set up an agent with the role's prompt.",
         {
             workflow: z.string().default('dev').describe('Workflow name (default: dev)'),

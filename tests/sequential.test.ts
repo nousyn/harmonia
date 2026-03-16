@@ -1,7 +1,7 @@
 /**
  * Tests for P3 Sequential mode.
  * 1. JSON validation in schema.ts (isJson path) — already written above
- * 2. write_doc sequential orchestration via MCP tool calls
+ * 2. doc_write sequential orchestration via MCP tool calls
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -97,9 +97,9 @@ describe('validateDoc — JSON mode', () => {
     });
 });
 
-// ─── write_doc Sequential Orchestration (via MCP tool calls) ───
+// ─── doc_write Sequential Orchestration (via MCP tool calls) ───
 
-describe('write_doc — sequential mode', () => {
+describe('doc_write — sequential mode', () => {
     let tempDir: string;
     let workflowsDir: string;
     let projectDir: string;
@@ -231,7 +231,7 @@ describe('write_doc — sequential mode', () => {
     // --- Tests follow in next part ---
 
     it('should require step parameter for medium scale doc with steps', async () => {
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: 'some content',
@@ -242,7 +242,7 @@ describe('write_doc — sequential mode', () => {
     });
 
     it('should reject unknown step ID', async () => {
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: 'x',
@@ -254,7 +254,7 @@ describe('write_doc — sequential mode', () => {
 
     it('should reject step when prerequisites not met', async () => {
         // Try to write step 2 without completing step 1
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: checkJson,
@@ -266,7 +266,7 @@ describe('write_doc — sequential mode', () => {
     });
 
     it('should accept valid first step and return progress', async () => {
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: reqJson,
@@ -279,7 +279,7 @@ describe('write_doc — sequential mode', () => {
     });
 
     it('should write step artifact file to disk', async () => {
-        await callTool('write_doc', {
+        await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: reqJson,
@@ -293,7 +293,7 @@ describe('write_doc — sequential mode', () => {
     it('should reject step with invalid JSON schema', async () => {
         // requirements step expects array field "features" — give it a string
         const badJson = JSON.stringify({ features: 'not-array', scope: 'test' });
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: badJson,
@@ -305,7 +305,7 @@ describe('write_doc — sequential mode', () => {
 
     it('should complete all steps and write formal doc', async () => {
         // Step 1
-        const r1 = await callTool('write_doc', {
+        const r1 = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: reqJson,
@@ -314,7 +314,7 @@ describe('write_doc — sequential mode', () => {
         expect(r1.isError).toBeFalsy();
 
         // Step 2
-        const r2 = await callTool('write_doc', {
+        const r2 = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: checkJson,
@@ -323,7 +323,7 @@ describe('write_doc — sequential mode', () => {
         expect(r2.isError).toBeFalsy();
 
         // Step 3
-        const r3 = await callTool('write_doc', {
+        const r3 = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: draftMd,
@@ -332,7 +332,7 @@ describe('write_doc — sequential mode', () => {
         expect(r3.isError).toBeFalsy();
 
         // Step 4 (final) — should trigger auto-merge + review
-        const r4 = await callTool('write_doc', {
+        const r4 = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: finalMd,
@@ -357,19 +357,19 @@ describe('write_doc — sequential mode', () => {
 
     it('should rollback subsequent steps on overwrite', async () => {
         // Complete steps 1, 2, 3
-        await callTool('write_doc', {
+        await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: reqJson,
             step: 'requirements',
         });
-        await callTool('write_doc', {
+        await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: checkJson,
             step: 'completeness-check',
         });
-        await callTool('write_doc', { project_name: 'test-project', doc_id: 'prd', content: draftMd, step: 'draft' });
+        await callTool('doc_write', { project_name: 'test-project', doc_id: 'prd', content: draftMd, step: 'draft' });
 
         // Overwrite step 1 — should rollback steps 2 and 3
         const newReqJson = JSON.stringify({
@@ -378,7 +378,7 @@ describe('write_doc — sequential mode', () => {
             scope: 'V2',
             priorities: { auth: 'P0' },
         });
-        const r = await callTool('write_doc', {
+        const r = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: newReqJson,
@@ -392,7 +392,7 @@ describe('write_doc — sequential mode', () => {
         expect(stepsData.docs.prd.completedSteps[0].stepId).toBe('requirements');
 
         // Trying step 3 directly should fail (step 2 not done)
-        const r3 = await callTool('write_doc', {
+        const r3 = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: draftMd,
@@ -437,7 +437,7 @@ describe('write_doc — sequential mode', () => {
             '- 代码审查通过，无严重缺陷和安全漏洞',
             '- 性能测试满足响应时间要求（< 500ms）',
         ].join('\n');
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content,
@@ -448,23 +448,23 @@ describe('write_doc — sequential mode', () => {
 
     it('should reject final step when formal doc validation fails', async () => {
         // Complete steps 1, 2, 3
-        await callTool('write_doc', {
+        await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: reqJson,
             step: 'requirements',
         });
-        await callTool('write_doc', {
+        await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: checkJson,
             step: 'completeness-check',
         });
-        await callTool('write_doc', { project_name: 'test-project', doc_id: 'prd', content: draftMd, step: 'draft' });
+        await callTool('doc_write', { project_name: 'test-project', doc_id: 'prd', content: draftMd, step: 'draft' });
 
         // Step 4 with content that fails step schema (prd.final.json) — missing sections + too short
         const badFinal = '# PRD\n\n## 项目概述\nShort content without required sections.';
-        const { text, isError } = await callTool('write_doc', {
+        const { text, isError } = await callTool('doc_write', {
             project_name: 'test-project',
             doc_id: 'prd',
             content: badFinal,

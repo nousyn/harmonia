@@ -1,5 +1,5 @@
 /**
- * MCP Tools: set_override / get_overrides
+ * MCP Tools: guard_set / review_set_rule / guard_get
  * Manage capability overrides and review settings.
  */
 
@@ -16,7 +16,7 @@ import type { CapabilityOverride } from '../core/types.js';
 
 export function registerOverrideTools(server: McpServer): void {
     server.tool(
-        'set_capability_override',
+        'guard_set',
         'Configure a role capability to use an external skill or MCP tool instead of the built-in behavior. Settings are saved to the override config file.',
         {
             scope: z.enum(['global', 'project']).describe('Override scope: global (all projects) or project-specific'),
@@ -64,7 +64,7 @@ export function registerOverrideTools(server: McpServer): void {
     );
 
     server.tool(
-        'set_review_override',
+        'review_set_rule',
         'Enable or disable review requirement for a specific document type.',
         {
             scope: z.enum(['global', 'project']).describe('Override scope: global or project-specific'),
@@ -99,7 +99,7 @@ export function registerOverrideTools(server: McpServer): void {
     );
 
     server.tool(
-        'get_overrides',
+        'guard_get',
         'Get the current override configuration. Shows the merged result (project + global) or a specific scope.',
         {
             project_name: z

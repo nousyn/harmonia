@@ -1,5 +1,5 @@
 /**
- * MCP Tool: dispatch_role
+ * MCP Tool: role_dispatch
  *
  * Prepare all data needed to hand off a task to a team member role.
  * Returns: role prompt (with overrides injected), frontmatter config,
@@ -101,8 +101,8 @@ function resolveExpectedOutputs(
 
 export function registerDispatchRole(server: McpServer, workflowsDir: string): void {
     server.tool(
-        'dispatch_role',
-        "Prepare all data needed to dispatch a task to a team member. Returns the role's prompt (with capability overrides), configuration, input documents, task brief, and a dispatch tracking ID. Automatically searches for reusable sessions and provides guidance. Does NOT launch agents — you (PM) decide how to pass this to the team member. After launching, call report_dispatch to register the session.",
+        'role_dispatch',
+        "Prepare all data needed to dispatch a task to a team member. Returns the role's prompt (with capability overrides), configuration, input documents, task brief, and a dispatch tracking ID. Automatically searches for reusable sessions and provides guidance. Does NOT launch agents — you (PM) decide how to pass this to the team member. After launching, call dispatch_report to register the session.",
         {
             project_name: z.string().describe('Project name'),
             role: z.string().describe('Role ID to dispatch (e.g. architect, developer, tester)'),
@@ -179,7 +179,7 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 // Determine input docs
                 const docIds = input_doc_ids ?? currentPhase?.inputs ?? [];
 
-                // Read input documents (skip external docs like "code" — not managed by write_doc)
+                // Read input documents (skip external docs like "code" — not managed by doc_write)
                 const inputDocs: Record<string, string> = {};
                 const missingDocs: string[] = [];
                 for (const docId of docIds) {
@@ -252,8 +252,8 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 summary.push(
                     ``,
                     `## Next Step`,
-                    `After launching the agent, call \`report_dispatch\` with dispatch_id="${dispatch.id}" and the agent's session ID.`,
-                    `When the agent finishes, call \`report_dispatch\` again with status="completed" (or "failed").`,
+                    `After launching the agent, call \`dispatch_report\` with dispatch_id="${dispatch.id}" and the agent's session ID.`,
+                    `When the agent finishes, call \`dispatch_report\` again with status="completed" (or "failed").`,
                     ``,
                     `## Role Prompt`,
                     ``,

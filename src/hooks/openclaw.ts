@@ -99,7 +99,7 @@ function handleBeforeToolCall(event: any): any {
             if (isInsideDir(filePath, PROJECT_DIR) && isCodeFile(filePath)) {
                 return {
                     block: true,
-                    reason: \`PM 不应直接修改代码文件。请通过 dispatch_role 将编码任务分配给 developer。文件: \${filePath}\`,
+                    reason: \`PM 不应直接修改代码文件。请通过 role_dispatch 将编码任务分配给 developer。文件: \${filePath}\`,
                 };
             }
 
@@ -107,7 +107,7 @@ function handleBeforeToolCall(event: any): any {
             if (!isInsideDir(filePath, PROJECT_DIR) && !isInsideDir(filePath, DATA_DIR)) {
                 return {
                     block: true,
-                    reason: \`PM 不应在项目目录和 Harmonia 数据目录之外写文件。请使用 write_doc 工具。路径: \${filePath}\`,
+                    reason: \`PM 不应在项目目录和 Harmonia 数据目录之外写文件。请使用 doc_write 工具。路径: \${filePath}\`,
                 };
             }
         }
@@ -121,7 +121,7 @@ function handleBeforeToolCall(event: any): any {
             if (blocked) {
                 return {
                     block: true,
-                    reason: \`PM 不应直接执行开发命令 (\${blocked}...)。请通过 dispatch_role 将任务分配给相应角色（developer/tester）。\`,
+                    reason: \`PM 不应直接执行开发命令 (\${blocked}...)。请通过 role_dispatch 将任务分配给相应角色（developer/tester）。\`,
                 };
             }
         }
@@ -143,7 +143,7 @@ function handleMessageReceived(): any {
                 const elapsed = minutesSince(d.updatedAt);
                 if (elapsed >= DISPATCH_TIMEOUT_MINUTES) {
                     reminders.push(
-                        \`- dispatch \${d.id} (\${d.role}) 已运行 \${elapsed} 分钟，建议调用 get_project_status 检查进度\`,
+                        \`- dispatch \${d.id} (\${d.role}) 已运行 \${elapsed} 分钟，建议调用 project_status 检查进度\`,
                     );
                 }
             }
@@ -164,7 +164,7 @@ function handleMessageReceived(): any {
         }
         if (pendingDocs.length > 0) {
             reminders.push(
-                \`- \${pendingDocs.length} 份文档待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingDocs.join(', ')} — 请尽快处理（approve_doc / reject_doc）\`,
+                \`- \${pendingDocs.length} 份文档待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingDocs.join(', ')} — 请尽快处理（doc_approve / reject_doc）\`,
             );
         }
     }
@@ -175,7 +175,7 @@ function handleMessageReceived(): any {
         const idle = minutesSince(state.updatedAt);
         if (idle >= PHASE_IDLE_TIMEOUT_MINUTES) {
             reminders.push(
-                \`- 当前阶段 (\${state.currentPhase}) 已空闲 \${idle} 分钟，建议调用 get_project_status 检查项目状态\`,
+                \`- 当前阶段 (\${state.currentPhase}) 已空闲 \${idle} 分钟，建议调用 project_status 检查项目状态\`,
             );
         }
     }

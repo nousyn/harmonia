@@ -30,7 +30,7 @@ import {
  *
  * Allows:
  * - All Harmonia MCP tools (they go through MCP, not file tools)
- * - Write/Edit to Harmonia data dir (doc writes via MCP go through write_doc)
+ * - Write/Edit to Harmonia data dir (doc writes via MCP go through doc_write)
  * - Read-only tools (Read, Glob, Grep, etc.)
  */
 function generatePreToolUseScript(params: HookParams): string {
@@ -84,7 +84,7 @@ case "$TOOL_NAME" in
       "$PROJECT_DIR"/*)
         case "$FILE_PATH" in
           ${codeExtsPattern})
-            block "PM 不应直接修改代码文件。请通过 dispatch_role 将编码任务分配给 developer。文件: $FILE_PATH"
+            block "PM 不应直接修改代码文件。请通过 role_dispatch 将编码任务分配给 developer。文件: $FILE_PATH"
             ;;
         esac
         ;;
@@ -95,7 +95,7 @@ case "$TOOL_NAME" in
       "$PROJECT_DIR"*) ;;  # inside project dir — allowed (non-code files like AGENTS.md)
       "$DATA_DIR"*) ;;      # inside data dir — allowed
       *)
-        block "PM 不应在项目目录和 Harmonia 数据目录之外写文件。请使用 write_doc 工具。路径: $FILE_PATH"
+        block "PM 不应在项目目录和 Harmonia 数据目录之外写文件。请使用 doc_write 工具。路径: $FILE_PATH"
         ;;
     esac
     ;;
@@ -116,7 +116,7 @@ ${blockedCmdsChecks}
     esac
 
     if [ -n "$BLOCKED_CMD" ]; then
-      block "PM 不应直接执行开发命令 ($BLOCKED_CMD...)。请通过 dispatch_role 将任务分配给相应角色（developer/tester）。"
+      block "PM 不应直接执行开发命令 ($BLOCKED_CMD...)。请通过 role_dispatch 将任务分配给相应角色（developer/tester）。"
     fi
     ;;
 esac
@@ -172,7 +172,7 @@ if [ -f "$DISPATCHES_FILE" ]; then
     if [ "$UPDATED_EPOCH" != "0" ]; then
       ELAPSED_MIN=$(( (NOW_EPOCH - UPDATED_EPOCH) / 60 ))
       if [ "$ELAPSED_MIN" -ge ${DISPATCH_TIMEOUT_MINUTES} ]; then
-        add_reminder "- dispatch $DID ($DROLE) 已运行 $ELAPSED_MIN 分钟，建议调用 get_project_status 检查进度"
+        add_reminder "- dispatch $DID ($DROLE) 已运行 $ELAPSED_MIN 分钟，建议调用 project_status 检查进度"
       fi
     fi
   done <<< "$RUNNING"
@@ -198,7 +198,7 @@ if [ -f "$REVIEWS_FILE" ]; then
   done <<< "$PENDING"
   
   if [ "$PENDING_COUNT" -gt 0 ]; then
-    add_reminder "- $PENDING_COUNT 份文档待审核超过 ${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟:$PENDING_DOCS — 请尽快处理（approve_doc / reject_doc）"
+    add_reminder "- $PENDING_COUNT 份文档待审核超过 ${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟:$PENDING_DOCS — 请尽快处理（doc_approve / reject_doc）"
   fi
 fi
 
@@ -213,7 +213,7 @@ if [ -f "$STATE_FILE" ]; then
     if [ "$STATE_EPOCH" != "0" ]; then
       IDLE_MIN=$(( (NOW_EPOCH - STATE_EPOCH) / 60 ))
       if [ "$IDLE_MIN" -ge ${PHASE_IDLE_TIMEOUT_MINUTES} ]; then
-        add_reminder "- 当前阶段 ($CURRENT_PHASE) 已空闲 $IDLE_MIN 分钟，建议调用 get_project_status 检查项目状态"
+        add_reminder "- 当前阶段 ($CURRENT_PHASE) 已空闲 $IDLE_MIN 分钟，建议调用 project_status 检查项目状态"
       fi
     fi
   fi

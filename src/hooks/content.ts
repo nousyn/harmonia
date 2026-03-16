@@ -102,20 +102,20 @@ export const CODE_EXTENSIONS = [
  */
 export const HARMONIA_TOOLS = [
     'project_init',
-    'setup_project',
-    'get_project_status',
-    'update_phase',
-    'dispatch_role',
-    'report_dispatch',
-    'write_doc',
-    'read_doc',
-    'list_docs',
-    'approve_doc',
+    'project_setup',
+    'project_status',
+    'phase_update',
+    'role_dispatch',
+    'dispatch_report',
+    'doc_write',
+    'doc_read',
+    'doc_list',
+    'doc_approve',
     'reject_doc',
-    'set_override',
-    'get_overrides',
-    'list_sessions',
-    'list_dispatches',
+    'guard_set',
+    'guard_get',
+    'review_set_rule',
+    'review_list',
 ] as const;
 
 // ─── Timeout thresholds (minutes) ───

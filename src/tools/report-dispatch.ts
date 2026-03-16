@@ -1,5 +1,5 @@
 /**
- * MCP Tool: report_dispatch
+ * MCP Tool: dispatch_report
  *
  * PM calls this tool to report dispatch status changes:
  * 1. After launching an agent: provide agent_session_id → creates/reuses session, marks dispatch running
@@ -30,11 +30,11 @@ import type { AgentType, DispatchRecord, SessionRecord } from '../core/types.js'
 
 export function registerReportDispatch(server: McpServer, workflowsDir: string): void {
     server.tool(
-        'report_dispatch',
+        'dispatch_report',
         'Report dispatch status after launching or completing a team member agent. Call with agent_session_id after launching to register the session. Call with status="completed" or "failed" when the agent finishes.',
         {
             project_name: z.string().describe('Project name'),
-            dispatch_id: z.string().describe('Dispatch ID returned by dispatch_role'),
+            dispatch_id: z.string().describe('Dispatch ID returned by role_dispatch'),
             status: z
                 .enum(['running', 'completed', 'failed', 'cancelled'])
                 .optional()
@@ -153,15 +153,15 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
 
                     if (missingOutputs.length > 0) {
                         results.push(`\n⚠ 预期产出文档缺失: ${missingOutputs.join(', ')}`);
-                        results.push('请确认角色是否已通过 write_doc 提交了所有产出。');
+                        results.push('请确认角色是否已通过 doc_write 提交了所有产出。');
                     }
                 }
 
                 // Build response
                 const nextStepHint =
                     effectiveStatus === 'running'
-                        ? `\nNext: When the agent finishes, call report_dispatch with dispatch_id="${dispatch_id}" and status="completed" (or "failed").`
-                        : `\nNext: Call get_project_status to check overall progress and determine next steps.`;
+                        ? `\nNext: When the agent finishes, call dispatch_report with dispatch_id="${dispatch_id}" and status="completed" (or "failed").`
+                        : `\nNext: Call project_status to check overall progress and determine next steps.`;
 
                 return {
                     content: [

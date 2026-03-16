@@ -8,10 +8,10 @@
  *
  * Provides tools for managing projects:
  * - project_init: Register a project and create <data_dir>/<project_name>/ data dirs
- * - get_project_status: View current project phase and progress
- * - get_role_prompt: Get role prompts for agent setup
- * - update_phase: Advance project phases
- * - write_doc / read_doc / list_docs: Manage project documents
+ * - project_status: View current project phase and progress
+ * - role_prompt: Get role prompts for agent setup
+ * - phase_update: Advance project phases
+ * - doc_write / doc_read / doc_list: Manage project documents
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
