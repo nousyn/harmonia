@@ -50,7 +50,7 @@ registerGetProjectStatus(server, WORKFLOWS_DIR);
 registerApproveDoc(server);
 registerOverrideTools(server);
 registerDispatchRole(server, WORKFLOWS_DIR);
-registerReportDispatch(server);
+registerReportDispatch(server, WORKFLOWS_DIR);
 registerSetupProject(server);
 
 // Connect via stdio

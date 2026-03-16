@@ -5,7 +5,10 @@
  * 1. After launching an agent: provide agent_session_id → creates/reuses session, marks dispatch running
  * 2. After agent finishes: provide status=completed/failed → updates dispatch, session goes idle/closed
  *
- * This is the single tool PM needs for all dispatch lifecycle management.
+ * Guards:
+ * - State machine: terminal states (completed/failed/cancelled) are irreversible
+ * - Valid transitions: dispatched→running/cancelled, running→completed/failed/cancelled
+ * - Completion check: warns if expectedOutputs docs are missing
  */
 
 import { z } from 'zod';
@@ -17,10 +20,15 @@ import {
     updateSession,
     findSessionByAgentId,
     readSessions,
+    isValidTransition,
+    isTerminalStatus,
 } from '../core/dispatch.js';
+import { listDocs } from '../core/docs.js';
+import { readState } from '../core/state.js';
+import { loadWorkflow } from '../core/workflow.js';
 import type { AgentType, DispatchRecord, SessionRecord } from '../core/types.js';
 
-export function registerReportDispatch(server: McpServer): void {
+export function registerReportDispatch(server: McpServer, workflowsDir: string): void {
     server.tool(
         'report_dispatch',
         'Report dispatch status after launching or completing a team member agent. Call with agent_session_id after launching to register the session. Call with status="completed" or "failed" when the agent finishes.',
@@ -62,6 +70,22 @@ export function registerReportDispatch(server: McpServer): void {
 
                 const effectiveStatus = status ?? 'running';
                 const results: string[] = [];
+
+                // Guard: state machine — reject invalid transitions
+                if (!isValidTransition(dispatch.status, effectiveStatus)) {
+                    const reason = isTerminalStatus(dispatch.status)
+                        ? `dispatch "${dispatch_id}" 已处于终态 "${dispatch.status}"，无法转换到 "${effectiveStatus}"`
+                        : `dispatch "${dispatch_id}" 当前状态 "${dispatch.status}" 不允许转换到 "${effectiveStatus}"`;
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: reason,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
 
                 // Handle session registration (when agent_session_id is provided)
                 let session: SessionRecord | null = null;
@@ -113,6 +137,24 @@ export function registerReportDispatch(server: McpServer): void {
                     }
 
                     results.push(`Dispatch ${dispatch_id} → running`);
+                }
+
+                // Completion check: warn if expectedOutputs are missing
+                if (effectiveStatus === 'completed' && dispatch.expectedOutputs.length > 0) {
+                    const existingDocs = await listDocs(project_name);
+                    const state = await readState(project_name);
+                    const wf = await loadWorkflow(workflowsDir, state.workflow);
+
+                    const missingOutputs = dispatch.expectedOutputs.filter((docId) => {
+                        const docDef = wf.definition.docs[docId];
+                        if (docDef?.external) return false; // external docs not tracked
+                        return !existingDocs.includes(docId);
+                    });
+
+                    if (missingOutputs.length > 0) {
+                        results.push(`\n⚠ 预期产出文档缺失: ${missingOutputs.join(', ')}`);
+                        results.push('请确认角色是否已通过 write_doc 提交了所有产出。');
+                    }
                 }
 
                 // Build response

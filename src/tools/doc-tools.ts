@@ -2,7 +2,10 @@
  * MCP Tools: write_doc / read_doc / list_docs
  * Read and write project documents under <data_dir>/<project_name>/docs/
  *
- * write_doc checks review configuration and auto-submits for review if needed.
+ * write_doc validates content against document schemas and checks review
+ * configuration. If validation fails, the write is rejected with specific
+ * error details. If review is required, the document is submitted for
+ * user approval.
  */
 
 import { z } from 'zod';
@@ -12,6 +15,7 @@ import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/workflow.js';
 import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
 import { submitForReview } from '../core/reviews.js';
+import { loadDocSchema, validateDoc, formatValidationErrors } from '../core/schema.js';
 
 export function registerDocTools(server: McpServer, workflowsDir: string): void {
     server.tool(
@@ -29,6 +33,66 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
             const state = await readState(project_name);
             const wf = await loadWorkflow(workflowsDir, state.workflow);
             const docDef = wf.definition.docs[doc_id];
+            const isHtml = docDef?.format === 'html';
+
+            // Guard: doc_id must be defined in workflow
+            if (!docDef) {
+                const validIds = Object.keys(wf.definition.docs)
+                    .filter((id) => !wf.definition.docs[id].external)
+                    .join(', ');
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `文档类型 "${doc_id}" 未在工作流中定义。可用的文档类型: ${validIds}`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+
+            // Guard: reject external doc types (should be produced outside write_doc)
+            if (docDef.external) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `文档 "${doc_id}" 是外部产出类型，不应通过 write_doc 写入。`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+
+            // Guard: empty content
+            if (!content.trim()) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: '文档内容为空，请提供实际内容后重新提交。',
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+
+            // Schema validation — reject write if content doesn't meet requirements
+            const schema = await loadDocSchema(workflowsDir, state.workflow, doc_id);
+            if (schema) {
+                const result = validateDoc(content, schema, state.scale, isHtml);
+                if (!result.valid) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: formatValidationErrors(result.errors),
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
 
             // Write the document with correct extension
             const filePath = await writeDoc(project_name, doc_id, content, docDef);

@@ -208,3 +208,28 @@ export async function getDispatch(projectName: string, dispatchId: string): Prom
     const dispatches = await readDispatches(projectName);
     return dispatches.find((d) => d.id === dispatchId) ?? null;
 }
+
+// ─── Dispatch State Machine ───
+
+/** Valid state transitions for dispatch status. */
+export const DISPATCH_TRANSITIONS: Record<DispatchStatus, DispatchStatus[]> = {
+    dispatched: ['running', 'cancelled'],
+    running: ['completed', 'failed', 'cancelled'],
+    completed: [],
+    failed: [],
+    cancelled: [],
+};
+
+/**
+ * Check if a dispatch status transition is valid.
+ */
+export function isValidTransition(from: DispatchStatus, to: DispatchStatus): boolean {
+    return DISPATCH_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Check if a dispatch status is terminal (no further transitions allowed).
+ */
+export function isTerminalStatus(status: DispatchStatus): boolean {
+    return DISPATCH_TRANSITIONS[status].length === 0;
+}

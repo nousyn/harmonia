@@ -139,6 +139,36 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     };
                 }
 
+                // Guard: role-phase validation
+                const currentPhase = findCurrentPhase(wf.definition.phases, state.currentPhase);
+                const currentPhaseRoles = currentPhase?.roles ?? [];
+                const phaseIndex = wf.definition.phases.findIndex((p) => p.id === state.currentPhase);
+                const nextPhase = phaseIndex >= 0 ? wf.definition.phases[phaseIndex + 1] : undefined;
+                const nextPhaseRoles = nextPhase?.roles ?? [];
+                const allowedRoles = [...new Set([...currentPhaseRoles, ...nextPhaseRoles])];
+
+                if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: [
+                                    `角色 "${role}" 不属于当前阶段 "${state.currentPhase}" 或下一阶段的角色。`,
+                                    `当前阶段允许的角色: ${currentPhaseRoles.join(', ') || '(无)'}`,
+                                    nextPhase
+                                        ? `下一阶段 (${nextPhase.id}) 允许的角色: ${nextPhaseRoles.join(', ')}`
+                                        : '',
+                                    '',
+                                    '如确需 dispatch 此角色，请先推进阶段。',
+                                ]
+                                    .filter(Boolean)
+                                    .join('\n'),
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+
                 // Get merged overrides
                 const overrides = await getMergedOverrides(project_name);
 
@@ -147,7 +177,6 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 const fullPrompt = overrideSection ? `${roleDef.prompt}\n${overrideSection}` : roleDef.prompt;
 
                 // Determine input docs
-                const currentPhase = findCurrentPhase(wf.definition.phases, state.currentPhase);
                 const docIds = input_doc_ids ?? currentPhase?.inputs ?? [];
 
                 // Read input documents (skip external docs like "code" — not managed by write_doc)
