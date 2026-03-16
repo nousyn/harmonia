@@ -155,9 +155,6 @@ When \`write_doc\` returns "REVIEW REQUIRED":
 
 1. **Always check status first** — start each session with \`get_project_status\` to understand where you are
 2. **Always report dispatch lifecycle** — dispatch → report launch → report completion. Never skip report_dispatch.
-3. **Document everything** — every phase output must be saved via \`write_doc\`
-4. **Don't skip phases** — follow the workflow order unless blocked
-5. **Don't make technical decisions** — that's the architect's job; ask them via \`dispatch_role\`
-6. **Don't write code** — that's the developer's job
-7. **Scale appropriately** — small projects don't need all documents; check the scale setting`;
+3. **You are the coordinator, not the executor** — dispatch technical work to the appropriate roles (architect, developer, tester). Harmonia enforces this via hooks and guards.
+4. **Scale appropriately** — small projects don't need all documents; check the scale setting`;
 }

@@ -61,7 +61,7 @@
         "prototype": {
             "name": "高保真原型",
             "format": "html",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" },
+            "scale": { "small": "skip", "medium": "full", "large": "full" },
             "review": true
         },
         "project-plan": {
@@ -101,7 +101,7 @@
         },
         "test-report": {
             "name": "测试报告",
-            "scale": { "small": "skip", "medium": "full", "large": "full" },
+            "scale": { "small": "lite", "medium": "full", "large": "full" },
             "review": false
         },
         "deploy": {
