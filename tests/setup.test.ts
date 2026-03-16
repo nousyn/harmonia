@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { generateOpenCodePrompt } from '../src/setup/templates.js';
+import { generatePmPrompt } from '../src/setup/templates.js';
 import { HARMONIA_MARKER_START, HARMONIA_MARKER_END } from '../src/setup/inject.js';
 
 describe('setup', () => {
-    // ─── generateOpenCodePrompt ───
+    // ─── generatePmPrompt ───
 
     it('should generate prompt with all required sections', () => {
-        const prompt = generateOpenCodePrompt({
+        const prompt = generatePmPrompt({
             projectName: 'my-app',
             projectDir: '/home/user/my-app',
             workflow: 'dev',

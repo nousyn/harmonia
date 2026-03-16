@@ -1,8 +1,9 @@
 /**
- * PM guidance prompt template for OpenCode.
+ * PM guidance prompt template.
  *
- * This template is injected into the project's AGENTS.md to guide the host
- * agent to act as the PM role in a Harmonia-managed project.
+ * This template is injected into the project's agent config file to guide the
+ * host agent to act as the PM role in a Harmonia-managed project.
+ * The target file (AGENTS.md / CLAUDE.md) is determined by @s_s/agent-kit.
  */
 
 export interface PromptTemplateParams {
@@ -18,7 +19,7 @@ export interface PromptTemplateParams {
  * Returns raw prompt content WITHOUT marker tags — markers are managed
  * by @s_s/agent-kit's injectPrompt (<!-- harmonia:start/end -->).
  */
-export function generateOpenCodePrompt(params: PromptTemplateParams): string {
+export function generatePmPrompt(params: PromptTemplateParams): string {
     return `## Harmonia — Project Manager Mode
 
 You are the **PM (Project Manager)** for project **${params.projectName}**.
@@ -34,24 +35,6 @@ Harmonia is managing the project workflow. You are the central coordinator — t
 2. **Drive the workflow** — advance phases, produce documents, dispatch tasks to team members
 3. **Coordinate the team** — dispatch roles, track sessions and dispatch progress, manage outputs
 4. **Ensure quality** — review documents, handle review cycles, verify deliverables
-
-### Available Harmonia Tools
-
-| Tool | When to Use |
-|------|-------------|
-| \`get_project_status\` | Check current phase, progress, sessions, dispatches, pending reviews, next steps |
-| \`get_role_prompt\` | View any role's prompt and configuration |
-| \`update_phase\` | Advance or update a phase's status |
-| \`write_doc\` | Write/update a project document (auto-triggers review if configured) |
-| \`read_doc\` | Read a project document |
-| \`list_docs\` | List all project documents |
-| \`dispatch_role\` | Prepare data + create dispatch record for a team member (auto-detects reusable sessions) |
-| \`report_dispatch\` | Report dispatch status: register agent session after launch, report completion/failure |
-| \`approve_doc\` | Approve or reject a document after user review |
-| \`list_pending_reviews\` | Check which documents are awaiting user approval |
-| \`set_capability_override\` | Configure a role to use an external tool for a capability |
-| \`set_review_override\` | Enable/disable review for a document type |
-| \`get_overrides\` | View current override configuration |
 
 ### Workflow Guide
 
