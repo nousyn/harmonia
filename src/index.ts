@@ -27,7 +27,7 @@ if (subcommand === 'setup') {
     const { parseSetupArgs, runSetup } = await import('./cli/setup.js');
     try {
         const opts = parseSetupArgs(process.argv.slice(3));
-        await runSetup({ ...opts, workflowsDir: WORKFLOWS_DIR });
+        await runSetup(opts);
     } catch (err) {
         console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
@@ -38,12 +38,10 @@ Harmonia — Multi-agent orchestration MCP server
 
 Usage:
   harmonia                Start MCP stdio server
-  harmonia setup          Initialize project in current directory
+  harmonia setup          Inject PM prompt + install hooks in current directory
   harmonia --help         Show this help message
 
 Setup options:
-  --name <name>           Project name (default: directory name)
-  --workflow <name>        Workflow to use (default: dev)
   --agent <type>           opencode | claude-code | codex | openclaw (default: auto-detect)
 `);
 } else if (subcommand && subcommand !== '--version' && subcommand !== '-v') {
@@ -64,6 +62,7 @@ Setup options:
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
 
     const { registerProjectInit } = await import('./tools/project-init.js');
+    const { registerSetScale } = await import('./tools/set-scale.js');
     const { registerGetRolePrompt } = await import('./tools/get-role-prompt.js');
     const { registerUpdatePhase } = await import('./tools/update-phase.js');
     const { registerDocTools } = await import('./tools/doc-tools.js');
@@ -79,6 +78,7 @@ Setup options:
 
     // Register all tools
     registerProjectInit(server, WORKFLOWS_DIR);
+    registerSetScale(server, WORKFLOWS_DIR);
     registerGetRolePrompt(server, WORKFLOWS_DIR);
     registerUpdatePhase(server, WORKFLOWS_DIR);
     registerDocTools(server, WORKFLOWS_DIR);

@@ -107,14 +107,14 @@ function sectionPresent(section: DocSchemaSection, headings: string[]): boolean 
  *
  * @param content  - Document content (markdown, HTML, or JSON)
  * @param schema   - Schema definition
- * @param scale    - Project scale (affects which sections are required)
+ * @param scale    - Project scale (affects which sections are required). When null, scale-dependent checks are skipped.
  * @param isHtml   - Whether the document is HTML format
  * @param isJson   - Whether the document is JSON format (for step artifacts)
  */
 export function validateDoc(
     content: string,
     schema: DocSchema,
-    scale: ProjectScale,
+    scale: ProjectScale | null,
     isHtml: boolean = false,
     isJson: boolean = false,
 ): ValidationResult {
@@ -142,7 +142,8 @@ export function validateDoc(
         const headings = extractHeadings(content);
 
         for (const section of schema.sections) {
-            const isRequired = section.required[scale];
+            // When scale is null, skip scale-dependent section requirements
+            const isRequired = scale !== null ? section.required[scale] : false;
             if (isRequired && !sectionPresent(section, headings)) {
                 const aliasList = section.aliases?.length ? `（或: ${section.aliases.join(', ')}）` : '';
                 errors.push({
@@ -181,7 +182,8 @@ export function validateDoc(
 
         if (parsed) {
             for (const fieldDef of schema.jsonFields) {
-                const isRequired = fieldDef.required[scale];
+                // When scale is null, skip scale-dependent field requirements
+                const isRequired = scale !== null ? fieldDef.required[scale] : false;
                 if (!isRequired) continue;
 
                 const value = parsed[fieldDef.field];

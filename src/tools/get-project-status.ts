@@ -3,6 +3,8 @@
  * Read the current project status with rich context for PM decision-making.
  * Includes phase progress, documents, pending reviews, dispatch records,
  * active sessions, and intelligent next-step suggestions.
+ *
+ * When called without project_name, returns a summary list of all projects.
  */
 
 import { z } from 'zod';
@@ -14,6 +16,7 @@ import { readReviews } from '../core/reviews.js';
 import { getMergedOverrides } from '../core/overrides.js';
 import { readDispatches, readSessions } from '../core/dispatch.js';
 import { readSteps, getCompletedStepIds } from '../core/steps.js';
+import { listProjects } from '../core/registry.js';
 import type {
     DispatchRecord,
     DocDefinition,
@@ -41,6 +44,13 @@ function deriveNextSteps(
     const currentPhaseDef = wf.definition.phases.find((p) => p.id === state.currentPhase);
 
     if (!currentPhaseDef) return ['Unknown phase — check project state.'];
+
+    // If scale is not set, that's the most important next step
+    if (state.scale === null) {
+        // Check if PRD exists and is approved
+        const hasPrdApproved = pendingReviews.length === 0; // simplified check
+        suggestions.push(`项目规模 (scale) 尚未设定。请先完成 PRD 编写和审批，然后调用 project_set_scale 设定规模。`);
+    }
 
     // If there are pending reviews, those block progress
     if (pendingReviews.length > 0) {
@@ -83,33 +93,33 @@ function deriveNextSteps(
         }
     }
 
-    // Check which phase outputs are still missing
-    // Skip external outputs (e.g. "code"), docs that are "skip", and "optional" docs at the current scale
-    const missingOutputs = currentPhaseDef.outputs.filter((o) => {
-        const docDef = wf.definition.docs[o];
-        if (docDef?.external) return false;
-        const scaleVal = docDef?.scale[state.scale];
-        if (scaleVal === 'skip' || scaleVal === 'optional') return false;
-        return !existingDocs.includes(o);
-    });
+    // Check which phase outputs are still missing (only when scale is set)
+    if (state.scale !== null) {
+        const scale = state.scale;
+        const missingOutputs = currentPhaseDef.outputs.filter((o) => {
+            const docDef = wf.definition.docs[o];
+            if (docDef?.external) return false;
+            const scaleVal = docDef?.scale[scale];
+            if (scaleVal === 'skip' || scaleVal === 'optional') return false;
+            return !existingDocs.includes(o);
+        });
 
-    if (missingOutputs.length > 0) {
-        // Only suggest dispatching if there are no active dispatches already covering this
-        const alreadyDispatched = activeDispatches.length > 0;
-        const nonPmRoles = currentPhaseDef.roles.filter((r) => r !== 'pm');
+        if (missingOutputs.length > 0) {
+            const alreadyDispatched = activeDispatches.length > 0;
+            const nonPmRoles = currentPhaseDef.roles.filter((r) => r !== 'pm');
 
-        if (nonPmRoles.length > 0 && !alreadyDispatched) {
+            if (nonPmRoles.length > 0 && !alreadyDispatched) {
+                suggestions.push(
+                    `Dispatch ${nonPmRoles.join(', ')} to produce: ${missingOutputs.join(', ')}. Use role_dispatch to prepare task data.`,
+                );
+            } else if (nonPmRoles.length === 0) {
+                suggestions.push(`Produce remaining documents: ${missingOutputs.join(', ')}. Use doc_write for each.`);
+            }
+        } else if (pendingReviews.length === 0 && activeDispatches.length === 0) {
             suggestions.push(
-                `Dispatch ${nonPmRoles.join(', ')} to produce: ${missingOutputs.join(', ')}. Use role_dispatch to prepare task data.`,
+                `All outputs for "${currentPhaseDef.name}" are complete. Advance with: phase_update(project_name, "${state.currentPhase}", "completed")`,
             );
-        } else if (nonPmRoles.length === 0) {
-            suggestions.push(`Produce remaining documents: ${missingOutputs.join(', ')}. Use doc_write for each.`);
         }
-    } else if (pendingReviews.length === 0 && activeDispatches.length === 0) {
-        // All outputs exist, no pending reviews, no active dispatches — can advance
-        suggestions.push(
-            `All outputs for "${currentPhaseDef.name}" are complete. Advance with: phase_update(project_name, "${state.currentPhase}", "completed")`,
-        );
     }
 
     // Check for lost sessions
@@ -122,7 +132,6 @@ function deriveNextSteps(
         }
     }
 
-    // If no suggestions yet, provide a generic one
     if (suggestions.length === 0) {
         suggestions.push(`Continue working on the "${currentPhaseDef.name}" phase.`);
     }
@@ -178,7 +187,6 @@ function formatStepProgress(docDef: DocDefinition, stepState: DocStepState | und
         return `  Steps: all completed ✓ (finalized)`;
     }
 
-    // Find the first incomplete step
     let firstIncomplete = steps.length;
     for (let i = 0; i < steps.length; i++) {
         if (!completedIds.has(steps[i].id)) {
@@ -196,14 +204,62 @@ function formatStepProgress(docDef: DocDefinition, stepState: DocStepState | und
     return `  Steps: ${parts.join(' → ')}`;
 }
 
+/**
+ * Build the project list summary (when project_name is not provided).
+ */
+async function buildProjectList(): Promise<string> {
+    const projectNames = await listProjects();
+
+    if (projectNames.length === 0) {
+        return [
+            '# Harmonia Projects',
+            '',
+            '(无已注册项目)',
+            '',
+            '使用 project_init(project_name, project_dir) 创建新项目。',
+        ].join('\n');
+    }
+
+    const rows: string[] = [];
+    for (const name of projectNames) {
+        try {
+            const state = await readState(name);
+            const scaleDisplay = state.scale ?? '(未设定)';
+            const updated = state.updatedAt.split('T')[0];
+            rows.push(`| ${name} | ${state.projectDir} | ${state.currentPhase} | ${scaleDisplay} | ${updated} |`);
+        } catch {
+            rows.push(`| ${name} | (无法读取状态) | - | - | - |`);
+        }
+    }
+
+    return [
+        '# Harmonia Projects',
+        '',
+        `共 ${projectNames.length} 个项目:`,
+        '',
+        '| 项目 | 目录 | 阶段 | 规模 | 更新时间 |',
+        '|------|------|------|------|----------|',
+        ...rows,
+        '',
+        '使用 project_status(project_name) 查看项目详情。',
+    ].join('\n');
+}
+
 export function registerGetProjectStatus(server: McpServer, workflowsDir: string): void {
     server.tool(
         'project_status',
-        'Get the current project status including phase progress, documents, pending reviews, dispatch records, active sessions, and next-step suggestions.',
+        '查看项目状态。不传 project_name 则返回所有项目的摘要列表；传入 project_name 则返回该项目的详细状态（阶段、文档、dispatch、session、下一步建议）。',
         {
-            project_name: z.string().describe('Project name'),
+            project_name: z.string().optional().describe('项目名称。不传则返回所有项目的摘要列表。'),
         },
         async ({ project_name }) => {
+            // List mode — no project_name
+            if (!project_name) {
+                const text = await buildProjectList();
+                return { content: [{ type: 'text' as const, text }] };
+            }
+
+            // Detail mode — specific project
             try {
                 const state = await readState(project_name);
                 const wf = await loadWorkflow(workflowsDir, state.workflow);
@@ -213,6 +269,8 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                 const dispatches = await readDispatches(project_name);
                 const sessions = await readSessions(project_name);
                 const stepsData = await readSteps(project_name);
+
+                const scaleDisplay = state.scale ?? '(未设定)';
 
                 // Phase summary
                 const phasesSummary = state.phases
@@ -245,7 +303,10 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                   const review = reviews[d];
                                   const reviewTag = review ? ` [${review.status}]` : '';
                                   const docDef = wf.definition.docs[d];
-                                  const hasSteps = docDef?.steps?.length && SEQUENTIAL_SCALES.has(state.scale);
+                                  const hasSteps =
+                                      docDef?.steps?.length &&
+                                      state.scale !== null &&
+                                      SEQUENTIAL_SCALES.has(state.scale);
                                   let line = `- ${d}${reviewTag}`;
                                   if (hasSteps) {
                                       line += '\n' + formatStepProgress(docDef, stepsData[d]);
@@ -281,6 +342,21 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                 const dispatchesSection =
                     dispatches.length > 0 ? dispatches.map((d) => formatDispatch(d, sessions)).join('\n') : '(none)';
 
+                // Expected outputs — only when scale is set
+                let expectedOutputsLine = '';
+                if (currentPhaseDef?.outputs && state.scale !== null) {
+                    const scale = state.scale;
+                    const filtered = currentPhaseDef.outputs.filter((o) => {
+                        const d = wf.definition.docs[o];
+                        if (!d) return true;
+                        const sv = d.scale[scale];
+                        return sv !== 'skip' && sv !== 'optional';
+                    });
+                    expectedOutputsLine = `Expected outputs: ${filtered.join(', ')}`;
+                } else if (currentPhaseDef?.outputs) {
+                    expectedOutputsLine = `Expected outputs: (需先设定 scale 才能确定)`;
+                }
+
                 // Derive next steps (now dispatch-aware)
                 const nextSteps = deriveNextSteps(state, wf, docs, pendingReviews, dispatches, sessions);
 
@@ -293,7 +369,7 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                 ``,
                                 `Source directory: ${state.projectDir}`,
                                 `Workflow: ${state.workflow}`,
-                                `Scale: ${state.scale}`,
+                                `Scale: ${scaleDisplay}`,
                                 `Created: ${state.createdAt}`,
                                 `Updated: ${state.updatedAt}`,
                                 ``,
@@ -305,16 +381,7 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                     ? `${currentPhaseDef.name} (${currentPhaseDef.id}): ${currentPhaseDef.description}`
                                     : 'Unknown',
                                 currentPhaseDef?.roles ? `Roles: ${currentPhaseDef.roles.join(', ')}` : '',
-                                currentPhaseDef?.outputs
-                                    ? `Expected outputs: ${currentPhaseDef.outputs
-                                          .filter((o) => {
-                                              const d = wf.definition.docs[o];
-                                              if (!d) return true;
-                                              const sv = d.scale[state.scale];
-                                              return sv !== 'skip' && sv !== 'optional';
-                                          })
-                                          .join(', ')}`
-                                    : '',
+                                expectedOutputsLine,
                                 ``,
                                 `## Sessions`,
                                 sessionsSection,
@@ -340,7 +407,7 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                     content: [
                         {
                             type: 'text' as const,
-                            text: 'Project not initialized. Use project_init to get started.',
+                            text: `项目 "${project_name}" 未找到。使用 project_status() 查看所有项目，或 project_init 创建新项目。`,
                         },
                     ],
                     isError: true,

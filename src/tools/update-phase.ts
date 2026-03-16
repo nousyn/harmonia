@@ -41,6 +41,11 @@ export function registerUpdatePhase(server: McpServer, workflowsDir: string): vo
                     const phaseIndex = wf.definition.phases.findIndex((p) => p.id === phase_id);
                     const guardErrors: string[] = [];
 
+                    // Guard 0: Scale must be set before completing any phase
+                    if (currentState.scale === null) {
+                        guardErrors.push('Scale 尚未设定。请先调用 project_set_scale 设定项目规模。');
+                    }
+
                     // Guard 1: Prior phases must all be completed
                     if (phaseIndex > 0) {
                         const priorPhases = wf.definition.phases.slice(0, phaseIndex);
@@ -53,13 +58,16 @@ export function registerUpdatePhase(server: McpServer, workflowsDir: string): vo
                         }
                     }
 
-                    // Guard 2: Required doc outputs must exist
-                    if (phaseDef) {
+                    // Guard 2 & 3 require scale to be set
+                    if (currentState.scale !== null && phaseDef) {
+                        const scale = currentState.scale;
+
+                        // Guard 2: Required doc outputs must exist
                         const missingDocOutputs = phaseDef.outputs.filter((o) => {
                             const docDef = wf.definition.docs[o];
                             if (!docDef) return false;
                             if (docDef.external) return false;
-                            const scaleVal = docDef.scale[currentState.scale];
+                            const scaleVal = docDef.scale[scale];
                             if (scaleVal === 'skip' || scaleVal === 'optional') return false;
                             return !existingDocs.includes(o);
                         });
@@ -67,10 +75,8 @@ export function registerUpdatePhase(server: McpServer, workflowsDir: string): vo
                         if (missingDocOutputs.length > 0) {
                             guardErrors.push(`缺少必需文档产出: ${missingDocOutputs.join(', ')}`);
                         }
-                    }
 
-                    // Guard 3: Docs requiring review must be approved
-                    if (phaseDef) {
+                        // Guard 3: Docs requiring review must be approved
                         const overrides = await getMergedOverrides(project_name);
                         const reviews = await readReviews(project_name);
 
@@ -78,12 +84,10 @@ export function registerUpdatePhase(server: McpServer, workflowsDir: string): vo
                             const docDef = wf.definition.docs[o];
                             if (!docDef) return false;
                             if (docDef.external) return false;
-                            const scaleVal = docDef.scale[currentState.scale];
+                            const scaleVal = docDef.scale[scale];
                             if (scaleVal === 'skip' || scaleVal === 'optional') return false;
-                            // Check if review is required for this doc
                             const needsReview = resolveDocReview(o, docDef, overrides);
                             if (!needsReview) return false;
-                            // Review required — check it's approved
                             const reviewState = reviews[o];
                             return !reviewState || reviewState.status !== 'approved';
                         });

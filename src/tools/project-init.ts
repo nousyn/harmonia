@@ -6,23 +6,29 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loadWorkflow } from '../core/workflow.js';
-import { initProjectState, readState, projectStateExists } from '../core/state.js';
+import { initProjectState, readState } from '../core/state.js';
 import { registerProject, getProject } from '../core/registry.js';
-import type { ProjectScale } from '../core/types.js';
 
 export function registerProjectInit(server: McpServer, workflowsDir: string): void {
     server.tool(
         'project_init',
-        "Initialize a new Harmonia project. Registers the project in the global data directory, creates data directories for documents/state, and creates the project source directory if it doesn't exist.",
+        "Initialize a new Harmonia project. Registers the project in the global data directory, creates data directories for documents/state, and creates the project source directory if it doesn't exist. Scale is NOT set here — use project_set_scale after PRD approval.",
         {
-            project_name: z.string().describe('Unique project name (used as directory name in the data directory)'),
+            project_name: z
+                .string()
+                .regex(
+                    /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
+                    'project_name 只允许小写字母、数字和短横线，且不能以短横线开头或结尾',
+                )
+                .min(2, 'project_name 至少 2 个字符')
+                .max(64, 'project_name 最多 64 个字符')
+                .describe('唯一的项目名称（只允许小写字母、数字和短横线，如 my-app）'),
             project_dir: z
                 .string()
-                .describe("Absolute path to the project source directory (will be created if it doesn't exist)"),
-            workflow: z.string().default('dev').describe('Workflow name to use (default: dev)'),
-            scale: z.enum(['small', 'medium', 'large']).default('small').describe('Project scale (small/medium/large)'),
+                .refine((s) => s.startsWith('/'), { message: 'project_dir 必须是绝对路径（以 / 开头）' })
+                .describe('项目源代码目录的绝对路径（如不存在会自动创建）'),
         },
-        async ({ project_name, project_dir, workflow: workflowName, scale }) => {
+        async ({ project_name, project_dir }) => {
             // Check if already initialized
             const existing = await getProject(project_name);
             if (existing) {
@@ -37,45 +43,30 @@ export function registerProjectInit(server: McpServer, workflowsDir: string): vo
                 };
             }
 
-            // Load workflow definition
+            // Load workflow definition (default: dev)
+            const workflowName = 'dev';
             const wf = await loadWorkflow(workflowsDir, workflowName);
 
             // Register project (creates global data dirs + project source dir)
             await registerProject(project_name, project_dir, workflowName);
 
-            // Initialize project state
-            const state = await initProjectState(project_name, project_dir, wf, scale as ProjectScale);
-
-            // Build doc list based on scale
-            const requiredDocs = Object.entries(wf.definition.docs)
-                .filter(([, doc]) => {
-                    const s = doc.scale[scale];
-                    return s === 'full' || s === 'lite';
-                })
-                .map(([id, doc]) => `- ${doc.name} (${id})`)
-                .join('\n');
-
-            const optionalDocs = Object.entries(wf.definition.docs)
-                .filter(([, doc]) => doc.scale[scale] === 'optional')
-                .map(([id, doc]) => `- ${doc.name} (${id})`)
-                .join('\n');
+            // Initialize project state (scale = null)
+            const state = await initProjectState(project_name, project_dir, wf);
 
             return {
                 content: [
                     {
                         type: 'text' as const,
                         text: [
-                            `Project "${project_name}" initialized successfully.`,
+                            `项目 "${project_name}" 初始化成功。`,
                             ``,
-                            `Source directory: ${project_dir}`,
-                            `Workflow: ${wf.definition.name} (${wf.definition.description})`,
-                            `Scale: ${scale}`,
-                            `Current phase: ${state.currentPhase}`,
-                            `Available roles: ${Object.keys(wf.roles).join(', ')}`,
+                            `源代码目录: ${project_dir}`,
+                            `工作流: ${wf.definition.name} (${wf.definition.description})`,
+                            `规模: (未设定)`,
+                            `当前阶段: ${state.currentPhase}`,
+                            `可用角色: ${Object.keys(wf.roles).join(', ')}`,
                             ``,
-                            `Required documents:`,
-                            requiredDocs || '(none)',
-                            optionalDocs ? `\nOptional documents:\n${optionalDocs}` : '',
+                            `下一步: 与用户沟通需求，编写 PRD，PRD 审批通过后调用 project_set_scale 设定项目规模。`,
                         ].join('\n'),
                     },
                 ],

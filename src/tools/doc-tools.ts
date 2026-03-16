@@ -29,9 +29,10 @@ const SEQUENTIAL_SCALES: Set<ProjectScale> = new Set(['medium', 'large']);
 
 /**
  * Check if sequential mode is active for a given doc definition and scale.
+ * Returns false when scale is null (not yet set).
  */
-function isSequentialActive(docDef: DocDefinition, scale: ProjectScale): boolean {
-    return !!docDef.steps?.length && SEQUENTIAL_SCALES.has(scale);
+function isSequentialActive(docDef: DocDefinition, scale: ProjectScale | null): boolean {
+    return scale !== null && !!docDef.steps?.length && SEQUENTIAL_SCALES.has(scale);
 }
 
 export function registerDocTools(server: McpServer, workflowsDir: string): void {
@@ -110,7 +111,7 @@ export function registerDocTools(server: McpServer, workflowsDir: string): void 
                     content,
                     step,
                     docDef,
-                    state.scale,
+                    state.scale as ProjectScale,
                 );
             }
 

@@ -19,7 +19,8 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 
 - 5 个阶段：需求澄清 → 方案设计 → 开发 → 测试 → 交付验收
 - 4 个角色：PM / 架构师 / 开发者 / 测试
-- 15 种文档类型，按项目规模（small / medium / large）自动调整
+- 15 种文档类型，按项目规模（small / medium / large）自动调整必选/可选
+- 项目规模延迟设定 — PRD 审批后由 PM 设定，设定后不可更改
 - 角色调度与报告机制（`role_dispatch` / `dispatch_report`）
 
 ### 文档结构校验
@@ -50,22 +51,23 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 
 ## MCP 工具一览
 
-| 工具              | 说明                                       |
-| ----------------- | ------------------------------------------ |
-| `project_init`    | 注册项目，创建数据目录，初始化工作流       |
-| `project_status`  | 查看当前阶段、文档状态、步骤进度           |
-| `phase_update`    | 推进项目阶段                               |
-| `doc_write`       | 写入文档（自动 schema 校验，支持逐步写入） |
-| `doc_read`        | 读取文档内容                               |
-| `doc_list`        | 列出项目所有文档                           |
-| `doc_approve`     | 审批需要 review 的文档（如 PRD）           |
-| `review_list`     | 列出待审批的文档                           |
-| `review_set_rule` | 设置审批规则覆盖                           |
-| `role_prompt`     | 获取角色提示词（含约束上下文注入）         |
-| `role_dispatch`   | 调度角色执行任务                           |
-| `dispatch_report` | 角色报告任务完成状态                       |
-| `guard_set`       | 设置角色的工具白名单/黑名单                |
-| `guard_get`       | 查看当前工具约束配置                       |
+| 工具                | 说明                                               |
+| ------------------- | -------------------------------------------------- |
+| `project_init`      | 注册项目，创建数据目录，初始化工作流               |
+| `project_set_scale` | 设定项目规模（PRD 审批后，不可更改）               |
+| `project_status`    | 查看项目状态（无参数返回项目列表，有参数返回详情） |
+| `phase_update`      | 推进项目阶段                                       |
+| `doc_write`         | 写入文档（自动 schema 校验，支持逐步写入）         |
+| `doc_read`          | 读取文档内容                                       |
+| `doc_list`          | 列出项目所有文档                                   |
+| `doc_approve`       | 审批需要 review 的文档（如 PRD）                   |
+| `review_list`       | 列出待审批的文档                                   |
+| `review_set_rule`   | 设置审批规则覆盖                                   |
+| `role_prompt`       | 获取角色提示词（含约束上下文注入）                 |
+| `role_dispatch`     | 调度角色执行任务                                   |
+| `dispatch_report`   | 角色报告任务完成状态                               |
+| `guard_set`         | 设置角色的工具白名单/黑名单                        |
+| `guard_get`         | 查看当前工具约束配置                               |
 
 ## 工作流结构
 
@@ -105,28 +107,25 @@ harmonia setup --agent openclaw
 
 `harmonia setup` 一键完成：
 
-1. 注册项目到 Harmonia 数据目录
-2. 注入 PM 提示词到 agent 配置文件（AGENTS.md / CLAUDE.md）
-3. 安装 agent hook 脚本（边界守卫 + 主动提醒）
+1. 注入 PM 提示词到 agent 配置文件（AGENTS.md / CLAUDE.md）
+2. 安装 agent hook 脚本（边界守卫 + 主动提醒）
 
-之后启动你的 AI 编程助手，调用 `project_status` 即可开始。
+之后启动你的 AI 编程助手，PM 会自动通过 `project_init` 注册项目，通过 `project_status` 获取项目信息。
 
 ### CLI 命令
 
 ```
 harmonia                启动 MCP stdio 服务器（供 agent 调用）
-harmonia setup          在当前目录初始化项目
+harmonia setup          初始化 agent 配置（注入提示词 + 安装 hook）
 harmonia --help         显示帮助信息
 harmonia --version      显示版本号
 ```
 
 `setup` 选项：
 
-| 选项                | 说明                                                          | 默认值                                                     |
-| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
-| `--name <name>`     | 项目名称                                                      | 当前目录名                                                 |
-| `--workflow <name>` | 工作流名称                                                    | `dev`                                                      |
-| `--agent <type>`    | agent 类型：`opencode` / `claude-code` / `codex` / `openclaw` | 建议显式指定。省略时通过 cwd 和 `~` 下的配置文件自动检测。 |
+| 选项             | 说明                                                          | 默认值                                                     |
+| ---------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| `--agent <type>` | agent 类型：`opencode` / `claude-code` / `codex` / `openclaw` | 建议显式指定。省略时通过 cwd 和 `~` 下的配置文件自动检测。 |
 
 ## 配置
 
@@ -253,7 +252,7 @@ harmonia/
 │   │   ├── workflow.ts       # 工作流加载
 │   │   ├── overrides.ts      # 工具约束管理
 │   │   └── reviews.ts        # 文档审批
-│   ├── tools/                # 10 个 MCP 工具注册
+│   ├── tools/                # 11 个 MCP 工具注册
 │   ├── hooks/                # P2 Agent Hook 系统
 │   │   ├── content.ts        # Hook 内容生成
 │   │   ├── install.ts        # Hook 安装逻辑
@@ -268,7 +267,7 @@ harmonia/
 │       ├── workflow.json     # 工作流定义
 │       ├── roles/            # 角色提示词 (pm.md, architect.md, ...)
 │       └── schemas/          # 文档 + 步骤 Schema
-├── tests/                    # 测试 (256 tests, 13 files)
+├── tests/                    # 测试 (260 tests, 13 files)
 └── .dev-logs/                # 开发日志
 ```
 

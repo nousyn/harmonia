@@ -82,19 +82,22 @@ function findCurrentPhase(phases: PhaseDefinition[], currentPhaseId: string): Ph
 /**
  * Resolve expected output doc IDs for a dispatch.
  * Uses the current phase's outputs, filtering out external, scale-skipped, and optional docs.
+ * When scale is null, returns all non-external outputs (cannot filter by scale).
  */
 function resolveExpectedOutputs(
     currentPhase: PhaseDefinition | undefined,
     workflowDef: WorkflowDefinition,
-    scale: ProjectScale,
+    scale: ProjectScale | null,
 ): string[] {
     if (!currentPhase) return [];
     return currentPhase.outputs.filter((docId) => {
         const docDef = workflowDef.docs[docId];
         if (!docDef) return false;
         if (docDef.external) return false;
-        const scaleVal = docDef.scale[scale];
-        if (scaleVal === 'skip' || scaleVal === 'optional') return false;
+        if (scale !== null) {
+            const scaleVal = docDef.scale[scale];
+            if (scaleVal === 'skip' || scaleVal === 'optional') return false;
+        }
         return true;
     });
 }
@@ -235,7 +238,7 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     `## Project Context`,
                     `- Project: ${project_name}`,
                     `- Directory: ${state.projectDir}`,
-                    `- Scale: ${state.scale}`,
+                    `- Scale: ${state.scale ?? '(未设定)'}`,
                     `- Current phase: ${state.currentPhase}`,
                     ``,
                     `## Input Documents (${Object.keys(inputDocs).length}${missingDocs.length > 0 ? `, ${missingDocs.length} missing` : ''})`,

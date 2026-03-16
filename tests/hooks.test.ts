@@ -3,6 +3,8 @@
  *
  * Tests Harmonia's own hook logic (content generation, parameter embedding,
  * agent routing). Does NOT test agent-kit's defineHooks/installHooks.
+ *
+ * Hooks are project-agnostic — only dataDir is baked in.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -23,8 +25,6 @@ import { createHooksForAgent } from '../src/hooks/install.js';
 
 const TEST_PARAMS: HookParams = {
     dataDir: '/test/data',
-    projectName: 'test-project',
-    projectDir: '/test/project',
 };
 
 // ─── Shared Constants ───
@@ -58,6 +58,7 @@ describe('hook shared constants', () => {
 
     it('HARMONIA_TOOLS should include all MCP tools', () => {
         expect(HARMONIA_TOOLS).toContain('project_init');
+        expect(HARMONIA_TOOLS).toContain('project_set_scale');
         expect(HARMONIA_TOOLS).toContain('role_dispatch');
         expect(HARMONIA_TOOLS).toContain('doc_write');
         expect(HARMONIA_TOOLS).toContain('doc_read');
@@ -102,16 +103,12 @@ describe('createClaudeCodeHooks', () => {
         const preToolUse = hookSet.definitions.find((d) => d.events.includes('PreToolUse' as any))!;
         const content = preToolUse.content;
 
-        it('should embed project directory', () => {
-            expect(content).toContain(`PROJECT_DIR="${TEST_PARAMS.projectDir}"`);
+        it('should NOT embed project directory (project-agnostic)', () => {
+            expect(content).not.toContain('PROJECT_DIR=');
         });
 
-        it('should embed data directory', () => {
-            expect(content).toContain(`DATA_DIR="${TEST_PARAMS.dataDir}"`);
-        });
-
-        it('should embed project name', () => {
-            expect(content).toContain(`PROJECT_NAME="${TEST_PARAMS.projectName}"`);
+        it('should NOT embed project name (project-agnostic)', () => {
+            expect(content).not.toContain('PROJECT_NAME=');
         });
 
         it('should check Write/Edit tools', () => {
@@ -122,7 +119,7 @@ describe('createClaudeCodeHooks', () => {
             expect(content).toContain('Bash|bash|Terminal|terminal');
         });
 
-        it('should include code extension pattern', () => {
+        it('should check by file extension (not project dir)', () => {
             for (const ext of CODE_EXTENSIONS) {
                 expect(content).toContain(`*${ext}`);
             }
@@ -135,7 +132,6 @@ describe('createClaudeCodeHooks', () => {
         });
 
         it('should use JSON decision block format', () => {
-            // In the shell script, quotes are escaped: \"decision\":\"block\"
             expect(content).toContain('\\"decision\\":\\"block\\"');
         });
     });
@@ -144,9 +140,12 @@ describe('createClaudeCodeHooks', () => {
         const userPrompt = hookSet.definitions.find((d) => d.events.includes('UserPromptSubmit' as any))!;
         const content = userPrompt.content;
 
-        it('should embed data directory and project name', () => {
+        it('should embed data directory', () => {
             expect(content).toContain(`DATA_DIR="${TEST_PARAMS.dataDir}"`);
-            expect(content).toContain(`PROJECT_NAME="${TEST_PARAMS.projectName}"`);
+        });
+
+        it('should scan all projects under DATA_DIR', () => {
+            expect(content).toContain('for PROJECT_DATA in "$DATA_DIR"/*/');
         });
 
         it('should read dispatches.json', () => {
@@ -202,10 +201,17 @@ describe('createOpenCodeHooks', () => {
             expect(content).toContain('satisfies Plugin');
         });
 
-        it('should embed project parameters', () => {
-            expect(content).toContain(JSON.stringify(TEST_PARAMS.projectDir));
+        it('should embed data directory only', () => {
             expect(content).toContain(JSON.stringify(TEST_PARAMS.dataDir));
-            expect(content).toContain(JSON.stringify(TEST_PARAMS.projectName));
+        });
+
+        it('should NOT embed project-specific params', () => {
+            expect(content).not.toContain('PROJECT_DIR');
+            expect(content).not.toContain('PROJECT_NAME');
+        });
+
+        it('should use listProjectDirs for scanning', () => {
+            expect(content).toContain('listProjectDirs');
         });
 
         it('should embed code extensions array', () => {
@@ -294,10 +300,17 @@ describe('createOpenClawHooks', () => {
             expect(content).toContain('export default async function handler');
         });
 
-        it('should embed project parameters', () => {
-            expect(content).toContain(JSON.stringify(TEST_PARAMS.projectDir));
+        it('should embed data directory only', () => {
             expect(content).toContain(JSON.stringify(TEST_PARAMS.dataDir));
-            expect(content).toContain(JSON.stringify(TEST_PARAMS.projectName));
+        });
+
+        it('should NOT embed project-specific params', () => {
+            expect(content).not.toContain('PROJECT_DIR');
+            expect(content).not.toContain('PROJECT_NAME');
+        });
+
+        it('should use listProjectDirs for scanning', () => {
+            expect(content).toContain('listProjectDirs');
         });
 
         it('should handle before_tool_call event', () => {
@@ -373,20 +386,16 @@ describe('createHooksForAgent', () => {
         expect(() => createHooksForAgent('unknown' as any, TEST_PARAMS)).toThrow();
     });
 
-    it('should pass params through to generated content', () => {
+    it('should pass dataDir through to generated content', () => {
         const customParams: HookParams = {
             dataDir: '/custom/data/dir',
-            projectName: 'custom-project',
-            projectDir: '/custom/project/dir',
         };
 
-        // Check each agent type embeds the custom params
+        // Check each agent type embeds the custom dataDir
         for (const agent of ['claude-code', 'opencode', 'openclaw'] as const) {
             const hookSet = createHooksForAgent(agent, customParams);
             const allContent = hookSet.definitions.map((d) => d.content).join('\n');
-            expect(allContent).toContain(customParams.projectDir);
             expect(allContent).toContain(customParams.dataDir);
-            expect(allContent).toContain(customParams.projectName);
         }
     });
 });

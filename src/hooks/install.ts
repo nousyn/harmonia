@@ -3,7 +3,7 @@
  *
  * Detects the host agent type and installs the appropriate hook definitions
  * using agent-kit's installHooks API. Hook content is generated with baked-in
- * project parameters (data dir, project name, project dir).
+ * data directory path. Hooks are project-agnostic.
  */
 
 import { createKit, type AgentType, type HookInstallResult } from '@s_s/agent-kit';
@@ -18,11 +18,11 @@ const kit = createKit('harmonia');
 /**
  * Install Harmonia hooks for the detected agent.
  *
- * Generates agent-specific hook content with baked-in project parameters,
+ * Generates agent-specific hook content with baked-in data directory,
  * then delegates to agent-kit for file writing and config merging.
  *
  * @param agentType - The host agent type (detected or user-specified)
- * @param params - Project-specific parameters to bake into hook content
+ * @param params - Parameters to bake into hook content (dataDir only)
  * @returns Installation result from agent-kit
  */
 export async function installHooks(agentType: AgentType, params: HookParams): Promise<HookInstallResult> {

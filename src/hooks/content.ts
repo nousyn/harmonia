@@ -4,10 +4,10 @@
  * Hook scripts run on the agent side (shell scripts for Claude Code,
  * TS plugins for OpenCode, handlers for OpenClaw). They need to know:
  *   - HARMONIA_DATA_DIR: where to read dispatches.json, state.json, etc.
- *   - PROJECT_NAME: which project's data to read
- *   - PROJECT_DIR: project source directory (for boundary checks)
  *
- * These values are baked into hook content at install time.
+ * Project-specific info (name, dir) is NOT baked in — hooks are project-agnostic.
+ * Boundary guards work on tool names + code file extensions only.
+ * Proactive reminders scan all projects under the data directory.
  */
 
 /**
@@ -17,10 +17,6 @@
 export interface HookParams {
     /** Harmonia data directory (absolute path) */
     dataDir: string;
-    /** Project name */
-    projectName: string;
-    /** Project source directory (absolute path) */
-    projectDir: string;
 }
 
 // ─── Boundary Rules ───
@@ -102,6 +98,7 @@ export const CODE_EXTENSIONS = [
  */
 export const HARMONIA_TOOLS = [
     'project_init',
+    'project_set_scale',
     'project_status',
     'phase_update',
     'role_dispatch',

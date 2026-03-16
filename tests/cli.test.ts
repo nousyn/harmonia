@@ -14,19 +14,7 @@ import { parseSetupArgs, runSetup } from '../src/cli/setup.js';
 describe('parseSetupArgs', () => {
     it('should return defaults with no args', () => {
         const opts = parseSetupArgs([]);
-        expect(opts.workflow).toBe('dev');
-        expect(opts.name).toBeUndefined();
         expect(opts.agent).toBeUndefined();
-    });
-
-    it('should parse --name', () => {
-        const opts = parseSetupArgs(['--name', 'my-project']);
-        expect(opts.name).toBe('my-project');
-    });
-
-    it('should parse --workflow', () => {
-        const opts = parseSetupArgs(['--workflow', 'custom']);
-        expect(opts.workflow).toBe('custom');
     });
 
     it('should parse --agent', () => {
@@ -34,23 +22,20 @@ describe('parseSetupArgs', () => {
         expect(opts.agent).toBe('claude-code');
     });
 
-    it('should parse all options together', () => {
-        const opts = parseSetupArgs(['--name', 'foo', '--workflow', 'dev', '--agent', 'opencode']);
-        expect(opts.name).toBe('foo');
-        expect(opts.workflow).toBe('dev');
-        expect(opts.agent).toBe('opencode');
-    });
-
     it('should throw on invalid --agent', () => {
         expect(() => parseSetupArgs(['--agent', 'vscode'])).toThrow('--agent must be one of');
     });
 
-    it('should throw on missing --name value', () => {
-        expect(() => parseSetupArgs(['--name'])).toThrow('--name requires a value');
-    });
-
     it('should throw on unknown option', () => {
         expect(() => parseSetupArgs(['--verbose'])).toThrow('Unknown option');
+    });
+
+    it('should throw on --name (removed)', () => {
+        expect(() => parseSetupArgs(['--name', 'foo'])).toThrow('Unknown option');
+    });
+
+    it('should throw on --workflow (removed)', () => {
+        expect(() => parseSetupArgs(['--workflow', 'dev'])).toThrow('Unknown option');
     });
 });
 
@@ -59,7 +44,6 @@ describe('parseSetupArgs', () => {
 describe('runSetup', () => {
     let tempDir: string;
     let projectDir: string;
-    let workflowsDir: string;
     let consoleLogs: string[];
 
     let originalDataDir: string | undefined;
@@ -75,9 +59,6 @@ describe('runSetup', () => {
 
         // Mock cwd to our temp project dir
         vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
-
-        // Real workflows from project
-        workflowsDir = join(import.meta.dirname, '..', 'workflows');
 
         // Capture console.log
         consoleLogs = [];
@@ -97,20 +78,10 @@ describe('runSetup', () => {
         await rm(tempDir, { recursive: true, force: true });
     });
 
-    it('should initialize a new project and inject prompt', async () => {
+    it('should inject prompt and install hooks', async () => {
         await runSetup({
-            name: 'test-project',
-            workflow: 'dev',
             agent: 'opencode',
-            workflowsDir,
         });
-
-        // Check project was initialized
-        const stateContent = await readFile(join(tempDir, 'test-project', 'state.json'), 'utf-8');
-        const state = JSON.parse(stateContent);
-        expect(state.projectName).toBe('test-project');
-        expect(state.scale).toBe('small'); // default internal value
-        expect(state.workflow).toBe('dev');
 
         // Check prompt was injected
         const agentsFile = await readFile(join(projectDir, 'AGENTS.md'), 'utf-8');
@@ -118,43 +89,31 @@ describe('runSetup', () => {
 
         // Check console output
         const output = consoleLogs.join('\n');
-        expect(output).toContain('test-project');
         expect(output).toContain('[done]');
         expect(output).toContain('Ready');
     });
 
-    it('should skip init if project already exists', async () => {
-        // First setup
+    it('should not register project or initialize state', async () => {
         await runSetup({
-            name: 'test-project',
-            workflow: 'dev',
             agent: 'opencode',
-            workflowsDir,
         });
+
+        // No state.json should exist — setup no longer initializes project
+        const stateExists = await readFile(join(tempDir, 'test-project', 'state.json'), 'utf-8').catch(() => null);
+        expect(stateExists).toBeNull();
+    });
+
+    it('should be idempotent (re-run updates prompt)', async () => {
+        // First setup
+        await runSetup({ agent: 'opencode' });
 
         consoleLogs = [];
 
-        // Second setup — should skip init
-        await runSetup({
-            name: 'test-project',
-            workflow: 'dev',
-            agent: 'opencode',
-            workflowsDir,
-        });
+        // Second setup — should update (replace) the prompt
+        await runSetup({ agent: 'opencode' });
 
         const output = consoleLogs.join('\n');
-        expect(output).toContain('[skip]');
-    });
-
-    it('should default project name to directory name', async () => {
-        // Don't pass name — should use basename of cwd
-        await runSetup({
-            workflow: 'dev',
-            agent: 'opencode',
-            workflowsDir,
-        });
-
-        const output = consoleLogs.join('\n');
-        expect(output).toContain('test-project');
+        expect(output).toContain('Updated');
+        expect(output).toContain('[done]');
     });
 });

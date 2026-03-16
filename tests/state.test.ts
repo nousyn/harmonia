@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { initProjectState, readState, updatePhaseStatus, projectStateExists } from '../src/core/state.js';
+import { initProjectState, readState, updatePhaseStatus, projectStateExists, setScale } from '../src/core/state.js';
 import { loadWorkflow } from '../src/core/workflow.js';
 import { resolve } from 'node:path';
 
@@ -29,14 +29,14 @@ describe('project state', () => {
         expect(await projectStateExists(TEST_PROJECT)).toBe(false);
     });
 
-    it('should initialize a project', async () => {
+    it('should initialize a project with null scale', async () => {
         const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
-        const state = await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf, 'small');
+        const state = await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
 
         expect(state.projectName).toBe(TEST_PROJECT);
         expect(state.projectDir).toBe(TEST_PROJECT_DIR);
         expect(state.workflow).toBe('dev');
-        expect(state.scale).toBe('small');
+        expect(state.scale).toBeNull();
         expect(state.currentPhase).toBe('clarify');
         expect(state.phases).toHaveLength(5);
         expect(state.phases[0].status).toBe('in_progress');
@@ -102,5 +102,25 @@ describe('project state', () => {
 
         expect(state.currentPhase).toBe('test');
         expect(state.phases.find((p) => p.id === 'test')!.status).toBe('in_progress');
+    });
+
+    it('should set scale on a project with null scale', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
+
+        const state = await setScale(TEST_PROJECT, 'medium');
+        expect(state.scale).toBe('medium');
+
+        // Verify persisted
+        const reread = await readState(TEST_PROJECT);
+        expect(reread.scale).toBe('medium');
+    });
+
+    it('should reject setScale when scale is already set', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, 'dev');
+        await initProjectState(TEST_PROJECT, TEST_PROJECT_DIR, wf);
+        await setScale(TEST_PROJECT, 'small');
+
+        await expect(setScale(TEST_PROJECT, 'large')).rejects.toThrow('Scale 已设定为 "small"');
     });
 });

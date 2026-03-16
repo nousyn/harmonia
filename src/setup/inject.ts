@@ -7,7 +7,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { createKit, detectAgent, type AgentType } from '@s_s/agent-kit';
-import { generatePmPrompt, type PromptTemplateParams } from './templates.js';
+import { generatePmPrompt } from './templates.js';
 
 /** Shared kit instance — binds all marker tags to "harmonia" */
 const kit = createKit('harmonia');
@@ -38,9 +38,8 @@ export async function detectHostAgent(projectDir: string): Promise<AgentType> {
 export async function injectPrompt(
     projectDir: string,
     agentType: AgentType,
-    params: PromptTemplateParams,
 ): Promise<{ filePath: string; created: boolean; replaced: boolean }> {
-    const prompt = generatePmPrompt(params);
+    const prompt = generatePmPrompt();
 
     // Check pre-existing state for return value
     const hasExisting = await kit.hasPromptInjected(agentType, { scope: 'project', projectRoot: projectDir });

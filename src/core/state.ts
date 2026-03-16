@@ -7,6 +7,16 @@ import { join, dirname } from 'node:path';
 import { getProjectDataDir } from './registry.js';
 import type { PhaseStatus, ProjectScale, ProjectState, LoadedWorkflow } from './types.js';
 
+/**
+ * Error thrown when a tool requires scale but it hasn't been set yet.
+ */
+export class ScaleNotSetError extends Error {
+    constructor(projectName: string) {
+        super(`项目 "${projectName}" 尚未设定 scale。请先完成 PRD 审批，然后调用 project_set_scale 设定项目规模。`);
+        this.name = 'ScaleNotSetError';
+    }
+}
+
 const STATE_FILE = 'state.json';
 
 function statePath(projectName: string): string {
@@ -22,7 +32,6 @@ export async function initProjectState(
     projectName: string,
     projectDir: string,
     workflow: LoadedWorkflow,
-    scale: ProjectScale = 'small',
 ): Promise<ProjectState> {
     const now = new Date().toISOString();
     const phases = workflow.definition.phases;
@@ -32,7 +41,7 @@ export async function initProjectState(
         projectName,
         projectDir,
         workflow: workflow.definition.name,
-        scale,
+        scale: null,
         currentPhase: firstPhaseId,
         phases: phases.map((p, i) => ({
             id: p.id,
@@ -125,4 +134,17 @@ export async function projectStateExists(projectName: string): Promise<boolean> 
     } catch {
         return false;
     }
+}
+
+/**
+ * Set the project scale. Scale is immutable once set.
+ */
+export async function setScale(projectName: string, scale: ProjectScale): Promise<ProjectState> {
+    const state = await readState(projectName);
+    if (state.scale !== null) {
+        throw new Error(`Scale 已设定为 "${state.scale}"，不可更改。如需调整规模，请重新评估 PRD。`);
+    }
+    state.scale = scale;
+    await writeState(projectName, state);
+    return state;
 }
