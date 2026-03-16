@@ -13,11 +13,15 @@ import { listDocs } from '../core/docs.js';
 import { readReviews } from '../core/reviews.js';
 import { getMergedOverrides } from '../core/overrides.js';
 import { readDispatches, readSessions } from '../core/dispatch.js';
+import { readSteps, getCompletedStepIds } from '../core/steps.js';
 import type {
     DispatchRecord,
+    DocDefinition,
     DocReviewState,
+    DocStepState,
     LoadedWorkflow,
     PhaseDefinition,
+    ProjectScale,
     ProjectState,
     SessionRecord,
 } from '../core/types.js';
@@ -157,6 +161,41 @@ function formatSession(s: SessionRecord): string {
     return `  ${s.id}  ${s.role.padEnd(12)} [${s.status}]  ${agentInfo}${agentType}${label}`;
 }
 
+/** Scales that activate sequential mode */
+const SEQUENTIAL_SCALES: Set<ProjectScale> = new Set(['medium', 'large']);
+
+/**
+ * Format step progress for a sequential document.
+ * Returns lines like:
+ *   Steps: [✓] 需求结构化 → [✓] 完整性校验 → [→] PRD 文档草稿 → [ ] PRD 最终版
+ */
+function formatStepProgress(docDef: DocDefinition, stepState: DocStepState | undefined): string {
+    const steps = docDef.steps!;
+    const completedIds = stepState ? getCompletedStepIds(stepState) : new Set<string>();
+    const finalized = stepState?.finalized ?? false;
+
+    if (finalized) {
+        return `  Steps: all completed ✓ (finalized)`;
+    }
+
+    // Find the first incomplete step
+    let firstIncomplete = steps.length;
+    for (let i = 0; i < steps.length; i++) {
+        if (!completedIds.has(steps[i].id)) {
+            firstIncomplete = i;
+            break;
+        }
+    }
+
+    const parts = steps.map((s, i) => {
+        if (completedIds.has(s.id)) return `[✓] ${s.name}`;
+        if (i === firstIncomplete) return `[→] ${s.name}`;
+        return `[ ] ${s.name}`;
+    });
+
+    return `  Steps: ${parts.join(' → ')}`;
+}
+
 export function registerGetProjectStatus(server: McpServer, workflowsDir: string): void {
     server.tool(
         'get_project_status',
@@ -173,6 +212,7 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                 const overrides = await getMergedOverrides(project_name);
                 const dispatches = await readDispatches(project_name);
                 const sessions = await readSessions(project_name);
+                const stepsData = await readSteps(project_name);
 
                 // Phase summary
                 const phasesSummary = state.phases
@@ -197,17 +237,40 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                               .join('\n')
                         : '(none)';
 
-                // Build documents section with status
+                // Build documents section with status and step progress
                 const docsSection =
                     docs.length > 0
                         ? docs
                               .map((d) => {
                                   const review = reviews[d];
-                                  if (!review) return `- ${d}`;
-                                  return `- ${d} [${review.status}]`;
+                                  const reviewTag = review ? ` [${review.status}]` : '';
+                                  const docDef = wf.definition.docs[d];
+                                  const hasSteps = docDef?.steps?.length && SEQUENTIAL_SCALES.has(state.scale);
+                                  let line = `- ${d}${reviewTag}`;
+                                  if (hasSteps) {
+                                      line += '\n' + formatStepProgress(docDef, stepsData[d]);
+                                  }
+                                  return line;
                               })
                               .join('\n')
                         : '(none yet)';
+
+                // Show step progress for docs not yet written but with active steps
+                const inProgressStepDocs = Object.keys(stepsData).filter((docId) => !docs.includes(docId));
+                const inProgressSection = inProgressStepDocs
+                    .map((docId) => {
+                        const docDef = wf.definition.docs[docId];
+                        if (!docDef?.steps?.length) return null;
+                        const stepState = stepsData[docId];
+                        const completedCount = stepState?.completedSteps.length ?? 0;
+                        if (completedCount === 0) return null;
+                        return (
+                            `- ${docId} (in progress, ${completedCount}/${docDef.steps.length} steps)\n` +
+                            formatStepProgress(docDef, stepState)
+                        );
+                    })
+                    .filter(Boolean)
+                    .join('\n');
 
                 // Build sessions section
                 const activeSessions = sessions.filter((s) => s.status !== 'closed');
@@ -264,6 +327,7 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                                 ``,
                                 `## Documents`,
                                 docsSection,
+                                ...(inProgressSection ? [``, `## In-Progress Steps`, inProgressSection] : []),
                                 ``,
                                 `## Next Steps`,
                                 nextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
