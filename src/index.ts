@@ -32,6 +32,21 @@ if (subcommand === 'setup') {
         console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
     }
+} else if (subcommand === 'unregister') {
+    // CLI mode — unregister a project from the registry
+    const projectName = process.argv[3];
+    if (!projectName) {
+        console.error('Usage: harmonia unregister <project_name>');
+        process.exit(1);
+    }
+    const { getProject, unregisterProject } = await import('./core/registry.js');
+    const entry = await getProject(projectName);
+    if (!entry) {
+        console.error(`Project "${projectName}" not found in registry.`);
+        process.exit(1);
+    }
+    await unregisterProject(projectName);
+    console.log(`Project "${projectName}" unregistered. Data files in the data directory were NOT deleted.`);
 } else if (subcommand === '--help' || subcommand === '-h') {
     console.log(`
 Harmonia — Multi-agent orchestration MCP server
@@ -39,6 +54,7 @@ Harmonia — Multi-agent orchestration MCP server
 Usage:
   harmonia                Start MCP stdio server
   harmonia setup          Inject PM prompt + install hooks in current directory
+  harmonia unregister <name>  Remove a project from the registry (keeps data files)
   harmonia --help         Show this help message
 
 Setup options:
@@ -63,6 +79,7 @@ Setup options:
     const { getGlobalDir } = await import('./core/registry.js');
 
     const { registerProjectInit } = await import('./tools/project-init.js');
+    const { registerIterationStart } = await import('./tools/iteration-start.js');
     const { registerSetScale } = await import('./tools/set-scale.js');
     const { registerGetRolePrompt } = await import('./tools/get-role-prompt.js');
     const { registerUpdatePhase } = await import('./tools/update-phase.js');
@@ -83,6 +100,7 @@ Setup options:
 
     // Register all tools
     registerProjectInit(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerIterationStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerSetScale(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerGetRolePrompt(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerUpdatePhase(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);

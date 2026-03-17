@@ -1,7 +1,7 @@
 /**
  * Dispatch & Session tracking — manages:
- *   <data_dir>/<project_name>/sessions.json
- *   <data_dir>/<project_name>/dispatches.json
+ *   <data_dir>/<project_name>/iter-<n>/sessions.json
+ *   <data_dir>/<project_name>/iter-<n>/dispatches.json
  *
  * Sessions represent agent instances (can be reused across dispatches).
  * Dispatches represent individual task assignments to a role.
@@ -10,33 +10,33 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getProjectDataDir } from './registry.js';
+import { getIterationDir } from './registry.js';
 import type { AgentType, SessionRecord, SessionStatus, DispatchRecord, DispatchStatus } from './types.js';
 
 const SESSIONS_FILE = 'sessions.json';
 const DISPATCHES_FILE = 'dispatches.json';
 
-function sessionsPath(projectName: string): string {
-    return join(getProjectDataDir(projectName), SESSIONS_FILE);
+function sessionsPath(projectName: string, iteration: number): string {
+    return join(getIterationDir(projectName, iteration), SESSIONS_FILE);
 }
 
-function dispatchesPath(projectName: string): string {
-    return join(getProjectDataDir(projectName), DISPATCHES_FILE);
+function dispatchesPath(projectName: string, iteration: number): string {
+    return join(getIterationDir(projectName, iteration), DISPATCHES_FILE);
 }
 
 // ─── Session CRUD ───
 
-export async function readSessions(projectName: string): Promise<SessionRecord[]> {
+export async function readSessions(projectName: string, iteration: number): Promise<SessionRecord[]> {
     try {
-        const content = await readFile(sessionsPath(projectName), 'utf-8');
+        const content = await readFile(sessionsPath(projectName, iteration), 'utf-8');
         return JSON.parse(content) as SessionRecord[];
     } catch {
         return [];
     }
 }
 
-async function writeSessions(projectName: string, sessions: SessionRecord[]): Promise<void> {
-    const filePath = sessionsPath(projectName);
+async function writeSessions(projectName: string, iteration: number, sessions: SessionRecord[]): Promise<void> {
+    const filePath = sessionsPath(projectName, iteration);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, JSON.stringify(sessions, null, 2) + '\n', 'utf-8');
 }
@@ -48,11 +48,12 @@ function nextSessionId(sessions: SessionRecord[]): string {
 
 export async function createSession(
     projectName: string,
+    iteration: number,
     role: string,
     agentType?: AgentType,
     label?: string,
 ): Promise<SessionRecord> {
-    const sessions = await readSessions(projectName);
+    const sessions = await readSessions(projectName, iteration);
     const now = new Date().toISOString();
 
     const session: SessionRecord = {
@@ -66,12 +67,13 @@ export async function createSession(
     };
 
     sessions.push(session);
-    await writeSessions(projectName, sessions);
+    await writeSessions(projectName, iteration, sessions);
     return session;
 }
 
 export async function updateSession(
     projectName: string,
+    iteration: number,
     sessionId: string,
     updates: {
         status?: SessionStatus;
@@ -80,7 +82,7 @@ export async function updateSession(
         label?: string;
     },
 ): Promise<SessionRecord> {
-    const sessions = await readSessions(projectName);
+    const sessions = await readSessions(projectName, iteration);
     const session = sessions.find((s) => s.id === sessionId);
 
     if (!session) {
@@ -93,7 +95,7 @@ export async function updateSession(
     if (updates.label !== undefined) session.label = updates.label;
     session.lastActiveAt = new Date().toISOString();
 
-    await writeSessions(projectName, sessions);
+    await writeSessions(projectName, iteration, sessions);
     return session;
 }
 
@@ -101,8 +103,12 @@ export async function updateSession(
  * Find an idle session for a given role (for session reuse).
  * Returns the most recently active idle session, or null if none found.
  */
-export async function findIdleSession(projectName: string, role: string): Promise<SessionRecord | null> {
-    const sessions = await readSessions(projectName);
+export async function findIdleSession(
+    projectName: string,
+    iteration: number,
+    role: string,
+): Promise<SessionRecord | null> {
+    const sessions = await readSessions(projectName, iteration);
     const idle = sessions
         .filter((s) => s.role === role && s.status === 'idle')
         .sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
@@ -114,26 +120,27 @@ export async function findIdleSession(projectName: string, role: string): Promis
  */
 export async function findSessionByAgentId(
     projectName: string,
+    iteration: number,
     role: string,
     agentSessionId: string,
 ): Promise<SessionRecord | null> {
-    const sessions = await readSessions(projectName);
+    const sessions = await readSessions(projectName, iteration);
     return sessions.find((s) => s.role === role && s.agentSessionId === agentSessionId) ?? null;
 }
 
 // ─── Dispatch CRUD ───
 
-export async function readDispatches(projectName: string): Promise<DispatchRecord[]> {
+export async function readDispatches(projectName: string, iteration: number): Promise<DispatchRecord[]> {
     try {
-        const content = await readFile(dispatchesPath(projectName), 'utf-8');
+        const content = await readFile(dispatchesPath(projectName, iteration), 'utf-8');
         return JSON.parse(content) as DispatchRecord[];
     } catch {
         return [];
     }
 }
 
-async function writeDispatches(projectName: string, dispatches: DispatchRecord[]): Promise<void> {
-    const filePath = dispatchesPath(projectName);
+async function writeDispatches(projectName: string, iteration: number, dispatches: DispatchRecord[]): Promise<void> {
+    const filePath = dispatchesPath(projectName, iteration);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, JSON.stringify(dispatches, null, 2) + '\n', 'utf-8');
 }
@@ -145,12 +152,13 @@ function nextDispatchId(dispatches: DispatchRecord[]): string {
 
 export async function createDispatch(
     projectName: string,
+    iteration: number,
     role: string,
     taskBrief: string,
     expectedOutputs: string[],
     sessionId?: string,
 ): Promise<DispatchRecord> {
-    const dispatches = await readDispatches(projectName);
+    const dispatches = await readDispatches(projectName, iteration);
     const now = new Date().toISOString();
 
     const dispatch: DispatchRecord = {
@@ -165,12 +173,13 @@ export async function createDispatch(
     };
 
     dispatches.push(dispatch);
-    await writeDispatches(projectName, dispatches);
+    await writeDispatches(projectName, iteration, dispatches);
     return dispatch;
 }
 
 export async function updateDispatch(
     projectName: string,
+    iteration: number,
     dispatchId: string,
     updates: {
         status?: DispatchStatus;
@@ -178,7 +187,7 @@ export async function updateDispatch(
         note?: string;
     },
 ): Promise<DispatchRecord> {
-    const dispatches = await readDispatches(projectName);
+    const dispatches = await readDispatches(projectName, iteration);
     const dispatch = dispatches.find((d) => d.id === dispatchId);
 
     if (!dispatch) {
@@ -197,15 +206,19 @@ export async function updateDispatch(
     if (updates.note !== undefined) dispatch.note = updates.note;
     dispatch.updatedAt = now;
 
-    await writeDispatches(projectName, dispatches);
+    await writeDispatches(projectName, iteration, dispatches);
     return dispatch;
 }
 
 /**
  * Get a single dispatch record by ID.
  */
-export async function getDispatch(projectName: string, dispatchId: string): Promise<DispatchRecord | null> {
-    const dispatches = await readDispatches(projectName);
+export async function getDispatch(
+    projectName: string,
+    iteration: number,
+    dispatchId: string,
+): Promise<DispatchRecord | null> {
+    const dispatches = await readDispatches(projectName, iteration);
     return dispatches.find((d) => d.id === dispatchId) ?? null;
 }
 

@@ -12,11 +12,14 @@
  *   ├── registry.json        # { projects: { "my-app": { dir: "/path/to/src", ... } } }
  *   ├── overrides.json       # global overrides (optional)
  *   ├── my-app/
- *   │   ├── state.json
- *   │   ├── docs/
- *   │   ├── reviews.json
  *   │   ├── overrides.json   # project-level overrides (optional)
- *   │   └── ...
+ *   │   ├── iter-1/
+ *   │   │   ├── state.json
+ *   │   │   ├── docs/
+ *   │   │   ├── reviews.json
+ *   │   │   └── ...
+ *   │   ├── iter-2/
+ *   │   │   └── ...
  *   └── another-project/
  *       └── ...
  */
@@ -37,6 +40,10 @@ export interface ProjectEntry {
     workflow: string;
     /** When the project was registered */
     createdAt: string;
+    /** Currently active iteration number (starts at 1, 0 means no iteration started yet) */
+    currentIteration: number;
+    /** Total number of iterations created so far */
+    totalIterations: number;
 }
 
 export interface Registry {
@@ -87,6 +94,8 @@ export async function writeRegistry(registry: Registry): Promise<void> {
 
 /**
  * Register a new project. Creates the project data directory.
+ * Note: Does NOT create iteration directories or state files.
+ * Use startIteration() after registration to begin the first iteration.
  */
 export async function registerProject(projectName: string, projectDir: string, workflow: string): Promise<void> {
     const registry = await readRegistry();
@@ -101,11 +110,13 @@ export async function registerProject(projectName: string, projectDir: string, w
         dir: projectDir,
         workflow,
         createdAt: new Date().toISOString(),
+        currentIteration: 0,
+        totalIterations: 0,
     };
 
-    // Create project data directory structure under global dir
+    // Create project data directory under global dir
     const dataDir = getProjectDataDir(projectName);
-    await mkdir(join(dataDir, 'docs'), { recursive: true });
+    await mkdir(dataDir, { recursive: true });
 
     // Create the project source directory if it doesn't exist
     await mkdir(projectDir, { recursive: true });
@@ -136,4 +147,38 @@ export async function unregisterProject(projectName: string): Promise<void> {
     const registry = await readRegistry();
     delete registry.projects[projectName];
     await writeRegistry(registry);
+}
+
+/**
+ * Get the iteration directory for a specific project iteration.
+ * Pure path concatenation — does NOT check if the directory exists.
+ */
+export function getIterationDir(projectName: string, iteration: number): string {
+    return join(getProjectDataDir(projectName), `iter-${iteration}`);
+}
+
+/**
+ * Start a new iteration for a project.
+ * Creates the iteration directory (with docs/ subdirectory) and updates the registry.
+ *
+ * @returns The new iteration number
+ */
+export async function startIteration(projectName: string): Promise<number> {
+    const registry = await readRegistry();
+    const entry = registry.projects[projectName];
+
+    if (!entry) {
+        throw new Error(`Project "${projectName}" not found in registry.`);
+    }
+
+    const newIteration = entry.totalIterations + 1;
+    entry.currentIteration = newIteration;
+    entry.totalIterations = newIteration;
+
+    // Create iteration directory with docs subdirectory
+    const iterDir = getIterationDir(projectName, newIteration);
+    await mkdir(join(iterDir, 'docs'), { recursive: true });
+
+    await writeRegistry(registry);
+    return newIteration;
 }

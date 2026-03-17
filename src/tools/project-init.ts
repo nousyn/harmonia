@@ -1,6 +1,10 @@
 /**
  * MCP Tool: project_init
- * Initialize a new Harmonia project with global registry and data directory.
+ * Register a new Harmonia project in the global registry.
+ *
+ * This tool ONLY registers the project — it does NOT create iteration directories
+ * or initialize state. After registration, call `iteration_start` to begin the
+ * first iteration.
  *
  * Supports an optional `workflow` parameter. When multiple workflows are
  * available and none is specified, returns an error with the available list
@@ -10,13 +14,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loadWorkflow, listWorkflows } from '../core/workflow.js';
-import { initProjectState, readState } from '../core/state.js';
 import { registerProject, getProject } from '../core/registry.js';
 
 export function registerProjectInit(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'project_init',
-        "Initialize a new Harmonia project. Registers the project in the global data directory, creates data directories for documents/state, and creates the project source directory if it doesn't exist. Scale is NOT set here — use project_set_scale after PRD approval.",
+        'Register a new Harmonia project. Creates the project entry in the global registry and the project source directory. Does NOT start an iteration — call iteration_start after registration to begin the first iteration.',
         {
             project_name: z
                 .string()
@@ -37,15 +40,34 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
                 .describe('工作流名称（如 dev）。只有一个可用工作流时自动选中；多个时必须指定。'),
         },
         async ({ project_name, project_dir, workflow }) => {
-            // Check if already initialized
+            // Check if already registered
             const existing = await getProject(project_name);
             if (existing) {
-                const state = await readState(project_name);
+                const iterInfo =
+                    existing.currentIteration > 0
+                        ? `当前迭代: iter-${existing.currentIteration} (共 ${existing.totalIterations} 轮)`
+                        : '尚未开始迭代';
+
                 return {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `Project "${project_name}" already exists.\n\nSource directory: ${existing.dir}\n\nCurrent state:\n${JSON.stringify(state, null, 2)}`,
+                            text: [
+                                `项目 "${project_name}" 已注册。`,
+                                ``,
+                                `源代码目录: ${existing.dir}`,
+                                `工作流: ${existing.workflow}`,
+                                `${iterInfo}`,
+                                ``,
+                                existing.currentIteration > 0
+                                    ? `如需查看当前状态，请调用 project_status(project_name="${project_name}")。`
+                                    : `请调用 iteration_start(project_name="${project_name}") 开始第一轮迭代。`,
+                                existing.currentIteration > 0
+                                    ? `如需开始新一轮迭代，请调用 iteration_start(project_name="${project_name}")。`
+                                    : '',
+                            ]
+                                .filter(Boolean)
+                                .join('\n'),
                         },
                     ],
                 };
@@ -115,29 +137,24 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
                 };
             }
 
-            // Load workflow definition
+            // Load workflow definition (validate it loads correctly)
             const wf = await loadWorkflow(builtinDir, customDir, workflowName);
 
-            // Register project (creates global data dirs + project source dir)
+            // Register project (creates global data dir + project source dir)
             await registerProject(project_name, project_dir, workflowName);
-
-            // Initialize project state (scale = null)
-            const state = await initProjectState(project_name, project_dir, wf);
 
             return {
                 content: [
                     {
                         type: 'text' as const,
                         text: [
-                            `项目 "${project_name}" 初始化成功。`,
+                            `项目 "${project_name}" 注册成功。`,
                             ``,
                             `源代码目录: ${project_dir}`,
                             `工作流: ${wf.definition.name} (${wf.definition.description})`,
-                            `规模: (未设定)`,
-                            `当前阶段: ${state.currentPhase}`,
                             `可用角色: ${Object.keys(wf.roles).join(', ')}`,
                             ``,
-                            `下一步: 与用户沟通需求，编写 PRD，PRD 审批通过后调用 project_set_scale 设定项目规模。`,
+                            `下一步: 调用 iteration_start(project_name="${project_name}") 开始第一轮迭代。`,
                         ].join('\n'),
                     },
                 ],

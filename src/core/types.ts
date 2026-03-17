@@ -158,6 +158,8 @@ export interface ProjectState {
     projectDir: string;
     /** Workflow name, e.g. "dev" */
     workflow: string;
+    /** Iteration number this state belongs to */
+    iteration: number;
     /** Project scale determined by PM (null until set via project_set_scale) */
     scale: ProjectScale | null;
     /** Current phase id */

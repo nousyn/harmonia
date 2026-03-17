@@ -16,7 +16,7 @@ import { readReviews } from '../core/reviews.js';
 import { getMergedOverrides } from '../core/overrides.js';
 import { readDispatches, readSessions } from '../core/dispatch.js';
 import { readSteps, getCompletedStepIds } from '../core/steps.js';
-import { listProjects } from '../core/registry.js';
+import { listProjects, getProject } from '../core/registry.js';
 import type {
     DispatchRecord,
     DocDefinition,
@@ -133,7 +133,15 @@ function deriveNextSteps(
     }
 
     if (suggestions.length === 0) {
-        suggestions.push(`Continue working on the "${currentPhaseDef.name}" phase.`);
+        // Check if ALL phases are completed → recommend iteration_start for next iteration
+        const allPhasesCompleted = state.phases.every((p) => p.status === 'completed');
+        if (allPhasesCompleted) {
+            suggestions.push(
+                `本次迭代所有阶段已完成。如需开始新一轮迭代，请调用 iteration_start(project_name="${state.projectName}")。`,
+            );
+        } else {
+            suggestions.push(`Continue working on the "${currentPhaseDef.name}" phase.`);
+        }
     }
 
     return suggestions;
@@ -223,12 +231,20 @@ async function buildProjectList(): Promise<string> {
     const rows: string[] = [];
     for (const name of projectNames) {
         try {
-            const state = await readState(name);
+            const entry = await getProject(name);
+            if (!entry || entry.currentIteration === 0) {
+                rows.push(`| ${name} | ${entry?.dir ?? '?'} | (未开始迭代) | - | - | - |`);
+                continue;
+            }
+            const state = await readState(name, entry.currentIteration);
             const scaleDisplay = state.scale ?? '(未设定)';
             const updated = state.updatedAt.split('T')[0];
-            rows.push(`| ${name} | ${state.projectDir} | ${state.currentPhase} | ${scaleDisplay} | ${updated} |`);
+            const iterDisplay = `${entry.currentIteration}/${entry.totalIterations}`;
+            rows.push(
+                `| ${name} | ${state.projectDir} | ${state.currentPhase} | ${scaleDisplay} | ${iterDisplay} | ${updated} |`,
+            );
         } catch {
-            rows.push(`| ${name} | (无法读取状态) | - | - | - |`);
+            rows.push(`| ${name} | (无法读取状态) | - | - | - | - |`);
         }
     }
 
@@ -237,8 +253,8 @@ async function buildProjectList(): Promise<string> {
         '',
         `共 ${projectNames.length} 个项目:`,
         '',
-        '| 项目 | 目录 | 阶段 | 规模 | 更新时间 |',
-        '|------|------|------|------|----------|',
+        '| 项目 | 目录 | 阶段 | 规模 | 迭代 | 更新时间 |',
+        '|------|------|------|------|------|----------|',
         ...rows,
         '',
         '使用 project_status(project_name) 查看项目详情。',
@@ -261,14 +277,48 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
 
             // Detail mode — specific project
             try {
-                const state = await readState(project_name);
+                // Resolve current iteration
+                const entry = await getProject(project_name);
+                if (!entry) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `项目 "${project_name}" 未注册。使用 project_status() 查看所有项目，或 project_init 创建新项目。`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+
+                if (entry.currentIteration === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: [
+                                    `# Project: ${project_name}`,
+                                    ``,
+                                    `Source directory: ${entry.dir}`,
+                                    `Registered: ${entry.createdAt}`,
+                                    `Iterations: 0`,
+                                    ``,
+                                    `项目已注册但尚未开始迭代。请调用 iteration_start(project_name="${project_name}") 开始第一次迭代。`,
+                                ].join('\n'),
+                            },
+                        ],
+                    };
+                }
+
+                const iteration = entry.currentIteration;
+                const state = await readState(project_name, iteration);
                 const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
-                const docs = await listDocs(project_name);
-                const reviews = await readReviews(project_name);
+                const docs = await listDocs(project_name, iteration);
+                const reviews = await readReviews(project_name, iteration);
                 const overrides = await getMergedOverrides(project_name);
-                const dispatches = await readDispatches(project_name);
-                const sessions = await readSessions(project_name);
-                const stepsData = await readSteps(project_name);
+                const dispatches = await readDispatches(project_name, iteration);
+                const sessions = await readSessions(project_name, iteration);
+                const stepsData = await readSteps(project_name, iteration);
 
                 const scaleDisplay = state.scale ?? '(未设定)';
 
@@ -370,6 +420,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                                 `Source directory: ${state.projectDir}`,
                                 `Workflow: ${state.workflow}`,
                                 `Scale: ${scaleDisplay}`,
+                                `Iteration: ${iteration} / ${entry.totalIterations}`,
                                 `Created: ${state.createdAt}`,
                                 `Updated: ${state.updatedAt}`,
                                 ``,
@@ -402,12 +453,12 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                         },
                     ],
                 };
-            } catch {
+            } catch (err) {
                 return {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `项目 "${project_name}" 未找到。使用 project_status() 查看所有项目，或 project_init 创建新项目。`,
+                            text: `项目 "${project_name}" 状态读取失败: ${err instanceof Error ? err.message : String(err)}`,
                         },
                     ],
                     isError: true,

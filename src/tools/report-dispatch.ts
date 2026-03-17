@@ -26,6 +26,7 @@ import {
 import { listDocs } from '../core/docs.js';
 import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/workflow.js';
+import { getProject } from '../core/registry.js';
 import type { AgentType, DispatchRecord, SessionRecord } from '../core/types.js';
 
 export function registerReportDispatch(server: McpServer, builtinDir: string, customDir: string): void {
@@ -54,8 +55,23 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
         },
         async ({ project_name, dispatch_id, status, agent_session_id, agent_type, label, note }) => {
             try {
+                // Resolve current iteration
+                const entry = await getProject(project_name);
+                if (!entry || entry.currentIteration === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                const iteration = entry.currentIteration;
+
                 // Load the dispatch record
-                const dispatch = await getDispatch(project_name, dispatch_id);
+                const dispatch = await getDispatch(project_name, iteration, dispatch_id);
                 if (!dispatch) {
                     return {
                         content: [
@@ -92,6 +108,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                 if (agent_session_id) {
                     session = await resolveOrCreateSession(
                         project_name,
+                        iteration,
                         dispatch,
                         agent_session_id,
                         agent_type as AgentType | undefined,
@@ -107,7 +124,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     effectiveStatus === 'cancelled'
                 ) {
                     // Terminal states: update dispatch and transition session
-                    await updateDispatch(project_name, dispatch_id, {
+                    await updateDispatch(project_name, iteration, dispatch_id, {
                         status: effectiveStatus,
                         ...(session ? { sessionId: session.id } : {}),
                         ...(note ? { note } : {}),
@@ -117,14 +134,14 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     const sessionId = session?.id ?? dispatch.sessionId;
                     if (sessionId) {
                         const newSessionStatus = effectiveStatus === 'completed' ? 'idle' : 'lost';
-                        await updateSession(project_name, sessionId, { status: newSessionStatus });
+                        await updateSession(project_name, iteration, sessionId, { status: newSessionStatus });
                         results.push(`Session ${sessionId} → ${newSessionStatus}`);
                     }
 
                     results.push(`Dispatch ${dispatch_id} → ${effectiveStatus}`);
                 } else {
                     // Running: update dispatch status + associate session
-                    await updateDispatch(project_name, dispatch_id, {
+                    await updateDispatch(project_name, iteration, dispatch_id, {
                         status: 'running',
                         ...(session ? { sessionId: session.id } : {}),
                         ...(note ? { note } : {}),
@@ -133,7 +150,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     // Mark session as active
                     const sessionId = session?.id ?? dispatch.sessionId;
                     if (sessionId) {
-                        await updateSession(project_name, sessionId, { status: 'active' });
+                        await updateSession(project_name, iteration, sessionId, { status: 'active' });
                     }
 
                     results.push(`Dispatch ${dispatch_id} → running`);
@@ -141,8 +158,8 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
 
                 // Completion check: warn if expectedOutputs are missing
                 if (effectiveStatus === 'completed' && dispatch.expectedOutputs.length > 0) {
-                    const existingDocs = await listDocs(project_name);
-                    const state = await readState(project_name);
+                    const existingDocs = await listDocs(project_name, iteration);
+                    const state = await readState(project_name, iteration);
                     const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
 
                     const missingOutputs = dispatch.expectedOutputs.filter((docId) => {
@@ -191,6 +208,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
  */
 async function resolveOrCreateSession(
     projectName: string,
+    iteration: number,
     dispatch: DispatchRecord,
     agentSessionId: string,
     agentType?: AgentType,
@@ -198,10 +216,10 @@ async function resolveOrCreateSession(
 ): Promise<SessionRecord> {
     // If the dispatch already has a session, update it with the agent session ID
     if (dispatch.sessionId) {
-        const sessions = await readSessions(projectName);
+        const sessions = await readSessions(projectName, iteration);
         const existing = sessions.find((s) => s.id === dispatch.sessionId);
         if (existing) {
-            return await updateSession(projectName, existing.id, {
+            return await updateSession(projectName, iteration, existing.id, {
                 agentSessionId,
                 ...(agentType ? { agentType } : {}),
                 ...(label ? { label } : {}),
@@ -211,9 +229,9 @@ async function resolveOrCreateSession(
     }
 
     // Check if a session with this agent session ID already exists for this role
-    const existingByAgent = await findSessionByAgentId(projectName, dispatch.role, agentSessionId);
+    const existingByAgent = await findSessionByAgentId(projectName, iteration, dispatch.role, agentSessionId);
     if (existingByAgent) {
-        return await updateSession(projectName, existingByAgent.id, {
+        return await updateSession(projectName, iteration, existingByAgent.id, {
             status: 'active',
             ...(agentType ? { agentType } : {}),
             ...(label ? { label } : {}),
@@ -221,6 +239,6 @@ async function resolveOrCreateSession(
     }
 
     // Create a new session
-    const session = await createSession(projectName, dispatch.role, agentType, label);
-    return await updateSession(projectName, session.id, { agentSessionId });
+    const session = await createSession(projectName, iteration, dispatch.role, agentType, label);
+    return await updateSession(projectName, iteration, session.id, { agentSessionId });
 }

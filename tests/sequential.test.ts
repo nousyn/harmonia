@@ -103,7 +103,7 @@ describe('doc_write — sequential mode', () => {
     let tempDir: string;
     let workflowsDir: string;
     let noCustomDir: string;
-    let projectDir: string;
+    let iterDir: string;
     let client: Client;
     let server: McpServer;
 
@@ -155,22 +155,34 @@ describe('doc_write — sequential mode', () => {
 
     beforeEach(async () => {
         tempDir = await mkdtemp(join(tmpdir(), 'harmonia-seq-test-'));
-        projectDir = join(tempDir, 'test-project');
+        const projectDir = join(tempDir, 'test-project');
+        iterDir = join(projectDir, 'iter-1');
         workflowsDir = join(tempDir, 'workflows');
         noCustomDir = join(tempDir, 'no-custom-workflows');
 
-        // Setup project data dir
-        await mkdir(projectDir, { recursive: true });
+        // Setup iteration data dir
+        await mkdir(join(iterDir, 'docs'), { recursive: true });
+
+        // Mock registry functions
+        vi.spyOn(registry, 'getIterationDir').mockReturnValue(iterDir);
         vi.spyOn(registry, 'getProjectDataDir').mockReturnValue(projectDir);
         vi.spyOn(registry, 'getGlobalDir').mockReturnValue(tempDir);
+        vi.spyOn(registry, 'getProject').mockResolvedValue({
+            dir: '/tmp/src',
+            workflow: 'dev',
+            createdAt: '2026-01-01T00:00:00Z',
+            currentIteration: 1,
+            totalIterations: 1,
+        });
 
         // Write state.json (medium scale to activate sequential mode)
         await writeFile(
-            join(projectDir, 'state.json'),
+            join(iterDir, 'state.json'),
             JSON.stringify({
                 projectName: 'test-project',
                 projectDir: '/tmp/src',
                 workflow: 'dev',
+                iteration: 1,
                 scale: 'medium',
                 currentPhase: 'requirements',
                 phases: [{ id: 'requirements', status: 'in_progress' }],
@@ -230,7 +242,7 @@ describe('doc_write — sequential mode', () => {
         await rm(tempDir, { recursive: true, force: true });
     });
 
-    // --- Tests follow in next part ---
+    // --- Tests ---
 
     it('should require step parameter for medium scale doc with steps', async () => {
         const { text, isError } = await callTool('doc_write', {
@@ -287,7 +299,7 @@ describe('doc_write — sequential mode', () => {
             content: reqJson,
             step: 'requirements',
         });
-        const artifactPath = join(projectDir, 'docs', 'prd.requirements.json');
+        const artifactPath = join(iterDir, 'docs', 'prd.requirements.json');
         const content = await readFile(artifactPath, 'utf-8');
         expect(JSON.parse(content)).toHaveProperty('features');
     });
@@ -345,15 +357,15 @@ describe('doc_write — sequential mode', () => {
         expect(r4.text).toContain('REVIEW REQUIRED');
 
         // Formal doc should exist
-        const formalDoc = await readFile(join(projectDir, 'docs', 'prd.md'), 'utf-8');
+        const formalDoc = await readFile(join(iterDir, 'docs', 'prd.md'), 'utf-8');
         expect(formalDoc).toContain('项目概述');
 
         // steps.json should show finalized
-        const stepsData = JSON.parse(await readFile(join(projectDir, 'steps.json'), 'utf-8'));
+        const stepsData = JSON.parse(await readFile(join(iterDir, 'steps.json'), 'utf-8'));
         expect(stepsData.docs.prd.finalized).toBe(true);
 
         // reviews.json should exist
-        const reviewsData = JSON.parse(await readFile(join(projectDir, 'reviews.json'), 'utf-8'));
+        const reviewsData = JSON.parse(await readFile(join(iterDir, 'reviews.json'), 'utf-8'));
         expect(reviewsData.docs.prd.status).toBe('pending');
     });
 
@@ -389,7 +401,7 @@ describe('doc_write — sequential mode', () => {
         expect(r.isError).toBeFalsy();
 
         // Now step 2 should be required again — verify by checking steps.json
-        const stepsData = JSON.parse(await readFile(join(projectDir, 'steps.json'), 'utf-8'));
+        const stepsData = JSON.parse(await readFile(join(iterDir, 'steps.json'), 'utf-8'));
         expect(stepsData.docs.prd.completedSteps).toHaveLength(1);
         expect(stepsData.docs.prd.completedSteps[0].stepId).toBe('requirements');
 
@@ -407,11 +419,12 @@ describe('doc_write — sequential mode', () => {
     it('should skip sequential mode for small scale', async () => {
         // Rewrite state.json with small scale
         await writeFile(
-            join(projectDir, 'state.json'),
+            join(iterDir, 'state.json'),
             JSON.stringify({
                 projectName: 'test-project',
                 projectDir: '/tmp/src',
                 workflow: 'dev',
+                iteration: 1,
                 scale: 'small',
                 currentPhase: 'requirements',
                 phases: [{ id: 'requirements', status: 'in_progress' }],

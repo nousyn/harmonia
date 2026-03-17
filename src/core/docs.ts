@@ -1,5 +1,5 @@
 /**
- * Document management — read/write files under <data_dir>/<project_name>/docs/
+ * Document management — read/write files under <data_dir>/<project_name>/iter-<n>/docs/
  *
  * Supports both .md and .html files based on doc format configuration.
  * Also supports step artifact files for sequential mode (e.g. prd.requirements.json).
@@ -7,11 +7,11 @@
 
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { getProjectDataDir } from './registry.js';
+import { getIterationDir } from './registry.js';
 import type { DocDefinition } from './types.js';
 
-function docsDir(projectName: string): string {
-    return join(getProjectDataDir(projectName), 'docs');
+function docsDir(projectName: string, iteration: number): string {
+    return join(getIterationDir(projectName, iteration), 'docs');
 }
 
 /**
@@ -22,15 +22,16 @@ function getDocExtension(docDef?: DocDefinition): string {
 }
 
 /**
- * Write a document to <data_dir>/<project_name>/docs/<docId>.<ext>
+ * Write a document to <data_dir>/<project_name>/iter-<n>/docs/<docId>.<ext>
  */
 export async function writeDoc(
     projectName: string,
+    iteration: number,
     docId: string,
     content: string,
     docDef?: DocDefinition,
 ): Promise<string> {
-    const dir = docsDir(projectName);
+    const dir = docsDir(projectName, iteration);
     await mkdir(dir, { recursive: true });
     const ext = getDocExtension(docDef);
     const filePath = join(dir, `${docId}${ext}`);
@@ -39,11 +40,11 @@ export async function writeDoc(
 }
 
 /**
- * Read a document from <data_dir>/<project_name>/docs/<docId>.<ext>
+ * Read a document from <data_dir>/<project_name>/iter-<n>/docs/<docId>.<ext>
  * Tries both .md and .html extensions.
  */
-export async function readDoc(projectName: string, docId: string): Promise<string> {
-    const dir = docsDir(projectName);
+export async function readDoc(projectName: string, iteration: number, docId: string): Promise<string> {
+    const dir = docsDir(projectName, iteration);
 
     // Try .md first, then .html
     for (const ext of ['.md', '.html']) {
@@ -58,10 +59,10 @@ export async function readDoc(projectName: string, docId: string): Promise<strin
 }
 
 /**
- * List all documents in <data_dir>/<project_name>/docs/
+ * List all documents in <data_dir>/<project_name>/iter-<n>/docs/
  */
-export async function listDocs(projectName: string): Promise<string[]> {
-    const dir = docsDir(projectName);
+export async function listDocs(projectName: string, iteration: number): Promise<string[]> {
+    const dir = docsDir(projectName, iteration);
     try {
         const files = await readdir(dir);
         return files.filter((f) => f.endsWith('.md') || f.endsWith('.html')).map((f) => f.replace(/\.(md|html)$/, ''));
@@ -73,19 +74,20 @@ export async function listDocs(projectName: string): Promise<string[]> {
 // ─── Step Artifact I/O ───
 
 /**
- * Write a step artifact to <data_dir>/<project_name>/docs/<docId>.<stepId>.<ext>
+ * Write a step artifact to <data_dir>/<project_name>/iter-<n>/docs/<docId>.<stepId>.<ext>
  *
  * @param format - "json" or "md" (determines file extension)
  * @returns The file path written
  */
 export async function writeStepArtifact(
     projectName: string,
+    iteration: number,
     docId: string,
     stepId: string,
     content: string,
     format: 'json' | 'md',
 ): Promise<string> {
-    const dir = docsDir(projectName);
+    const dir = docsDir(projectName, iteration);
     await mkdir(dir, { recursive: true });
     const ext = format === 'json' ? '.json' : '.md';
     const filePath = join(dir, `${docId}.${stepId}${ext}`);
@@ -94,11 +96,16 @@ export async function writeStepArtifact(
 }
 
 /**
- * Read a step artifact from <data_dir>/<project_name>/docs/<docId>.<stepId>.<ext>
+ * Read a step artifact from <data_dir>/<project_name>/iter-<n>/docs/<docId>.<stepId>.<ext>
  * Tries .json first, then .md.
  */
-export async function readStepArtifact(projectName: string, docId: string, stepId: string): Promise<string> {
-    const dir = docsDir(projectName);
+export async function readStepArtifact(
+    projectName: string,
+    iteration: number,
+    docId: string,
+    stepId: string,
+): Promise<string> {
+    const dir = docsDir(projectName, iteration);
 
     for (const ext of ['.json', '.md']) {
         try {

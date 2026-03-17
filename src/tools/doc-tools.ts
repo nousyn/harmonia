@@ -22,6 +22,7 @@ import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
 import { submitForReview } from '../core/reviews.js';
 import { loadDocSchema, validateDoc, formatValidationErrors } from '../core/schema.js';
 import { getDocStepState, getCompletedStepIds, recordStepCompletion, markFinalized } from '../core/steps.js';
+import { getProject } from '../core/registry.js';
 import type { DocDefinition, DocStepDefinition, ProjectScale } from '../core/types.js';
 
 /** Scales that activate sequential mode (medium and above) */
@@ -53,8 +54,23 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
                 ),
         },
         async ({ project_name, doc_id, content, step }) => {
+            // Resolve current iteration
+            const entry = await getProject(project_name);
+            if (!entry || entry.currentIteration === 0) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+            const iteration = entry.currentIteration;
+
             // Load workflow to get doc definition (format, review defaults)
-            const state = await readState(project_name);
+            const state = await readState(project_name, iteration);
             const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
             const docDef = wf.definition.docs[doc_id];
             const isHtml = docDef?.format === 'html';
@@ -108,6 +124,7 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
                     customDir,
                     state.workflow,
                     project_name,
+                    iteration,
                     doc_id,
                     content,
                     step,
@@ -141,14 +158,14 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
             }
 
             // Write the document with correct extension
-            const filePath = await writeDoc(project_name, doc_id, content, docDef);
+            const filePath = await writeDoc(project_name, iteration, doc_id, content, docDef);
 
             // Check if review is required
             const overrides = await getMergedOverrides(project_name);
             const needsReview = docDef ? resolveDocReview(doc_id, docDef, overrides) : false;
 
             if (needsReview) {
-                await submitForReview(project_name, doc_id);
+                await submitForReview(project_name, iteration, doc_id);
                 const docName = docDef?.name ?? doc_id;
                 return {
                     content: [
@@ -188,7 +205,22 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
         },
         async ({ project_name, doc_id }) => {
             try {
-                const docContent = await readDoc(project_name, doc_id);
+                // Resolve current iteration
+                const entry = await getProject(project_name);
+                if (!entry || entry.currentIteration === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                const iteration = entry.currentIteration;
+
+                const docContent = await readDoc(project_name, iteration, doc_id);
                 return {
                     content: [
                         {
@@ -218,7 +250,22 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
             project_name: z.string().describe('Project name'),
         },
         async ({ project_name }) => {
-            const docs = await listDocs(project_name);
+            // Resolve current iteration
+            const entry = await getProject(project_name);
+            if (!entry || entry.currentIteration === 0) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+            const iteration = entry.currentIteration;
+
+            const docs = await listDocs(project_name, iteration);
             return {
                 content: [
                     {
@@ -226,7 +273,7 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
                         text:
                             docs.length > 0
                                 ? `Documents:\n${docs.map((d) => `- ${d}`).join('\n')}`
-                                : 'No documents found. Initialize a project first with project_init.',
+                                : 'No documents found for this iteration.',
                     },
                 ],
             };
@@ -246,6 +293,7 @@ async function handleSequentialWrite(
     customDir: string,
     workflowName: string,
     projectName: string,
+    iteration: number,
     docId: string,
     content: string,
     step: string | undefined,
@@ -290,7 +338,7 @@ async function handleSequentialWrite(
     }
 
     const stepIndex = stepIds.indexOf(step);
-    const stepState = await getDocStepState(projectName, docId);
+    const stepState = await getDocStepState(projectName, iteration, docId);
     const completedIds = getCompletedStepIds(stepState);
 
     // Guard: prerequisite steps must be completed (hard enforcement)
@@ -329,10 +377,10 @@ async function handleSequentialWrite(
     }
 
     // Write the step artifact
-    const artifactPath = await writeStepArtifact(projectName, docId, step, content, stepDef.format);
+    const artifactPath = await writeStepArtifact(projectName, iteration, docId, step, content, stepDef.format);
 
     // Record step completion (handles rollback if overwriting)
-    await recordStepCompletion(projectName, docId, step, artifactPath, stepIds);
+    await recordStepCompletion(projectName, iteration, docId, step, artifactPath, stepIds);
 
     const isLastStep = stepIndex === steps.length - 1;
 
@@ -343,6 +391,7 @@ async function handleSequentialWrite(
             customDir,
             workflowName,
             projectName,
+            iteration,
             docId,
             content,
             docDef,
@@ -373,6 +422,7 @@ async function handleFinalStep(
     customDir: string,
     workflowName: string,
     projectName: string,
+    iteration: number,
     docId: string,
     content: string,
     docDef: DocDefinition,
@@ -405,17 +455,17 @@ async function handleFinalStep(
     }
 
     // Write the formal document
-    const filePath = await writeDoc(projectName, docId, content, docDef);
+    const filePath = await writeDoc(projectName, iteration, docId, content, docDef);
 
     // Mark as finalized
-    await markFinalized(projectName, docId);
+    await markFinalized(projectName, iteration, docId);
 
     // Check if review is required
     const overrides = await getMergedOverrides(projectName);
     const needsReview = resolveDocReview(docId, docDef, overrides);
 
     if (needsReview) {
-        await submitForReview(projectName, docId);
+        await submitForReview(projectName, iteration, docId);
         const docName = docDef.name ?? docId;
         return {
             content: [

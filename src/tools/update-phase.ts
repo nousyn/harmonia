@@ -17,6 +17,7 @@ import { listDocs } from '../core/docs.js';
 import { readReviews } from '../core/reviews.js';
 import { readDispatches } from '../core/dispatch.js';
 import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
+import { getProject } from '../core/registry.js';
 
 export function registerUpdatePhase(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
@@ -31,11 +32,26 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
         },
         async ({ project_name, phase_id, status, blocked_reason, force }) => {
             try {
+                // Resolve current iteration
+                const entry = await getProject(project_name);
+                if (!entry || entry.currentIteration === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                const iteration = entry.currentIteration;
+
                 // ── Completion guards ──
                 if (status === 'completed' && !force) {
-                    const currentState = await readState(project_name);
+                    const currentState = await readState(project_name, iteration);
                     const wf = await loadWorkflow(builtinDir, customDir, currentState.workflow);
-                    const existingDocs = await listDocs(project_name);
+                    const existingDocs = await listDocs(project_name, iteration);
 
                     const phaseDef = wf.definition.phases.find((p) => p.id === phase_id);
                     const phaseIndex = wf.definition.phases.findIndex((p) => p.id === phase_id);
@@ -78,7 +94,7 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
 
                         // Guard 3: Docs requiring review must be approved
                         const overrides = await getMergedOverrides(project_name);
-                        const reviews = await readReviews(project_name);
+                        const reviews = await readReviews(project_name, iteration);
 
                         const unapprovedDocs = phaseDef.outputs.filter((o) => {
                             const docDef = wf.definition.docs[o];
@@ -98,7 +114,7 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
                     }
 
                     // Guard 4: No active dispatches
-                    const dispatches = await readDispatches(project_name);
+                    const dispatches = await readDispatches(project_name, iteration);
                     const activeDispatches = dispatches.filter(
                         (d) => d.status === 'dispatched' || d.status === 'running',
                     );
@@ -126,7 +142,7 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
                     }
                 }
 
-                const state = await updatePhaseStatus(project_name, phase_id, status, blocked_reason);
+                const state = await updatePhaseStatus(project_name, iteration, phase_id, status, blocked_reason);
 
                 const phasesSummary = state.phases
                     .map((p) => {

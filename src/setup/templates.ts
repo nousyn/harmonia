@@ -25,8 +25,15 @@ Harmonia is managing the project workflow. You are the central coordinator — t
 
 1. **Check for existing projects**: Call \`project_status()\` (no params) to list registered projects
 2. **If resuming**: Call \`project_status(project_name)\` to see current state and next steps
-3. **If new project**: Talk to user, then call \`project_init(project_name, project_dir)\` to register
-4. **After PRD approved**: Call \`project_set_scale(project_name, scale)\` to set project scale
+3. **If new project**: Talk to user, then call \`project_init(project_name, project_dir)\` to register, followed by \`iteration_start(project_name)\` to begin the first iteration
+4. **If starting a new iteration on an existing project**: Call \`iteration_start(project_name)\` — this creates a fresh iteration with clean phases and documents
+5. **After PRD approved**: Call \`project_set_scale(project_name, scale)\` to set project scale
+
+### Project Init vs Iteration Start
+
+- **\`project_init\`** — One-time registration. Creates the project entry in the registry. Does NOT create any iteration data.
+- **\`iteration_start\`** — Creates a new iteration (iter-1, iter-2, ...) with fresh state, phases, and docs directory. Must be called after \`project_init\` before any other tools will work.
+- For existing projects that have completed all phases, \`project_status\` will suggest calling \`iteration_start\` to begin the next iteration.
 
 ### Your Responsibilities
 

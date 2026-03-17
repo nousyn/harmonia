@@ -1,10 +1,10 @@
 /**
- * Project state management — manages <data_dir>/<project_name>/state.json
+ * Project state management — manages <data_dir>/<project_name>/iter-<n>/state.json
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getProjectDataDir } from './registry.js';
+import { getIterationDir } from './registry.js';
 import type { PhaseStatus, ProjectScale, ProjectState, LoadedWorkflow } from './types.js';
 
 /**
@@ -19,19 +19,20 @@ export class ScaleNotSetError extends Error {
 
 const STATE_FILE = 'state.json';
 
-function statePath(projectName: string): string {
-    return join(getProjectDataDir(projectName), STATE_FILE);
+function statePath(projectName: string, iteration: number): string {
+    return join(getIterationDir(projectName, iteration), STATE_FILE);
 }
 
 /**
- * Initialize a new project state file.
- * Note: directory creation and registry are handled by registry.registerProject().
+ * Initialize a new project state file for a specific iteration.
+ * Note: directory creation is handled by registry.startIteration().
  * This only writes the state.json.
  */
 export async function initProjectState(
     projectName: string,
     projectDir: string,
     workflow: LoadedWorkflow,
+    iteration: number,
 ): Promise<ProjectState> {
     const now = new Date().toISOString();
     const phases = workflow.definition.phases;
@@ -41,6 +42,7 @@ export async function initProjectState(
         projectName,
         projectDir,
         workflow: workflow.definition.name,
+        iteration,
         scale: null,
         currentPhase: firstPhaseId,
         phases: phases.map((p, i) => ({
@@ -52,23 +54,23 @@ export async function initProjectState(
         updatedAt: now,
     };
 
-    await writeState(projectName, state);
+    await writeState(projectName, iteration, state);
     return state;
 }
 
 /**
- * Read the current project state.
+ * Read the current project state for a specific iteration.
  */
-export async function readState(projectName: string): Promise<ProjectState> {
-    const content = await readFile(statePath(projectName), 'utf-8');
+export async function readState(projectName: string, iteration: number): Promise<ProjectState> {
+    const content = await readFile(statePath(projectName, iteration), 'utf-8');
     return JSON.parse(content) as ProjectState;
 }
 
 /**
- * Write project state to disk.
+ * Write project state to disk for a specific iteration.
  */
-export async function writeState(projectName: string, state: ProjectState): Promise<void> {
-    const filePath = statePath(projectName);
+export async function writeState(projectName: string, iteration: number, state: ProjectState): Promise<void> {
+    const filePath = statePath(projectName, iteration);
     await mkdir(dirname(filePath), { recursive: true });
     state.updatedAt = new Date().toISOString();
     await writeFile(filePath, JSON.stringify(state, null, 2) + '\n', 'utf-8');
@@ -79,11 +81,12 @@ export async function writeState(projectName: string, state: ProjectState): Prom
  */
 export async function updatePhaseStatus(
     projectName: string,
+    iteration: number,
     phaseId: string,
     status: PhaseStatus,
     blockedReason?: string,
 ): Promise<ProjectState> {
-    const state = await readState(projectName);
+    const state = await readState(projectName, iteration);
     const phase = state.phases.find((p) => p.id === phaseId);
 
     if (!phase) {
@@ -120,16 +123,16 @@ export async function updatePhaseStatus(
         }
     }
 
-    await writeState(projectName, state);
+    await writeState(projectName, iteration, state);
     return state;
 }
 
 /**
- * Check if a project state file exists.
+ * Check if a project state file exists for a specific iteration.
  */
-export async function projectStateExists(projectName: string): Promise<boolean> {
+export async function projectStateExists(projectName: string, iteration: number): Promise<boolean> {
     try {
-        await readFile(statePath(projectName), 'utf-8');
+        await readFile(statePath(projectName, iteration), 'utf-8');
         return true;
     } catch {
         return false;
@@ -139,12 +142,12 @@ export async function projectStateExists(projectName: string): Promise<boolean> 
 /**
  * Set the project scale. Scale is immutable once set.
  */
-export async function setScale(projectName: string, scale: ProjectScale): Promise<ProjectState> {
-    const state = await readState(projectName);
+export async function setScale(projectName: string, iteration: number, scale: ProjectScale): Promise<ProjectState> {
+    const state = await readState(projectName, iteration);
     if (state.scale !== null) {
         throw new Error(`Scale 已设定为 "${state.scale}"，不可更改。如需调整规模，请重新评估 PRD。`);
     }
     state.scale = scale;
-    await writeState(projectName, state);
+    await writeState(projectName, iteration, state);
     return state;
 }

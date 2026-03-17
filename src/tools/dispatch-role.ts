@@ -20,6 +20,7 @@ import { readState } from '../core/state.js';
 import { readDoc } from '../core/docs.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession } from '../core/dispatch.js';
+import { getProject } from '../core/registry.js';
 import type {
     CapabilityOverride,
     OverrideConfig,
@@ -123,8 +124,23 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
         },
         async ({ project_name, role, task_brief, input_doc_ids }) => {
             try {
+                // Resolve current iteration
+                const entry = await getProject(project_name);
+                if (!entry || entry.currentIteration === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                const iteration = entry.currentIteration;
+
                 // Load project state and workflow
-                const state = await readState(project_name);
+                const state = await readState(project_name, iteration);
                 const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
 
                 // Validate role exists
@@ -189,7 +205,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                     const docDef = wf.definition.docs[docId];
                     if (docDef?.external) continue; // external outputs not stored as docs
                     try {
-                        inputDocs[docId] = await readDoc(project_name, docId);
+                        inputDocs[docId] = await readDoc(project_name, iteration, docId);
                     } catch {
                         missingDocs.push(docId);
                     }
@@ -202,10 +218,17 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 const expectedOutputs = resolveExpectedOutputs(currentPhase, wf.definition, state.scale);
 
                 // Check for reusable idle session
-                const idleSession = await findIdleSession(project_name, role);
+                const idleSession = await findIdleSession(project_name, iteration, role);
 
                 // Create dispatch record
-                const dispatch = await createDispatch(project_name, role, task_brief, expectedOutputs, idleSession?.id);
+                const dispatch = await createDispatch(
+                    project_name,
+                    iteration,
+                    role,
+                    task_brief,
+                    expectedOutputs,
+                    idleSession?.id,
+                );
 
                 // Build session guidance
                 const sessionGuidance = buildSessionGuidance(
