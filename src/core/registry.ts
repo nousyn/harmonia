@@ -141,12 +141,20 @@ export async function listProjects(): Promise<string[]> {
 }
 
 /**
- * Remove a project from the registry (does NOT delete files).
+ * Remove a project from the registry.
+ * By default, also deletes the project data directory.
+ * Pass keepData: true to only remove the registry entry.
  */
-export async function unregisterProject(projectName: string): Promise<void> {
+export async function unregisterProject(projectName: string, keepData = false): Promise<void> {
     const registry = await readRegistry();
     delete registry.projects[projectName];
     await writeRegistry(registry);
+
+    if (!keepData) {
+        const { rm } = await import('node:fs/promises');
+        const dataDir = getProjectDataDir(projectName);
+        await rm(dataDir, { recursive: true, force: true });
+    }
 }
 
 /**

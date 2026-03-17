@@ -34,9 +34,11 @@ if (subcommand === 'setup') {
     }
 } else if (subcommand === 'unregister') {
     // CLI mode — unregister a project from the registry
-    const projectName = process.argv[3];
+    const args = process.argv.slice(3);
+    const keepData = args.includes('--keep-data');
+    const projectName = args.find((a) => !a.startsWith('--'));
     if (!projectName) {
-        console.error('Usage: harmonia unregister <project_name>');
+        console.error('Usage: harmonia unregister <project_name> [--keep-data]');
         process.exit(1);
     }
     const { getProject, unregisterProject } = await import('./core/registry.js');
@@ -45,17 +47,22 @@ if (subcommand === 'setup') {
         console.error(`Project "${projectName}" not found in registry.`);
         process.exit(1);
     }
-    await unregisterProject(projectName);
-    console.log(`Project "${projectName}" unregistered. Data files in the data directory were NOT deleted.`);
+    await unregisterProject(projectName, keepData);
+    if (keepData) {
+        console.log(`Project "${projectName}" unregistered. Data files were kept.`);
+    } else {
+        console.log(`Project "${projectName}" unregistered. Data directory has been deleted.`);
+    }
 } else if (subcommand === '--help' || subcommand === '-h') {
     console.log(`
 Harmonia — Multi-agent orchestration MCP server
 
 Usage:
-  harmonia                Start MCP stdio server
-  harmonia setup          Inject PM prompt + install hooks in current directory
-  harmonia unregister <name>  Remove a project from the registry (keeps data files)
-  harmonia --help         Show this help message
+  harmonia                    Start MCP stdio server
+  harmonia setup              Inject PM prompt + install hooks in current directory
+  harmonia unregister <name>  Remove project from registry and delete data (default)
+  harmonia unregister <name> --keep-data  Remove from registry but keep data files
+  harmonia --help             Show this help message
 
 Setup options:
   --agent <type>           opencode | claude-code | codex | openclaw (default: auto-detect)
