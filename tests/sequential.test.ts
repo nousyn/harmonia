@@ -107,6 +107,8 @@ describe('doc_write — sequential mode', () => {
     let client: Client;
     let server: McpServer;
 
+    const ITER = 1;
+
     // Valid step content helpers
     const reqJson = JSON.stringify({
         features: ['auth', 'login'],
@@ -156,14 +158,12 @@ describe('doc_write — sequential mode', () => {
     beforeEach(async () => {
         tempDir = await mkdtemp(join(tmpdir(), 'harmonia-seq-test-'));
         const projectDir = join(tempDir, 'test-project');
-        iterDir = join(projectDir, 'iter-1');
+        iterDir = join(projectDir, `iter-${ITER}`);
         workflowsDir = join(tempDir, 'workflows');
         noCustomDir = join(tempDir, 'no-custom-workflows');
 
         // Setup iteration data dir
         await mkdir(join(iterDir, 'docs'), { recursive: true });
-
-        // Mock registry functions
         vi.spyOn(registry, 'getIterationDir').mockReturnValue(iterDir);
         vi.spyOn(registry, 'getProjectDataDir').mockReturnValue(projectDir);
         vi.spyOn(registry, 'getGlobalDir').mockReturnValue(tempDir);
@@ -171,8 +171,8 @@ describe('doc_write — sequential mode', () => {
             dir: '/tmp/src',
             workflow: 'dev',
             createdAt: '2026-01-01T00:00:00Z',
-            currentIteration: 1,
-            totalIterations: 1,
+            currentIteration: ITER,
+            totalIterations: ITER,
         });
 
         // Write state.json (medium scale to activate sequential mode)
@@ -182,7 +182,7 @@ describe('doc_write — sequential mode', () => {
                 projectName: 'test-project',
                 projectDir: '/tmp/src',
                 workflow: 'dev',
-                iteration: 1,
+                iteration: ITER,
                 scale: 'medium',
                 currentPhase: 'requirements',
                 phases: [{ id: 'requirements', status: 'in_progress' }],
@@ -424,7 +424,7 @@ describe('doc_write — sequential mode', () => {
                 projectName: 'test-project',
                 projectDir: '/tmp/src',
                 workflow: 'dev',
-                iteration: 1,
+                iteration: ITER,
                 scale: 'small',
                 currentPhase: 'requirements',
                 phases: [{ id: 'requirements', status: 'in_progress' }],
