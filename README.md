@@ -140,6 +140,16 @@ setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自�
 
 > PM 会自动执行：`project_status()` → `project_init("todo-cli", "/path/to/project")` → `iteration_start("todo-cli")` → 开始与你澄清需求 → 撰写 PRD
 
+**为已有项目添加新功能：**
+
+```
+你：我有一个现有的 API 服务 /Users/me/api-server，想给它加上用户认证模块，帮我管理这个项目。
+```
+
+> PM 会自动执行：`project_status()` → 发现未注册 → `project_init("api-server", "/Users/me/api-server")` → `iteration_start("api-server")` → 开始需求澄清
+>
+> `project_init` 只是将项目注册到 Harmonia，不会修改你的源码目录。
+
 **继续已有项目：**
 
 ```
