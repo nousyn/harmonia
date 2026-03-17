@@ -98,6 +98,7 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 | 工具                | 说明                                               |
 | ------------------- | -------------------------------------------------- |
 | `project_init`      | 注册项目，创建数据目录，初始化工作流               |
+| `iteration_start`   | 开始新迭代（创建 iter-N 目录，重置阶段状态）       |
 | `project_set_scale` | 设定项目规模（PRD 审批后，不可更改）               |
 | `project_status`    | 查看项目状态（无参数返回项目列表，有参数返回详情） |
 | `phase_update`      | 推进项目阶段                                       |
@@ -158,11 +159,18 @@ harmonia setup --agent openclaw
 ### CLI 命令
 
 ```
-harmonia                启动 MCP stdio 服务器（供 agent 调用）
-harmonia setup          初始化 agent 配置（注入提示词 + 安装 hook）
-harmonia --help         显示帮助信息
-harmonia --version      显示版本号
+harmonia                       启动 MCP stdio 服务器（供 agent 调用）
+harmonia setup                 初始化 agent 配置（注入提示词 + 安装 hook）
+harmonia unregister <name>     注销项目（默认同时删除数据目录）
+harmonia --help                显示帮助信息
+harmonia --version             显示版本号
 ```
+
+`unregister` 选项：
+
+| 选项          | 说明                               | 默认行为                 |
+| ------------- | ---------------------------------- | ------------------------ |
+| `--keep-data` | 仅移除注册表条目，保留项目数据目录 | 不指定时同时删除数据目录 |
 
 `setup` 选项：
 
@@ -264,6 +272,7 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 
 ```
 <data_dir>/harmonia/
+├── registry.json               # 项目注册表
 ├── overrides.json              # 全局覆盖配置
 ├── .workflows/                 # 自定义工作流目录
 │   └── <workflow_name>/
@@ -271,16 +280,20 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 │       ├── roles/
 │       └── schemas/
 ├── <project_name>/
-│   ├── state.json              # 项目状态（当前阶段、规模等）
-│   ├── steps.json              # 文档步骤进度
-│   ├── overrides.json          # 项目级覆盖配置
-│   ├── docs/                   # 文档产出物
-│   │   ├── prd.md
-│   │   ├── prd.requirements.json    # 步骤产出物
-│   │   ├── tech-design.md
+│   ├── overrides.json          # 项目级覆盖配置（跨迭代共享）
+│   ├── iter-1/                 # 第 1 次迭代
+│   │   ├── state.json          # 项目状态（当前阶段、规模等）
+│   │   ├── sessions.json       # 会话记录
+│   │   ├── dispatches.json     # 调度记录
+│   │   ├── reviews.json        # 审批记录
+│   │   ├── steps.json          # 文档步骤进度
+│   │   └── docs/               # 文档产出物
+│   │       ├── prd.md
+│   │       ├── prd.requirements.json
+│   │       └── ...
+│   ├── iter-2/                 # 第 2 次迭代
 │   │   └── ...
-│   ├── reviews/                # 审批记录
-│   └── dispatch/               # 调度记录
+│   └── ...
 └── <other_project>/
     └── ...
 ```
@@ -366,7 +379,7 @@ harmonia/
 │       ├── workflow.json     # 工作流定义
 │       ├── roles/            # 角色提示词 (pm.md, architect.md, ...)
 │       └── schemas/          # 文档 + 步骤 Schema
-├── tests/                    # 测试 (261 tests, 13 files)
+├── tests/                    # 测试 (262 tests, 13 files)
 └── .dev-logs/                # 开发日志
 ```
 
@@ -390,6 +403,9 @@ npm run test:watch
 
 # 代码格式化
 npm run prettier:fix
+
+# 发布版本
+npm run release
 ```
 
 ## License
