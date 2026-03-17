@@ -138,41 +138,39 @@ setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自�
 你：我想开发一个命令行待办事项工具，用 TypeScript 写，支持增删改查和优先级排序。
 ```
 
-> PM 会自动执行：`project_status()` → `project_init("todo-cli", "/path/to/project")` → `iteration_start("todo-cli")` → 开始与你澄清需求 → 撰写 PRD
+> PM 会先调用 `project_status()` 检查是否有已注册项目，发现没有后，会和你沟通确认项目名称和目录路径，然后调用 `project_init` 注册项目、`iteration_start` 开始第一次迭代，接着进入需求澄清阶段撰写 PRD。
 
-**为已有项目添加新功能：**
+**为已有代码库添加新功能：**
 
 ```
-你：我有一个现有的 API 服务 /Users/me/api-server，想给它加上用户认证模块，帮我管理这个项目。
+你：我的项目在 /Users/me/api-server，想给它加上用户认证模块，帮我管理一下。
 ```
 
-> PM 会自动执行：`project_status()` → 发现未注册 → `project_init("api-server", "/Users/me/api-server")` → `iteration_start("api-server")` → 开始需求澄清
->
-> `project_init` 只是将项目注册到 Harmonia，不会修改你的源码目录。
+> 和启动新项目流程相同——PM 会确认项目信息后调用 `project_init` + `iteration_start`。`project_init` 只是将项目注册到 Harmonia，不会修改你的源码目录。
 
-**继续已有项目：**
+**继续已注册的项目：**
 
 ```
 你：继续之前的 todo-cli 项目。
 ```
 
-> PM 会自动执行：`project_status("todo-cli")` → 根据当前阶段和进度恢复工作
+> PM 调用 `project_status("todo-cli")` 获取当前迭代的阶段、文档、调度记录等状态，根据进度恢复工作。
 
 **开始新一轮迭代：**
 
 ```
-你：todo-cli 需要加一些新功能，开始新的迭代吧。
+你：todo-cli 需要加一些新功能，开始新的迭代。
 ```
 
-> PM 会自动执行：`iteration_start("todo-cli")` → 创建 iter-2 → 从需求澄清阶段重新开始
+> PM 调用 `iteration_start("todo-cli")` 创建新迭代（如 iter-2），从需求澄清阶段重新开始。上一轮迭代的文档和状态保留不变。
 
 **查看所有项目：**
 
 ```
-你：我有哪些项目在进行？
+你：我有哪些项目？
 ```
 
-> PM 会自动执行：`project_status()` → 返回所有已注册项目及其状态
+> PM 调用 `project_status()`（无参数）返回所有已注册项目及其当前迭代状态。
 
 ### CLI 命令
 
