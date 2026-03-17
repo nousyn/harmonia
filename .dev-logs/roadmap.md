@@ -194,3 +194,33 @@ Harmonia 的本质是一套**协作机制**，而非仅仅是工作流引擎。�
 | ---------------- | -------------------- | ------------------------------------------------------------- |
 | **透传**         | 用户直接与某角色沟通 | `@角色名 消息内容`，PM 原文传递，原文返回                     |
 | **Session 恢复** | 多轮交互保持上下文   | `--session/--resume` + `~/.harmonia/<project>/sessions/` 管理 |
+
+---
+
+# activeContext 并发安全问题
+
+> 状态: 已知问题，待讨论
+> 发现日期: 2026-03-17
+> 关联: patch + issues 系统实现 (025-patch-issues-plan)
+
+## 问题描述
+
+`activeContext` 是 `ProjectEntry` 上的单一全局字段（存储在 `registry.json`），用于标识当前活跃的工作上下文（如 `"iter-2"` 或 `"patch-1"`）。所有工具通过 `resolveActive()` 读取该字段来确定操作目标目录。
+
+当同一项目有两个并发会话时（例如一个 PM 在推进迭代，另一个会话启动了紧急补丁），后启动的会话会覆盖 `activeContext`，导致先前会话的工具调用被路由到错误的上下文目录。
+
+## 影响范围
+
+所有依赖 `resolveActive()` 的工具：`doc_write`、`doc_read`、`update_phase`、`dispatch_role`、`report_dispatch`、`approve_doc`、`set_scale` 等。
+
+## 当前缓解
+
+单项目单 PM 串行推进的场景下不会触发。PM prompt 中应避免同时开启多个上下文。
+
+## 可能的修复方向
+
+- **工具级显式传参**: 给工具加可选 `context` 参数，省略时 fallback 到 `activeContext`
+- **Session 级绑定**: dispatch 时绑定 context 到 session，工具自动路由
+- **其他方案待讨论**
+
+具体方案后续讨论确定。
