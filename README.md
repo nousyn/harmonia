@@ -2,8 +2,6 @@
 
 > _众声喧哗之中，和谐不是沉默，而是各得其所。_
 
-Multi-agent orchestration MCP server with pluggable workflows.
-
 Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 的智能体编排服务器。它为 AI 编程助手（Claude Code、OpenCode、OpenClaw、Codex）提供项目管理工具，让多个 AI agent 在预定义的工作流中按角色协作完成软件开发任务。
 
 ## 核心理念
