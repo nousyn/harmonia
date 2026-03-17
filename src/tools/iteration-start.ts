@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getProject, startIteration } from '../core/registry.js';
+import { getProject, startIteration, getIterationDir, resolveContextDir } from '../core/registry.js';
 import { loadWorkflow } from '../core/workflow.js';
 import { initProjectState, readState } from '../core/state.js';
 
@@ -43,8 +43,14 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                 // Guard: if there's a current iteration, check if all phases are completed
                 if (entry.currentIteration > 0 && !force) {
                     try {
-                        const currentState = await readState(project_name, entry.currentIteration);
-                        const incompletePhases = currentState.phases.filter((p) => p.status !== 'completed');
+                        // Resolve the current iteration's context dir
+                        const currentIterDir = entry.activeContext
+                            ? resolveContextDir(project_name, `iter-${entry.currentIteration}`)?.dir
+                            : undefined;
+                        const currentState = await readState(project_name, entry.currentIteration, currentIterDir);
+                        const incompletePhases = currentState.phases.filter(
+                            (p) => p.status !== 'completed' && p.status !== 'skipped',
+                        );
                         if (incompletePhases.length > 0) {
                             const phaseList = incompletePhases.map((p) => `${p.id} (${p.status})`).join(', ');
                             return {
@@ -71,7 +77,15 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
 
                 // Load workflow and initialize state
                 const wf = await loadWorkflow(builtinDir, customDir, entry.workflow);
-                const state = await initProjectState(project_name, entry.dir, wf, newIteration);
+                const newIterDir = getIterationDir(project_name, newIteration);
+                const state = await initProjectState(
+                    project_name,
+                    entry.dir,
+                    wf,
+                    newIteration,
+                    'iteration',
+                    newIterDir,
+                );
 
                 return {
                     content: [

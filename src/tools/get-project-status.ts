@@ -16,7 +16,8 @@ import { readReviews } from '../core/reviews.js';
 import { getMergedOverrides } from '../core/overrides.js';
 import { readDispatches, readSessions } from '../core/dispatch.js';
 import { readSteps, getCompletedStepIds } from '../core/steps.js';
-import { listProjects, getProject } from '../core/registry.js';
+import { listProjects, getProject, resolveContextDir } from '../core/registry.js';
+import { readIssues } from '../core/issues.js';
 import type {
     DispatchRecord,
     DocDefinition,
@@ -39,6 +40,7 @@ function deriveNextSteps(
     pendingReviews: DocReviewState[],
     dispatches: DispatchRecord[],
     sessions: SessionRecord[],
+    openIssueCount: number,
 ): string[] {
     const suggestions: string[] = [];
     const currentPhaseDef = wf.definition.phases.find((p) => p.id === state.currentPhase);
@@ -134,14 +136,21 @@ function deriveNextSteps(
 
     if (suggestions.length === 0) {
         // Check if ALL phases are completed → recommend iteration_start for next iteration
-        const allPhasesCompleted = state.phases.every((p) => p.status === 'completed');
+        const allPhasesCompleted = state.phases.every((p) => p.status === 'completed' || p.status === 'skipped');
         if (allPhasesCompleted) {
             suggestions.push(
-                `本次迭代所有阶段已完成。如需开始新一轮迭代，请调用 iteration_start(project_name="${state.projectName}")。`,
+                `本次${state.type === 'patch' ? '补丁' : '迭代'}所有阶段已完成。如需开始新一轮迭代，请调用 iteration_start(project_name="${state.projectName}")。`,
             );
         } else {
             suggestions.push(`Continue working on the "${currentPhaseDef.name}" phase.`);
         }
+    }
+
+    // Always mention open issues if there are any
+    if (openIssueCount > 0) {
+        suggestions.push(
+            `有 ${openIssueCount} 个未关闭的 issue。可调用 patch_start 开始补丁修复，或 issue_list 查看详情。`,
+        );
     }
 
     return suggestions;
@@ -232,16 +241,21 @@ async function buildProjectList(): Promise<string> {
     for (const name of projectNames) {
         try {
             const entry = await getProject(name);
-            if (!entry || entry.currentIteration === 0) {
-                rows.push(`| ${name} | ${entry?.dir ?? '?'} | (未开始迭代) | - | - | - |`);
+            if (!entry || !entry.activeContext) {
+                rows.push(`| ${name} | ${entry?.dir ?? '?'} | (无活跃上下文) | - | - | - |`);
                 continue;
             }
-            const state = await readState(name, entry.currentIteration);
+            const resolved = resolveContextDir(name, entry.activeContext);
+            if (!resolved) {
+                rows.push(`| ${name} | ${entry.dir} | (上下文异常) | - | - | - |`);
+                continue;
+            }
+            const state = await readState(name, resolved.number, resolved.dir);
             const scaleDisplay = state.scale ?? '(未设定)';
             const updated = state.updatedAt.split('T')[0];
-            const iterDisplay = `${entry.currentIteration}/${entry.totalIterations}`;
+            const contextDisplay = entry.activeContext;
             rows.push(
-                `| ${name} | ${state.projectDir} | ${state.currentPhase} | ${scaleDisplay} | ${iterDisplay} | ${updated} |`,
+                `| ${name} | ${state.projectDir} | ${state.currentPhase} | ${scaleDisplay} | ${contextDisplay} | ${updated} |`,
             );
         } catch {
             rows.push(`| ${name} | (无法读取状态) | - | - | - | - |`);
@@ -253,8 +267,8 @@ async function buildProjectList(): Promise<string> {
         '',
         `共 ${projectNames.length} 个项目:`,
         '',
-        '| 项目 | 目录 | 阶段 | 规模 | 迭代 | 更新时间 |',
-        '|------|------|------|------|------|----------|',
+        '| 项目 | 目录 | 阶段 | 规模 | 上下文 | 更新时间 |',
+        '|------|------|------|------|--------|----------|',
         ...rows,
         '',
         '使用 project_status(project_name) 查看项目详情。',
@@ -277,7 +291,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
 
             // Detail mode — specific project
             try {
-                // Resolve current iteration
+                // Resolve project entry
                 const entry = await getProject(project_name);
                 if (!entry) {
                     return {
@@ -291,7 +305,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                     };
                 }
 
-                if (entry.currentIteration === 0) {
+                if (!entry.activeContext) {
                     return {
                         content: [
                             {
@@ -301,24 +315,41 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                                     ``,
                                     `Source directory: ${entry.dir}`,
                                     `Registered: ${entry.createdAt}`,
-                                    `Iterations: 0`,
+                                    `Iterations: ${entry.totalIterations}`,
+                                    `Patches: ${entry.totalPatches}`,
+                                    `Active context: (none)`,
                                     ``,
-                                    `项目已注册但尚未开始迭代。请调用 iteration_start(project_name="${project_name}") 开始第一次迭代。`,
+                                    `项目已注册但尚未开始迭代或补丁。请调用 iteration_start(project_name="${project_name}") 开始第一次迭代，或 patch_start 开始补丁。`,
                                 ].join('\n'),
                             },
                         ],
                     };
                 }
 
-                const iteration = entry.currentIteration;
-                const state = await readState(project_name, iteration);
+                const resolved = resolveContextDir(project_name, entry.activeContext);
+                if (!resolved) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `项目 "${project_name}" 的 activeContext "${entry.activeContext}" 无法解析。数据可能已损坏。`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+
+                const contextDir = resolved.dir;
+                const contextNumber = resolved.number;
+                const state = await readState(project_name, contextNumber, contextDir);
                 const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
-                const docs = await listDocs(project_name, iteration);
-                const reviews = await readReviews(project_name, iteration);
+                const docs = await listDocs(project_name, contextNumber, contextDir);
+                const reviews = await readReviews(project_name, contextNumber, contextDir);
                 const overrides = await getMergedOverrides(project_name);
-                const dispatches = await readDispatches(project_name, iteration);
-                const sessions = await readSessions(project_name, iteration);
-                const stepsData = await readSteps(project_name, iteration);
+                const dispatches = await readDispatches(project_name, contextNumber, contextDir);
+                const sessions = await readSessions(project_name, contextNumber, contextDir);
+                const stepsData = await readSteps(project_name, contextNumber, contextDir);
+                const issues = await readIssues(project_name);
 
                 const scaleDisplay = state.scale ?? '(未设定)';
 
@@ -392,6 +423,22 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                 const dispatchesSection =
                     dispatches.length > 0 ? dispatches.map((d) => formatDispatch(d, sessions)).join('\n') : '(none)';
 
+                // Build issues section
+                const openIssues = issues.filter((i) => i.status === 'open');
+                const closedIssues = issues.filter((i) => i.status === 'closed');
+                const issuesSummary =
+                    issues.length > 0
+                        ? [
+                              `Total: ${issues.length} (${openIssues.length} open, ${closedIssues.length} closed)`,
+                              ...openIssues.map((i) => {
+                                  const resolvedBy = i.resolvedBy
+                                      ? ` → ${i.resolvedBy.type}-${i.resolvedBy.number}`
+                                      : '';
+                                  return `  [OPEN] ${i.id}: ${i.title} (iter-${i.iteration}, ${i.source})${resolvedBy}`;
+                              }),
+                          ].join('\n')
+                        : '(none)';
+
                 // Expected outputs — only when scale is set
                 let expectedOutputsLine = '';
                 if (currentPhaseDef?.outputs && state.scale !== null) {
@@ -408,7 +455,15 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                 }
 
                 // Derive next steps (now dispatch-aware)
-                const nextSteps = deriveNextSteps(state, wf, docs, pendingReviews, dispatches, sessions);
+                const nextSteps = deriveNextSteps(
+                    state,
+                    wf,
+                    docs,
+                    pendingReviews,
+                    dispatches,
+                    sessions,
+                    openIssues.length,
+                );
 
                 return {
                     content: [
@@ -420,7 +475,9 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                                 `Source directory: ${state.projectDir}`,
                                 `Workflow: ${state.workflow}`,
                                 `Scale: ${scaleDisplay}`,
-                                `Iteration: ${iteration} / ${entry.totalIterations}`,
+                                `Active context: ${entry.activeContext} (${resolved.type} #${contextNumber})`,
+                                `Iterations: ${entry.currentIteration} / ${entry.totalIterations}`,
+                                `Patches: ${entry.currentPatch} / ${entry.totalPatches}`,
                                 `Created: ${state.createdAt}`,
                                 `Updated: ${state.updatedAt}`,
                                 ``,
@@ -439,6 +496,9 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                                 ``,
                                 `## Dispatches`,
                                 dispatchesSection,
+                                ``,
+                                `## Issues`,
+                                issuesSummary,
                                 ``,
                                 `## Pending Reviews`,
                                 pendingSection,

@@ -167,12 +167,16 @@ describe('doc_write — sequential mode', () => {
         vi.spyOn(registry, 'getIterationDir').mockReturnValue(iterDir);
         vi.spyOn(registry, 'getProjectDataDir').mockReturnValue(projectDir);
         vi.spyOn(registry, 'getGlobalDir').mockReturnValue(tempDir);
+        vi.spyOn(registry, 'resolveContextDir').mockReturnValue({ dir: iterDir, type: 'iteration', number: ITER });
         vi.spyOn(registry, 'getProject').mockResolvedValue({
             dir: '/tmp/src',
             workflow: 'dev',
             createdAt: '2026-01-01T00:00:00Z',
             currentIteration: ITER,
             totalIterations: ITER,
+            currentPatch: 0,
+            totalPatches: 0,
+            activeContext: 'iter-1',
         });
 
         // Write state.json (medium scale to activate sequential mode)

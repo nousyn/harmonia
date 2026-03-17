@@ -43,10 +43,9 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
             // Check if already registered
             const existing = await getProject(project_name);
             if (existing) {
-                const iterInfo =
-                    existing.currentIteration > 0
-                        ? `当前迭代: iter-${existing.currentIteration} (共 ${existing.totalIterations} 轮)`
-                        : '尚未开始迭代';
+                const contextInfo = existing.activeContext
+                    ? `活跃上下文: ${existing.activeContext}`
+                    : '尚未开始迭代或补丁';
 
                 return {
                     content: [
@@ -57,14 +56,12 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
                                 ``,
                                 `源代码目录: ${existing.dir}`,
                                 `工作流: ${existing.workflow}`,
-                                `${iterInfo}`,
+                                `迭代: ${existing.totalIterations} 轮，补丁: ${existing.totalPatches} 个`,
+                                `${contextInfo}`,
                                 ``,
-                                existing.currentIteration > 0
+                                existing.activeContext
                                     ? `如需查看当前状态，请调用 project_status(project_name="${project_name}")。`
                                     : `请调用 iteration_start(project_name="${project_name}") 开始第一轮迭代。`,
-                                existing.currentIteration > 0
-                                    ? `如需开始新一轮迭代，请调用 iteration_start(project_name="${project_name}")。`
-                                    : '',
                             ]
                                 .filter(Boolean)
                                 .join('\n'),

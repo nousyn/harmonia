@@ -17,7 +17,7 @@ import { listDocs } from '../core/docs.js';
 import { readReviews } from '../core/reviews.js';
 import { readDispatches } from '../core/dispatch.js';
 import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
-import { getProject } from '../core/registry.js';
+import { resolveActive, isError } from './utils.js';
 
 export function registerUpdatePhase(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
@@ -32,26 +32,14 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
         },
         async ({ project_name, phase_id, status, blocked_reason, force }) => {
             try {
-                // Resolve current iteration
-                const entry = await getProject(project_name);
-                if (!entry || entry.currentIteration === 0) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-                const iteration = entry.currentIteration;
+                const ctx = await resolveActive(project_name);
+                if (isError(ctx)) return ctx;
 
                 // ── Completion guards ──
                 if (status === 'completed' && !force) {
-                    const currentState = await readState(project_name, iteration);
+                    const currentState = await readState(project_name, ctx.number, ctx.dir);
                     const wf = await loadWorkflow(builtinDir, customDir, currentState.workflow);
-                    const existingDocs = await listDocs(project_name, iteration);
+                    const existingDocs = await listDocs(project_name, ctx.number, ctx.dir);
 
                     const phaseDef = wf.definition.phases.find((p) => p.id === phase_id);
                     const phaseIndex = wf.definition.phases.findIndex((p) => p.id === phase_id);
@@ -62,12 +50,12 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
                         guardErrors.push('Scale 尚未设定。请先调用 project_set_scale 设定项目规模。');
                     }
 
-                    // Guard 1: Prior phases must all be completed
+                    // Guard 1: Prior phases must all be completed (skipped counts as completed)
                     if (phaseIndex > 0) {
                         const priorPhases = wf.definition.phases.slice(0, phaseIndex);
                         const incompletePriors = priorPhases.filter((pp) => {
                             const ps = currentState.phases.find((s) => s.id === pp.id);
-                            return !ps || ps.status !== 'completed';
+                            return !ps || (ps.status !== 'completed' && ps.status !== 'skipped');
                         });
                         if (incompletePriors.length > 0) {
                             guardErrors.push(`前序阶段未完成: ${incompletePriors.map((p) => p.id).join(', ')}`);
@@ -94,7 +82,7 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
 
                         // Guard 3: Docs requiring review must be approved
                         const overrides = await getMergedOverrides(project_name);
-                        const reviews = await readReviews(project_name, iteration);
+                        const reviews = await readReviews(project_name, ctx.number, ctx.dir);
 
                         const unapprovedDocs = phaseDef.outputs.filter((o) => {
                             const docDef = wf.definition.docs[o];
@@ -114,7 +102,7 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
                     }
 
                     // Guard 4: No active dispatches
-                    const dispatches = await readDispatches(project_name, iteration);
+                    const dispatches = await readDispatches(project_name, ctx.number, ctx.dir);
                     const activeDispatches = dispatches.filter(
                         (d) => d.status === 'dispatched' || d.status === 'running',
                     );
@@ -142,7 +130,14 @@ export function registerUpdatePhase(server: McpServer, builtinDir: string, custo
                     }
                 }
 
-                const state = await updatePhaseStatus(project_name, iteration, phase_id, status, blocked_reason);
+                const state = await updatePhaseStatus(
+                    project_name,
+                    ctx.number,
+                    phase_id,
+                    status,
+                    blocked_reason,
+                    ctx.dir,
+                );
 
                 const phasesSummary = state.phases
                     .map((p) => {

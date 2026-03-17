@@ -22,7 +22,8 @@ import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
 import { submitForReview } from '../core/reviews.js';
 import { loadDocSchema, validateDoc, formatValidationErrors } from '../core/schema.js';
 import { getDocStepState, getCompletedStepIds, recordStepCompletion, markFinalized } from '../core/steps.js';
-import { getProject } from '../core/registry.js';
+import { resolveActive, isError } from './utils.js';
+import { getProject, resolveContextDir } from '../core/registry.js';
 import type { DocDefinition, DocStepDefinition, ProjectScale } from '../core/types.js';
 
 /** Scales that activate sequential mode (medium and above) */
@@ -54,23 +55,11 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
                 ),
         },
         async ({ project_name, doc_id, content, step }) => {
-            // Resolve current iteration
-            const entry = await getProject(project_name);
-            if (!entry || entry.currentIteration === 0) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-            const iteration = entry.currentIteration;
+            const ctx = await resolveActive(project_name);
+            if (isError(ctx)) return ctx;
 
             // Load workflow to get doc definition (format, review defaults)
-            const state = await readState(project_name, iteration);
+            const state = await readState(project_name, ctx.number, ctx.dir);
             const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
             const docDef = wf.definition.docs[doc_id];
             const isHtml = docDef?.format === 'html';
@@ -124,12 +113,13 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
                     customDir,
                     state.workflow,
                     project_name,
-                    iteration,
+                    ctx.number,
                     doc_id,
                     content,
                     step,
                     docDef,
                     state.scale as ProjectScale,
+                    ctx.dir,
                 );
             }
 
@@ -158,14 +148,14 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
             }
 
             // Write the document with correct extension
-            const filePath = await writeDoc(project_name, iteration, doc_id, content, docDef);
+            const filePath = await writeDoc(project_name, ctx.number, doc_id, content, docDef, ctx.dir);
 
             // Check if review is required
             const overrides = await getMergedOverrides(project_name);
             const needsReview = docDef ? resolveDocReview(doc_id, docDef, overrides) : false;
 
             if (needsReview) {
-                await submitForReview(project_name, iteration, doc_id);
+                await submitForReview(project_name, ctx.number, doc_id, ctx.dir);
                 const docName = docDef?.name ?? doc_id;
                 return {
                     content: [
@@ -198,29 +188,52 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
 
     server.tool(
         'doc_read',
-        'Read a project document from the project docs directory.',
+        'Read a project document. By default reads from the active context. Use the optional `context` parameter (e.g. "iter-1", "patch-2") to read from a different context.',
         {
             project_name: z.string().describe('Project name'),
             doc_id: z.string().describe('Document ID to read'),
+            context: z
+                .string()
+                .optional()
+                .describe('Context to read from (e.g. "iter-1", "patch-2"). Defaults to active context.'),
         },
-        async ({ project_name, doc_id }) => {
+        async ({ project_name, doc_id, context }) => {
             try {
-                // Resolve current iteration
-                const entry = await getProject(project_name);
-                if (!entry || entry.currentIteration === 0) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-                const iteration = entry.currentIteration;
+                let contextNumber: number;
+                let contextDir: string;
 
-                const docContent = await readDoc(project_name, iteration, doc_id);
+                if (context) {
+                    // Cross-context read: resolve the specified context
+                    const entry = await getProject(project_name);
+                    if (!entry) {
+                        return {
+                            content: [{ type: 'text' as const, text: `项目 "${project_name}" 未注册。` }],
+                            isError: true,
+                        };
+                    }
+                    const resolved = resolveContextDir(project_name, context);
+                    if (!resolved) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: `无法解析上下文 "${context}"。格式示例: iter-1, patch-2`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    contextNumber = resolved.number;
+                    contextDir = resolved.dir;
+                } else {
+                    // Default: active context
+                    const ctx = await resolveActive(project_name);
+                    if (isError(ctx)) return ctx;
+                    contextNumber = ctx.number;
+                    contextDir = ctx.dir;
+                }
+
+                const docContent = await readDoc(project_name, contextNumber, doc_id, contextDir);
                 return {
                     content: [
                         {
@@ -245,35 +258,56 @@ export function registerDocTools(server: McpServer, builtinDir: string, customDi
 
     server.tool(
         'doc_list',
-        'List all project documents in the project docs directory.',
+        'List all project documents. By default lists from the active context. Use the optional `context` parameter (e.g. "iter-1", "patch-2") to list from a different context.',
         {
             project_name: z.string().describe('Project name'),
+            context: z
+                .string()
+                .optional()
+                .describe('Context to list from (e.g. "iter-1", "patch-2"). Defaults to active context.'),
         },
-        async ({ project_name }) => {
-            // Resolve current iteration
-            const entry = await getProject(project_name);
-            if (!entry || entry.currentIteration === 0) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-            const iteration = entry.currentIteration;
+        async ({ project_name, context }) => {
+            let contextNumber: number;
+            let contextDir: string;
+            let contextLabel: string;
 
-            const docs = await listDocs(project_name, iteration);
+            if (context) {
+                const entry = await getProject(project_name);
+                if (!entry) {
+                    return {
+                        content: [{ type: 'text' as const, text: `项目 "${project_name}" 未注册。` }],
+                        isError: true,
+                    };
+                }
+                const resolved = resolveContextDir(project_name, context);
+                if (!resolved) {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: `无法解析上下文 "${context}"。格式示例: iter-1, patch-2` },
+                        ],
+                        isError: true,
+                    };
+                }
+                contextNumber = resolved.number;
+                contextDir = resolved.dir;
+                contextLabel = context;
+            } else {
+                const ctx = await resolveActive(project_name);
+                if (isError(ctx)) return ctx;
+                contextNumber = ctx.number;
+                contextDir = ctx.dir;
+                contextLabel = ctx.activeContext;
+            }
+
+            const docs = await listDocs(project_name, contextNumber, contextDir);
             return {
                 content: [
                     {
                         type: 'text' as const,
                         text:
                             docs.length > 0
-                                ? `Documents:\n${docs.map((d) => `- ${d}`).join('\n')}`
-                                : 'No documents found for this iteration.',
+                                ? `Documents (${contextLabel}):\n${docs.map((d) => `- ${d}`).join('\n')}`
+                                : `No documents found for ${contextLabel}.`,
                     },
                 ],
             };
@@ -299,6 +333,7 @@ async function handleSequentialWrite(
     step: string | undefined,
     docDef: DocDefinition,
     scale: ProjectScale,
+    contextDir: string,
 ): Promise<ToolResult> {
     const steps = docDef.steps!;
     const stepIds = steps.map((s) => s.id);
@@ -338,7 +373,7 @@ async function handleSequentialWrite(
     }
 
     const stepIndex = stepIds.indexOf(step);
-    const stepState = await getDocStepState(projectName, iteration, docId);
+    const stepState = await getDocStepState(projectName, iteration, docId, contextDir);
     const completedIds = getCompletedStepIds(stepState);
 
     // Guard: prerequisite steps must be completed (hard enforcement)
@@ -377,10 +412,18 @@ async function handleSequentialWrite(
     }
 
     // Write the step artifact
-    const artifactPath = await writeStepArtifact(projectName, iteration, docId, step, content, stepDef.format);
+    const artifactPath = await writeStepArtifact(
+        projectName,
+        iteration,
+        docId,
+        step,
+        content,
+        stepDef.format,
+        contextDir,
+    );
 
     // Record step completion (handles rollback if overwriting)
-    await recordStepCompletion(projectName, iteration, docId, step, artifactPath, stepIds);
+    await recordStepCompletion(projectName, iteration, docId, step, artifactPath, stepIds, contextDir);
 
     const isLastStep = stepIndex === steps.length - 1;
 
@@ -397,6 +440,7 @@ async function handleSequentialWrite(
             docDef,
             scale,
             stepDef,
+            contextDir,
         );
     }
 
@@ -428,6 +472,7 @@ async function handleFinalStep(
     docDef: DocDefinition,
     scale: ProjectScale,
     stepDef: DocStepDefinition,
+    contextDir: string,
 ): Promise<ToolResult> {
     const isHtml = docDef.format === 'html';
 
@@ -455,17 +500,17 @@ async function handleFinalStep(
     }
 
     // Write the formal document
-    const filePath = await writeDoc(projectName, iteration, docId, content, docDef);
+    const filePath = await writeDoc(projectName, iteration, docId, content, docDef, contextDir);
 
     // Mark as finalized
-    await markFinalized(projectName, iteration, docId);
+    await markFinalized(projectName, iteration, docId, contextDir);
 
     // Check if review is required
     const overrides = await getMergedOverrides(projectName);
     const needsReview = resolveDocReview(docId, docDef, overrides);
 
     if (needsReview) {
-        await submitForReview(projectName, iteration, docId);
+        await submitForReview(projectName, iteration, docId, contextDir);
         const docName = docDef.name ?? docId;
         return {
             content: [

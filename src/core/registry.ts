@@ -13,12 +13,17 @@
  *   ├── overrides.json       # global overrides (optional)
  *   ├── my-app/
  *   │   ├── overrides.json   # project-level overrides (optional)
+ *   │   ├── issues.json      # project-level issue tracking (optional)
  *   │   ├── iter-1/
  *   │   │   ├── state.json
  *   │   │   ├── docs/
  *   │   │   ├── reviews.json
  *   │   │   └── ...
  *   │   ├── iter-2/
+ *   │   │   └── ...
+ *   │   ├── patch-1/
+ *   │   │   ├── state.json   # type: "patch", clarify/design skipped
+ *   │   │   ├── docs/
  *   │   │   └── ...
  *   └── another-project/
  *       └── ...
@@ -44,6 +49,12 @@ export interface ProjectEntry {
     currentIteration: number;
     /** Total number of iterations created so far */
     totalIterations: number;
+    /** Currently active patch number (starts at 1, 0 means no patch started yet) */
+    currentPatch: number;
+    /** Total number of patches created so far */
+    totalPatches: number;
+    /** Active context identifier, e.g. "iter-1" or "patch-2". Empty string means no context. */
+    activeContext: string;
 }
 
 export interface Registry {
@@ -112,6 +123,9 @@ export async function registerProject(projectName: string, projectDir: string, w
         createdAt: new Date().toISOString(),
         currentIteration: 0,
         totalIterations: 0,
+        currentPatch: 0,
+        totalPatches: 0,
+        activeContext: '',
     };
 
     // Create project data directory under global dir
@@ -182,6 +196,7 @@ export async function startIteration(projectName: string): Promise<number> {
     const newIteration = entry.totalIterations + 1;
     entry.currentIteration = newIteration;
     entry.totalIterations = newIteration;
+    entry.activeContext = `iter-${newIteration}`;
 
     // Create iteration directory with docs subdirectory
     const iterDir = getIterationDir(projectName, newIteration);
@@ -189,4 +204,66 @@ export async function startIteration(projectName: string): Promise<number> {
 
     await writeRegistry(registry);
     return newIteration;
+}
+
+/**
+ * Get the patch directory for a specific project patch.
+ * Pure path concatenation — does NOT check if the directory exists.
+ */
+export function getPatchDir(projectName: string, patch: number): string {
+    return join(getProjectDataDir(projectName), `patch-${patch}`);
+}
+
+/**
+ * Start a new patch for a project.
+ * Creates the patch directory (with docs/ subdirectory) and updates the registry.
+ *
+ * @returns The new patch number
+ */
+export async function startPatch(projectName: string): Promise<number> {
+    const registry = await readRegistry();
+    const entry = registry.projects[projectName];
+
+    if (!entry) {
+        throw new Error(`Project "${projectName}" not found in registry.`);
+    }
+
+    const newPatch = entry.totalPatches + 1;
+    entry.currentPatch = newPatch;
+    entry.totalPatches = newPatch;
+    entry.activeContext = `patch-${newPatch}`;
+
+    // Create patch directory with docs subdirectory
+    const patchDir = getPatchDir(projectName, newPatch);
+    await mkdir(join(patchDir, 'docs'), { recursive: true });
+
+    await writeRegistry(registry);
+    return newPatch;
+}
+
+/**
+ * Resolve the active context directory for a project.
+ * Parses activeContext string (e.g. "iter-1", "patch-2") into an absolute path.
+ *
+ * @returns { dir: string, type: 'iteration' | 'patch', number: number } or null if no active context
+ */
+export function resolveContextDir(
+    projectName: string,
+    activeContext: string,
+): { dir: string; type: 'iteration' | 'patch'; number: number } | null {
+    if (!activeContext) return null;
+
+    const iterMatch = activeContext.match(/^iter-(\d+)$/);
+    if (iterMatch) {
+        const num = parseInt(iterMatch[1], 10);
+        return { dir: getIterationDir(projectName, num), type: 'iteration', number: num };
+    }
+
+    const patchMatch = activeContext.match(/^patch-(\d+)$/);
+    if (patchMatch) {
+        const num = parseInt(patchMatch[1], 10);
+        return { dir: getPatchDir(projectName, num), type: 'patch', number: num };
+    }
+
+    return null;
 }

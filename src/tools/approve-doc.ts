@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { resolveReview, getPendingReviews } from '../core/reviews.js';
-import { getProject } from '../core/registry.js';
+import { resolveActive, isError } from './utils.js';
 
 export function registerApproveDoc(server: McpServer): void {
     server.tool(
@@ -20,23 +20,11 @@ export function registerApproveDoc(server: McpServer): void {
         },
         async ({ project_name, doc_id, approved, comment }) => {
             try {
-                // Resolve current iteration
-                const entry = await getProject(project_name);
-                if (!entry || entry.currentIteration === 0) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `项目 "${project_name}" 未找到或尚未开始迭代。`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-                const iteration = entry.currentIteration;
+                const ctx = await resolveActive(project_name);
+                if (isError(ctx)) return ctx;
 
                 const status = approved ? 'approved' : 'rejected';
-                const review = await resolveReview(project_name, iteration, doc_id, status, comment);
+                const review = await resolveReview(project_name, ctx.number, doc_id, status, comment);
 
                 if (approved) {
                     return {
@@ -82,22 +70,10 @@ export function registerApproveDoc(server: McpServer): void {
             project_name: z.string().describe('Project name'),
         },
         async ({ project_name }) => {
-            // Resolve current iteration
-            const entry = await getProject(project_name);
-            if (!entry || entry.currentIteration === 0) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `项目 "${project_name}" 未找到或尚未开始迭代。`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-            const iteration = entry.currentIteration;
+            const ctx = await resolveActive(project_name);
+            if (isError(ctx)) return ctx;
 
-            const pending = await getPendingReviews(project_name, iteration);
+            const pending = await getPendingReviews(project_name, ctx.number);
 
             if (pending.length === 0) {
                 return {

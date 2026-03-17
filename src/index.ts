@@ -96,6 +96,8 @@ Setup options:
     const { registerOverrideTools } = await import('./tools/override-tools.js');
     const { registerDispatchRole } = await import('./tools/dispatch-role.js');
     const { registerReportDispatch } = await import('./tools/report-dispatch.js');
+    const { registerPatchStart } = await import('./tools/patch-start.js');
+    const { registerIssueTools } = await import('./tools/issue-tools.js');
 
     // Custom workflows directory: <data_dir>/.workflows
     const CUSTOM_WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
@@ -117,6 +119,8 @@ Setup options:
     registerOverrideTools(server);
     registerDispatchRole(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerReportDispatch(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerPatchStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerIssueTools(server);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

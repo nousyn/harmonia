@@ -140,8 +140,9 @@ export interface LoadedWorkflow {
 
 // ─── Project State (<data_dir>/<project_name>/state.json) ───
 
-export type PhaseStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'review';
+export type PhaseStatus = 'pending' | 'in_progress' | 'completed' | 'blocked' | 'review' | 'skipped';
 export type ProjectScale = 'small' | 'medium' | 'large';
+export type ContextType = 'iteration' | 'patch';
 
 export interface PhaseState {
     id: string;
@@ -158,7 +159,9 @@ export interface ProjectState {
     projectDir: string;
     /** Workflow name, e.g. "dev" */
     workflow: string;
-    /** Iteration number this state belongs to */
+    /** Context type: "iteration" for full iterations, "patch" for lightweight patches */
+    type: ContextType;
+    /** Iteration or patch number this state belongs to */
     iteration: number;
     /** Project scale determined by PM (null until set via project_set_scale) */
     scale: ProjectScale | null;
@@ -304,4 +307,35 @@ export interface DocStepState {
     finalized: boolean;
     /** Finalized at timestamp */
     finalizedAt?: string;
+}
+
+// ─── Issue Tracking (<data_dir>/<project_name>/issues.json) ───
+
+export type IssueStatus = 'open' | 'closed';
+export type IssueSource = 'test' | 'user-feedback';
+
+export interface IssueResolvedBy {
+    type: ContextType;
+    number: number;
+}
+
+export interface Issue {
+    /** Auto-generated ID, e.g. "issue-1" */
+    id: string;
+    /** Short title */
+    title: string;
+    /** Detailed description */
+    description: string;
+    /** Where this issue was discovered */
+    source: IssueSource;
+    /** Which iteration this issue relates to */
+    iteration: number;
+    /** How this issue was resolved (set when closing) */
+    resolvedBy?: IssueResolvedBy;
+    /** Current status */
+    status: IssueStatus;
+    /** When this issue was created */
+    createdAt: string;
+    /** When this issue was closed */
+    closedAt?: string;
 }

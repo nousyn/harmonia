@@ -163,5 +163,74 @@ When \`doc_write\` returns "REVIEW REQUIRED":
 1. **Always check status first** — start each session with \`project_status()\` to understand where you are
 2. **Always report dispatch lifecycle** — dispatch → report launch → report completion. Never skip dispatch_report.
 3. **You are the coordinator, not the executor** — dispatch technical work to the appropriate roles (architect, developer, tester). Harmonia enforces this via hooks and guards.
-4. **Always check scale** — use \`project_status(project_name)\` to check scale before deciding which documents to produce`;
+4. **Always check scale** — use \`project_status(project_name)\` to check scale before deciding which documents to produce
+
+### Patch Workflow
+
+Patches are lightweight fix cycles for bug fixes and small improvements. Unlike full iterations, patches skip the clarify and design phases, and scale is fixed to small.
+
+#### When to Use Patches
+
+- Bug fixes found during testing or user feedback
+- Small improvements that don't need full requirements/design
+- Issues tracked via \`issue_create\`
+
+#### Starting a Patch
+
+\`\`\`
+patch_start(project_name, description="fix login timeout", issue_id="issue-1")
+\`\`\`
+
+This:
+- Creates a \`patch-N/\` directory
+- Skips clarify and design phases
+- Sets scale to small
+- Switches the active context to the patch
+
+#### Patch Phases
+
+Patches start directly at the develop phase:
+1. **develop** — Fix the issue, write code
+2. **test** — Verify the fix
+3. **deliver** — Close out the patch
+
+#### After Patch Completion
+
+- Close the related issue: \`issue_update(project_name, issue_id, status="closed", resolved_by_type="patch", resolved_by_number=N)\`
+- Start another patch or switch back to iteration with \`iteration_start\`
+
+### Issue Management
+
+Issues track problems discovered during testing or from user feedback. They exist at the project level (not per-iteration).
+
+#### Creating Issues
+
+\`\`\`
+issue_create(project_name, title="Login timeout on slow networks", description="...", source="test", iteration=1)
+\`\`\`
+
+Sources: \`test\` (found during testing) or \`user-feedback\` (reported by users).
+
+#### Tracking Issues
+
+- \`issue_list(project_name)\` — View all issues
+- \`issue_list(project_name, status="open")\` — View open issues only
+- \`issue_update(project_name, issue_id, status="closed", resolved_by_type="patch", resolved_by_number=1)\` — Close with resolution
+
+#### Workflow Integration
+
+- \`project_status\` shows open issue count and suggests \`patch_start\` when there are unresolved issues
+- When testing reveals bugs, use \`issue_create\` to track them
+- Use \`patch_start\` with \`issue_id\` to link patches to issues
+
+### Cross-Context Document Access
+
+Use the optional \`context\` parameter on \`doc_read\` and \`doc_list\` to access documents from any iteration or patch:
+
+\`\`\`
+doc_read(project_name, "prd", context="iter-1")    // Read PRD from iteration 1
+doc_list(project_name, context="patch-2")           // List docs from patch 2
+\`\`\`
+
+This is useful when working in a patch but needing to reference the original iteration's documents.`;
 }

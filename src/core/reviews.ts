@@ -1,7 +1,8 @@
 /**
- * Document review state management — <data_dir>/<project_name>/iter-<n>/reviews.json
+ * Document review state management — <context_dir>/reviews.json
  *
  * Tracks which documents are pending review, approved, or rejected.
+ * All public functions accept an optional contextDir parameter.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -15,16 +16,21 @@ interface ReviewsData {
     docs: Record<string, DocReviewState>;
 }
 
-function reviewsPath(projectName: string, iteration: number): string {
-    return join(getIterationDir(projectName, iteration), REVIEWS_FILE);
+function reviewsPath(projectName: string, iteration: number, contextDir?: string): string {
+    const base = contextDir ?? getIterationDir(projectName, iteration);
+    return join(base, REVIEWS_FILE);
 }
 
 /**
- * Read the reviews state for a project iteration.
+ * Read the reviews state for a project context.
  */
-export async function readReviews(projectName: string, iteration: number): Promise<Record<string, DocReviewState>> {
+export async function readReviews(
+    projectName: string,
+    iteration: number,
+    contextDir?: string,
+): Promise<Record<string, DocReviewState>> {
     try {
-        const content = await readFile(reviewsPath(projectName, iteration), 'utf-8');
+        const content = await readFile(reviewsPath(projectName, iteration, contextDir), 'utf-8');
         const data = JSON.parse(content) as ReviewsData;
         return data.docs ?? {};
     } catch {
@@ -39,8 +45,9 @@ async function writeReviews(
     projectName: string,
     iteration: number,
     docs: Record<string, DocReviewState>,
+    contextDir?: string,
 ): Promise<void> {
-    const filePath = reviewsPath(projectName, iteration);
+    const filePath = reviewsPath(projectName, iteration, contextDir);
     await mkdir(dirname(filePath), { recursive: true });
     const data: ReviewsData = { docs };
     await writeFile(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
@@ -49,15 +56,20 @@ async function writeReviews(
 /**
  * Submit a document for review. Sets status to "pending".
  */
-export async function submitForReview(projectName: string, iteration: number, docId: string): Promise<DocReviewState> {
-    const reviews = await readReviews(projectName, iteration);
+export async function submitForReview(
+    projectName: string,
+    iteration: number,
+    docId: string,
+    contextDir?: string,
+): Promise<DocReviewState> {
+    const reviews = await readReviews(projectName, iteration, contextDir);
     const state: DocReviewState = {
         docId,
         status: 'pending',
         submittedAt: new Date().toISOString(),
     };
     reviews[docId] = state;
-    await writeReviews(projectName, iteration, reviews);
+    await writeReviews(projectName, iteration, reviews, contextDir);
     return state;
 }
 
@@ -70,8 +82,9 @@ export async function resolveReview(
     docId: string,
     status: 'approved' | 'rejected',
     comment?: string,
+    contextDir?: string,
 ): Promise<DocReviewState> {
-    const reviews = await readReviews(projectName, iteration);
+    const reviews = await readReviews(projectName, iteration, contextDir);
     const existing = reviews[docId];
 
     if (!existing) {
@@ -88,7 +101,7 @@ export async function resolveReview(
         existing.comment = comment;
     }
 
-    await writeReviews(projectName, iteration, reviews);
+    await writeReviews(projectName, iteration, reviews, contextDir);
     return existing;
 }
 
@@ -99,15 +112,20 @@ export async function getDocReview(
     projectName: string,
     iteration: number,
     docId: string,
+    contextDir?: string,
 ): Promise<DocReviewState | null> {
-    const reviews = await readReviews(projectName, iteration);
+    const reviews = await readReviews(projectName, iteration, contextDir);
     return reviews[docId] ?? null;
 }
 
 /**
- * Get all pending reviews for a project iteration.
+ * Get all pending reviews for a project context.
  */
-export async function getPendingReviews(projectName: string, iteration: number): Promise<DocReviewState[]> {
-    const reviews = await readReviews(projectName, iteration);
+export async function getPendingReviews(
+    projectName: string,
+    iteration: number,
+    contextDir?: string,
+): Promise<DocReviewState[]> {
+    const reviews = await readReviews(projectName, iteration, contextDir);
     return Object.values(reviews).filter((r) => r.status === 'pending');
 }

@@ -8,7 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readState, setScale } from '../core/state.js';
 import { loadWorkflow } from '../core/workflow.js';
 import { readReviews } from '../core/reviews.js';
-import { getProject } from '../core/registry.js';
+import { resolveActive, isError } from './utils.js';
 import type { ProjectScale } from '../core/types.js';
 
 export function registerSetScale(server: McpServer, builtinDir: string, customDir: string): void {
@@ -21,23 +21,10 @@ export function registerSetScale(server: McpServer, builtinDir: string, customDi
         },
         async ({ project_name, scale }) => {
             try {
-                // Resolve current iteration
-                const entry = await getProject(project_name);
-                if (!entry || entry.currentIteration === 0) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `项目 "${project_name}" 未找到或尚未开始迭代。请先调用 iteration_start。`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-                const iteration = entry.currentIteration;
+                const ctx = await resolveActive(project_name);
+                if (isError(ctx)) return ctx;
 
-                // Check project exists
-                const state = await readState(project_name, iteration);
+                const state = await readState(project_name, ctx.number, ctx.dir);
 
                 // Guard: scale already set
                 if (state.scale !== null) {
@@ -53,7 +40,7 @@ export function registerSetScale(server: McpServer, builtinDir: string, customDi
                 }
 
                 // Guard: PRD must be approved
-                const reviews = await readReviews(project_name, iteration);
+                const reviews = await readReviews(project_name, ctx.number, ctx.dir);
                 const prdReview = reviews['prd'];
                 if (!prdReview || prdReview.status !== 'approved') {
                     const prdStatus = prdReview ? prdReview.status : '未提交';
@@ -69,7 +56,7 @@ export function registerSetScale(server: McpServer, builtinDir: string, customDi
                 }
 
                 // Set scale
-                const updated = await setScale(project_name, iteration, scale as ProjectScale);
+                const updated = await setScale(project_name, ctx.number, scale as ProjectScale, ctx.dir);
 
                 // Build doc list based on scale
                 const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
