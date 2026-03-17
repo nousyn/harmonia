@@ -126,7 +126,43 @@ harmonia setup --agent openclaw
 1. 注入 PM 提示词到 agent 配置文件（AGENTS.md / CLAUDE.md）
 2. 安装 agent hook 脚本（边界守卫 + 主动提醒）
 
-之后启动你的 AI 编程助手，PM 会自动通过 `project_init` 注册项目，通过 `project_status` 获取项目信息。
+之后启动你的 AI 编程助手，用自然语言告诉它你要做什么即可。
+
+### 使用示例
+
+setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自然语言描述需求，PM 会自动调用 Harmonia 工具驱动整个流程。
+
+**启动新项目：**
+
+```
+你：我想开发一个命令行待办事项工具，用 TypeScript 写，支持增删改查和优先级排序。
+```
+
+> PM 会自动执行：`project_status()` → `project_init("todo-cli", "/path/to/project")` → `iteration_start("todo-cli")` → 开始与你澄清需求 → 撰写 PRD
+
+**继续已有项目：**
+
+```
+你：继续之前的 todo-cli 项目。
+```
+
+> PM 会自动执行：`project_status("todo-cli")` → 根据当前阶段和进度恢复工作
+
+**开始新一轮迭代：**
+
+```
+你：todo-cli 需要加一些新功能，开始新的迭代吧。
+```
+
+> PM 会自动执行：`iteration_start("todo-cli")` → 创建 iter-2 → 从需求澄清阶段重新开始
+
+**查看所有项目：**
+
+```
+你：我有哪些项目在进行？
+```
+
+> PM 会自动执行：`project_status()` → 返回所有已注册项目及其状态
 
 ### CLI 命令
 
