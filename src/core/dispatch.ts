@@ -185,6 +185,7 @@ export async function createDispatch(
     expectedOutputs: string[],
     sessionId?: string,
     contextDir?: string,
+    nodeId?: string,
 ): Promise<DispatchRecord> {
     const dispatches = await readDispatches(projectName, iteration, contextDir);
     const now = new Date().toISOString();
@@ -198,6 +199,7 @@ export async function createDispatch(
         createdAt: now,
         updatedAt: now,
         ...(sessionId ? { sessionId } : {}),
+        ...(nodeId ? { nodeId } : {}),
     };
 
     dispatches.push(dispatch);

@@ -1,14 +1,18 @@
 /**
  * MCP Tool: dispatch_report
  *
- * PM calls this tool to report dispatch status changes:
+ * Coordinator calls this tool to report dispatch status changes:
  * 1. After launching an agent: provide agent_session_id → creates/reuses session, marks dispatch running
  * 2. After agent finishes: provide status=completed/failed → updates dispatch, session goes idle/closed
+ *
+ * Node-based architecture changes:
+ * - On completed: triggers `node_completed` engine event → computes nextAction
+ * - On failed: triggers `node_failed` engine event → engine checks onFailed → computes nextAction
+ * - Returns nextAction in response so coordinator knows what to do next
  *
  * Guards:
  * - State machine: terminal states (completed/failed/cancelled) are irreversible
  * - Valid transitions: dispatched→running/cancelled, running→completed/failed/cancelled
- * - Completion check: warns if expectedOutputs docs are missing
  */
 
 import { z } from 'zod';
@@ -23,16 +27,14 @@ import {
     isValidTransition,
     isTerminalStatus,
 } from '../core/dispatch.js';
-import { listDocs } from '../core/docs.js';
-import { readState } from '../core/state.js';
-import { loadWorkflow } from '../core/workflow.js';
 import { resolveActive, isError } from './utils.js';
+import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
 import type { AgentType, DispatchRecord, SessionRecord } from '../core/types.js';
 
 export function registerReportDispatch(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'dispatch_report',
-        'Report dispatch status after launching or completing a team member agent. Call with agent_session_id after launching to register the session. Call with status="completed" or "failed" when the agent finishes.',
+        'Report dispatch status after launching or completing a team member agent. Call with agent_session_id after launching to register the session. Call with status="completed" or "failed" when the agent finishes. Returns nextAction indicating what the coordinator should do next.',
         {
             project_name: z.string().describe('Project name'),
             dispatch_id: z.string().describe('Dispatch ID returned by role_dispatch'),
@@ -78,8 +80,8 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                 // Guard: state machine — reject invalid transitions
                 if (!isValidTransition(dispatch.status, effectiveStatus)) {
                     const reason = isTerminalStatus(dispatch.status)
-                        ? `dispatch "${dispatch_id}" 已处于终态 "${dispatch.status}"，无法转换到 "${effectiveStatus}"`
-                        : `dispatch "${dispatch_id}" 当前状态 "${dispatch.status}" 不允许转换到 "${effectiveStatus}"`;
+                        ? `Dispatch "${dispatch_id}" is in terminal status "${dispatch.status}" — cannot transition to "${effectiveStatus}".`
+                        : `Dispatch "${dispatch_id}" current status "${dispatch.status}" does not allow transition to "${effectiveStatus}".`;
                     return {
                         content: [
                             {
@@ -107,6 +109,8 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                 }
 
                 // Handle status transitions
+                let nextActionText = '';
+
                 if (
                     effectiveStatus === 'completed' ||
                     effectiveStatus === 'failed' ||
@@ -125,7 +129,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                         ctx.dir,
                     );
 
-                    // Transition session: completed → idle, failed → lost
+                    // Transition session: completed → idle, failed/cancelled → lost
                     const sessionId = session?.id ?? dispatch.sessionId;
                     if (sessionId) {
                         const newSessionStatus = effectiveStatus === 'completed' ? 'idle' : 'lost';
@@ -134,6 +138,29 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     }
 
                     results.push(`Dispatch ${dispatch_id} → ${effectiveStatus}`);
+
+                    // Trigger engine events for completed/failed (not cancelled — cancellation is manual)
+                    if (dispatch.nodeId) {
+                        if (effectiveStatus === 'completed') {
+                            const engineResult = await processWorkflowEvent(
+                                builtinDir,
+                                customDir,
+                                project_name,
+                                ctx,
+                                { type: 'node_completed', nodeId: dispatch.nodeId },
+                            );
+                            nextActionText = formatNextAction(engineResult.nextAction);
+                        } else if (effectiveStatus === 'failed') {
+                            const engineResult = await processWorkflowEvent(
+                                builtinDir,
+                                customDir,
+                                project_name,
+                                ctx,
+                                { type: 'node_failed', nodeId: dispatch.nodeId, error: note ?? 'Unknown failure' },
+                            );
+                            nextActionText = formatNextAction(engineResult.nextAction);
+                        }
+                    }
                 } else {
                     // Running: update dispatch status + associate session
                     await updateDispatch(
@@ -157,24 +184,6 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     results.push(`Dispatch ${dispatch_id} → running`);
                 }
 
-                // Completion check: warn if expectedOutputs are missing
-                if (effectiveStatus === 'completed' && dispatch.expectedOutputs.length > 0) {
-                    const existingDocs = await listDocs(project_name, ctx.number, ctx.dir);
-                    const state = await readState(project_name, ctx.number, ctx.dir);
-                    const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
-
-                    const missingOutputs = dispatch.expectedOutputs.filter((docId) => {
-                        const docDef = wf.definition.docs[docId];
-                        if (docDef?.external) return false; // external docs not tracked
-                        return !existingDocs.includes(docId);
-                    });
-
-                    if (missingOutputs.length > 0) {
-                        results.push(`\n⚠ 预期产出文档缺失: ${missingOutputs.join(', ')}`);
-                        results.push('请确认角色是否已通过 doc_write 提交了所有产出。');
-                    }
-                }
-
                 // Build response
                 const nextStepHint =
                     effectiveStatus === 'running'
@@ -185,7 +194,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     content: [
                         {
                             type: 'text' as const,
-                            text: `# Report Dispatch: ${dispatch_id}\n\n${results.join('\n')}${nextStepHint}`,
+                            text: `# Report Dispatch: ${dispatch_id}\n\n${results.join('\n')}${nextStepHint}${nextActionText}`,
                         },
                     ],
                 };

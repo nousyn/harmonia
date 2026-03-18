@@ -90,15 +90,15 @@ Setup options:
     const { registerSetScale } = await import('./tools/set-scale.js');
     const { registerGetRolePrompt } = await import('./tools/get-role-prompt.js');
     const { registerUpdatePhase } = await import('./tools/update-phase.js');
-    const { registerDocTools } = await import('./tools/doc-tools.js');
+    const { registerArtifactTools } = await import('./tools/artifact-tools.js');
     const { registerGetProjectStatus } = await import('./tools/get-project-status.js');
-    const { registerApproveDoc } = await import('./tools/approve-doc.js');
+    const { registerApproveArtifact } = await import('./tools/approve-artifact.js');
     const { registerOverrideTools } = await import('./tools/override-tools.js');
     const { registerDispatchRole } = await import('./tools/dispatch-role.js');
     const { registerReportDispatch } = await import('./tools/report-dispatch.js');
     const { registerPatchStart } = await import('./tools/patch-start.js');
     const { registerIssueTools } = await import('./tools/issue-tools.js');
-    const { registerDocSchema } = await import('./tools/doc-schema.js');
+    const { registerArtifactSchema } = await import('./tools/artifact-schema.js');
 
     // Custom workflows directory: <data_dir>/.workflows
     const CUSTOM_WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
@@ -114,15 +114,15 @@ Setup options:
     registerSetScale(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerGetRolePrompt(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerUpdatePhase(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerDocTools(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerArtifactTools(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerGetProjectStatus(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerApproveDoc(server);
+    registerApproveArtifact(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerOverrideTools(server);
     registerDispatchRole(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerReportDispatch(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerPatchStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerIssueTools(server);
-    registerDocSchema(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerArtifactSchema(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

@@ -116,7 +116,7 @@ function sectionPresent(section: ArtifactSchemaSection, headings: string[]): boo
  *
  * This function handles both for backward compatibility during migration.
  */
-function isRequired(required: boolean | Record<string, boolean>): boolean {
+export function isRequired(required: boolean | Record<string, boolean>): boolean {
     if (typeof required === 'boolean') return required;
     // Old scale-based format: treat as required if ANY scale requires it
     return Object.values(required).some(Boolean);
@@ -264,7 +264,7 @@ export interface StepSchemaEntry {
  */
 export function formatSchemaGuidance(
     docId: string,
-    docDef: { name: string; format?: 'md' | 'html' },
+    docDef: { name: string; format?: 'md' | 'html' | 'json' },
     schema: ArtifactSchema | undefined,
     stepSchemas?: StepSchemaEntry[],
 ): string {
@@ -274,7 +274,7 @@ export function formatSchemaGuidance(
     lines.push('');
 
     // Format
-    const format = docDef.format === 'html' ? 'HTML' : 'Markdown';
+    const format = docDef.format === 'html' ? 'HTML' : docDef.format === 'json' ? 'JSON' : 'Markdown';
     lines.push(`格式: ${format}`);
 
     // Min length
