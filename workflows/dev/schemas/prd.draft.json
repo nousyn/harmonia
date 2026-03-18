@@ -2,13 +2,20 @@
     "sections": [
         {
             "heading": "## 项目概述",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Project Overview", "## 概述"]
+            "required": true,
+            "aliases": [
+                "## Project Overview",
+                "## 概述"
+            ]
         },
         {
             "heading": "## 功能需求",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Functional Requirements", "## 需求列表", "## 功能列表"]
+            "required": true,
+            "aliases": [
+                "## Functional Requirements",
+                "## 需求列表",
+                "## 功能列表"
+            ]
         }
     ],
     "minLength": 150,

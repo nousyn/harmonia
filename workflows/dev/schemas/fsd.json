@@ -2,23 +2,38 @@
     "sections": [
         {
             "heading": "## 功能概述",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Feature Overview", "## 功能说明"]
+            "required": true,
+            "aliases": [
+                "## Feature Overview",
+                "## 功能说明"
+            ]
         },
         {
             "heading": "## 功能规格",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Functional Specifications", "## 详细规格", "## 功能详情"]
+            "required": true,
+            "aliases": [
+                "## Functional Specifications",
+                "## 详细规格",
+                "## 功能详情"
+            ]
         },
         {
             "heading": "## 交互流程",
-            "required": { "small": false, "medium": true, "large": true },
-            "aliases": ["## Interaction Flow", "## 用户流程", "## 交互设计"]
+            "required": true,
+            "aliases": [
+                "## Interaction Flow",
+                "## 用户流程",
+                "## 交互设计"
+            ]
         },
         {
             "heading": "## 边界条件",
-            "required": { "small": false, "medium": false, "large": true },
-            "aliases": ["## Edge Cases", "## 边界情况", "## 异常处理"]
+            "required": true,
+            "aliases": [
+                "## Edge Cases",
+                "## 边界情况",
+                "## 异常处理"
+            ]
         }
     ],
     "minLength": 200,

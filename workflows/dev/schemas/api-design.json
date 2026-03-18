@@ -2,23 +2,39 @@
     "sections": [
         {
             "heading": "## 端点列表",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## API Endpoints", "## 接口列表", "## Endpoints"]
+            "required": true,
+            "aliases": [
+                "## API Endpoints",
+                "## 接口列表",
+                "## Endpoints"
+            ]
         },
         {
             "heading": "## 请求/响应格式",
-            "required": { "small": false, "medium": true, "large": true },
-            "aliases": ["## Request/Response", "## 数据格式", "## 请求响应"]
+            "required": true,
+            "aliases": [
+                "## Request/Response",
+                "## 数据格式",
+                "## 请求响应"
+            ]
         },
         {
             "heading": "## 错误码",
-            "required": { "small": false, "medium": false, "large": true },
-            "aliases": ["## Error Codes", "## 错误处理", "## 异常码"]
+            "required": true,
+            "aliases": [
+                "## Error Codes",
+                "## 错误处理",
+                "## 异常码"
+            ]
         },
         {
             "heading": "## 认证与授权",
-            "required": { "small": false, "medium": false, "large": true },
-            "aliases": ["## Authentication", "## Auth", "## 权限"]
+            "required": true,
+            "aliases": [
+                "## Authentication",
+                "## Auth",
+                "## 权限"
+            ]
         }
     ],
     "minLength": 100,

@@ -122,7 +122,7 @@ export default {
                     // Neutralize: replace content with warning
                     output.args = {
                         ...args,
-                        content: \`[HARMONIA 拦截] PM 不应直接修改代码文件。请通过 role_dispatch 将编码任务分配给 developer。\\n原目标文件: \${filePath}\`,
+                        content: \`[HARMONIA 拦截] Coordinator 不应直接修改代码文件。请通过 role_dispatch 将编码任务分配给 developer。\\n原目标文件: \${filePath}\`,
                         oldString: '__HARMONIA_BLOCKED_EDIT__',
                         newString: '__HARMONIA_BLOCKED_EDIT__',
                     };
@@ -138,8 +138,8 @@ export default {
                     if (blocked) {
                         output.args = {
                             ...args,
-                            command: \`echo "[HARMONIA 拦截] PM 不应直接执行开发命令 (\${blocked}...)。请通过 role_dispatch 将任务分配给相应角色（developer/tester）。"\`,
-                            cmd: \`echo "[HARMONIA 拦截] PM 不应直接执行开发命令 (\${blocked}...)。请通过 role_dispatch 将任务分配给相应角色（developer/tester）。"\`,
+                            command: \`echo "[HARMONIA 拦截] Coordinator 不应直接执行开发命令 (\${blocked}...)。请通过 role_dispatch 将任务分配给相应角色（developer/tester）。"\`,
+                            cmd: \`echo "[HARMONIA 拦截] Coordinator 不应直接执行开发命令 (\${blocked}...)。请通过 role_dispatch 将任务分配给相应角色（developer/tester）。"\`,
                         };
                         return;
                     }
@@ -184,18 +184,18 @@ export default {
                     }
                     if (pendingDocs.length > 0) {
                         reminders.push(
-                            \`- [\${proj.name}] \${pendingDocs.length} 份文档待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingDocs.join(', ')} — 请尽快处理（doc_approve / reject_doc）\`,
+                            \`- [\${proj.name}] \${pendingDocs.length} 份文档待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingDocs.join(', ')} — 请尽快处理（artifact_approve）\`,
                         );
                     }
                 }
 
-                // Check 3: Phase idle check
+                // Check 3: Workflow idle check
                 const state = readJsonSafe(resolve(proj.path, 'state.json'));
-                if (state && state.updatedAt && state.currentPhase) {
+                if (state && state.updatedAt) {
                     const idle = minutesSince(state.updatedAt);
                     if (idle >= PHASE_IDLE_TIMEOUT_MINUTES) {
                         reminders.push(
-                            \`- [\${proj.name}] 当前阶段 (\${state.currentPhase}) 已空闲 \${idle} 分钟，建议调用 project_status 检查项目状态\`,
+                            \`- [\${proj.name}] 工作流已空闲 \${idle} 分钟，建议调用 project_status 检查项目状态\`,
                         );
                     }
                 }

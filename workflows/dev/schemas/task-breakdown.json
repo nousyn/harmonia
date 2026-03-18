@@ -2,8 +2,12 @@
     "sections": [
         {
             "heading": "## 任务列表",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Task List", "## 任务清单", "## Tasks"]
+            "required": true,
+            "aliases": [
+                "## Task List",
+                "## 任务清单",
+                "## Tasks"
+            ]
         }
     ],
     "minLength": 100,

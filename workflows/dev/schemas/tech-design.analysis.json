@@ -2,23 +2,23 @@
     "jsonFields": [
         {
             "field": "currentArchitecture",
-            "required": { "small": false, "medium": true, "large": true },
+            "required": true,
             "type": "object"
         },
         {
             "field": "constraints",
-            "required": { "small": true, "medium": true, "large": true },
+            "required": true,
             "type": "array"
         },
         {
             "field": "proposals",
-            "required": { "small": true, "medium": true, "large": true },
+            "required": true,
             "type": "array",
             "minItems": 1
         },
         {
             "field": "recommendation",
-            "required": { "small": true, "medium": true, "large": true },
+            "required": true,
             "type": "string"
         }
     ],

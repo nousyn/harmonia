@@ -2,23 +2,39 @@
     "sections": [
         {
             "heading": "## 测试范围",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Test Scope", "## 测试目标", "## 测试概述"]
+            "required": true,
+            "aliases": [
+                "## Test Scope",
+                "## 测试目标",
+                "## 测试概述"
+            ]
         },
         {
             "heading": "## 测试结果",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Test Results", "## 用例结果", "## 执行结果"]
+            "required": true,
+            "aliases": [
+                "## Test Results",
+                "## 用例结果",
+                "## 执行结果"
+            ]
         },
         {
             "heading": "## 问题列表",
-            "required": { "small": false, "medium": true, "large": true },
-            "aliases": ["## Issues", "## 缺陷列表", "## 问题与缺陷"]
+            "required": true,
+            "aliases": [
+                "## Issues",
+                "## 缺陷列表",
+                "## 问题与缺陷"
+            ]
         },
         {
             "heading": "## 覆盖率",
-            "required": { "small": false, "medium": false, "large": true },
-            "aliases": ["## Coverage", "## 测试覆盖率", "## 代码覆盖率"]
+            "required": true,
+            "aliases": [
+                "## Coverage",
+                "## 测试覆盖率",
+                "## 代码覆盖率"
+            ]
         }
     ],
     "minLength": 100,

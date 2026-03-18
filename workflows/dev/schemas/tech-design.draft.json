@@ -2,13 +2,21 @@
     "sections": [
         {
             "heading": "## 架构概述",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Architecture Overview", "## 系统架构", "## 架构设计"]
+            "required": true,
+            "aliases": [
+                "## Architecture Overview",
+                "## 系统架构",
+                "## 架构设计"
+            ]
         },
         {
             "heading": "## 技术选型",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Technology Stack", "## 技术栈", "## Tech Stack"]
+            "required": true,
+            "aliases": [
+                "## Technology Stack",
+                "## 技术栈",
+                "## Tech Stack"
+            ]
         }
     ],
     "minLength": 150,

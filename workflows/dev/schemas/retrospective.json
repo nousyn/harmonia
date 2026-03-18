@@ -2,18 +2,29 @@
     "sections": [
         {
             "heading": "## 项目总结",
-            "required": { "small": true, "medium": true, "large": true },
-            "aliases": ["## Summary", "## 总结", "## 项目概要"]
+            "required": true,
+            "aliases": [
+                "## Summary",
+                "## 总结",
+                "## 项目概要"
+            ]
         },
         {
             "heading": "## 经验教训",
-            "required": { "small": false, "medium": true, "large": true },
-            "aliases": ["## Lessons Learned", "## 收获与反思"]
+            "required": true,
+            "aliases": [
+                "## Lessons Learned",
+                "## 收获与反思"
+            ]
         },
         {
             "heading": "## 改进建议",
-            "required": { "small": false, "medium": false, "large": true },
-            "aliases": ["## Improvements", "## 后续改进", "## 待改进"]
+            "required": true,
+            "aliases": [
+                "## Improvements",
+                "## 后续改进",
+                "## 待改进"
+            ]
         }
     ],
     "minLength": 50,

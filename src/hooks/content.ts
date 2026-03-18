@@ -22,7 +22,7 @@ export interface HookParams {
 // ─── Boundary Rules ───
 
 /**
- * Tool names that PM should not call directly (code modification tools).
+ * Tool names that coordinator should not call directly (code modification tools).
  * These are the standard agent tool names across different platforms.
  */
 export const BLOCKED_TOOLS = [
@@ -40,7 +40,7 @@ export const BLOCKED_TOOLS = [
 ] as const;
 
 /**
- * Shell commands that indicate development work (PM should not run these).
+ * Shell commands that indicate development work (coordinator should not run these).
  */
 export const BLOCKED_COMMANDS = [
     'npm run',
@@ -66,7 +66,7 @@ export const BLOCKED_COMMANDS = [
 ] as const;
 
 /**
- * File extensions that indicate source code (PM should not modify these).
+ * File extensions that indicate source code (coordinator should not modify these).
  */
 export const CODE_EXTENSIONS = [
     '.ts',
@@ -93,25 +93,26 @@ export const CODE_EXTENSIONS = [
 ] as const;
 
 /**
- * Harmonia MCP tool names — these are always allowed since PM uses them
+ * Harmonia MCP tool names — these are always allowed since coordinator uses them
  * through Harmonia's own tool system.
  */
 export const HARMONIA_TOOLS = [
     'project_init',
-    'project_set_scale',
     'project_status',
-    'phase_update',
+    'iteration_start',
+    'patch_start',
     'role_dispatch',
     'dispatch_report',
-    'doc_write',
-    'doc_read',
-    'doc_list',
-    'doc_approve',
-    'reject_doc',
-    'guard_set',
-    'guard_get',
-    'review_set_rule',
+    'artifact_write',
+    'artifact_read',
+    'artifact_list',
+    'artifact_approve',
+    'artifact_schema',
     'review_list',
+    'role_prompt',
+    'issue_create',
+    'issue_update',
+    'issue_list',
 ] as const;
 
 // ─── Timeout thresholds (minutes) ───
@@ -119,7 +120,7 @@ export const HARMONIA_TOOLS = [
 /** Dispatch running timeout — warn after this many minutes */
 export const DISPATCH_TIMEOUT_MINUTES = 30;
 
-/** Phase idle timeout — warn after this many minutes with no tool calls */
+/** Workflow idle timeout — warn after this many minutes with no tool calls */
 export const PHASE_IDLE_TIMEOUT_MINUTES = 15;
 
 /** Review pending timeout — warn after this many minutes */

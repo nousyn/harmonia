@@ -2,13 +2,13 @@
     "jsonFields": [
         {
             "field": "tasks",
-            "required": { "small": true, "medium": true, "large": true },
+            "required": true,
             "type": "array",
             "minItems": 1
         },
         {
             "field": "estimatedTotal",
-            "required": { "small": false, "medium": true, "large": true },
+            "required": true,
             "type": "string"
         }
     ],
