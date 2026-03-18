@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loadWorkflow } from '../core/workflow.js';
-import { getMergedOverrides, resolveCapabilityOverride } from '../core/overrides.js';
+import { getMergedOverrides } from '../core/overrides.js';
 import type { CapabilityOverride, OverrideConfig } from '../core/types.js';
 
 /**
@@ -60,7 +60,7 @@ export function registerGetRolePrompt(server: McpServer, builtinDir: string, cus
         "Get the system prompt and configuration for a specific role in the workflow. Includes any capability overrides configured at global or project level. Use this to understand what a role does or to set up an agent with the role's prompt.",
         {
             workflow: z.string().default('dev').describe('Workflow name (default: dev)'),
-            role: z.string().describe('Role ID (e.g. pm, architect, developer, tester)'),
+            role: z.string().describe('Role ID (e.g. coordinator, architect, developer, tester)'),
             project_name: z
                 .string()
                 .optional()

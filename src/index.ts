@@ -87,13 +87,10 @@ Setup options:
 
     const { registerProjectInit } = await import('./tools/project-init.js');
     const { registerIterationStart } = await import('./tools/iteration-start.js');
-    const { registerSetScale } = await import('./tools/set-scale.js');
     const { registerGetRolePrompt } = await import('./tools/get-role-prompt.js');
-    const { registerUpdatePhase } = await import('./tools/update-phase.js');
     const { registerArtifactTools } = await import('./tools/artifact-tools.js');
     const { registerGetProjectStatus } = await import('./tools/get-project-status.js');
     const { registerApproveArtifact } = await import('./tools/approve-artifact.js');
-    const { registerOverrideTools } = await import('./tools/override-tools.js');
     const { registerDispatchRole } = await import('./tools/dispatch-role.js');
     const { registerReportDispatch } = await import('./tools/report-dispatch.js');
     const { registerPatchStart } = await import('./tools/patch-start.js');
@@ -111,13 +108,10 @@ Setup options:
     // Register all tools
     registerProjectInit(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerIterationStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerSetScale(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerGetRolePrompt(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerUpdatePhase(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerArtifactTools(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerGetProjectStatus(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerApproveArtifact(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerOverrideTools(server);
     registerDispatchRole(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerReportDispatch(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerPatchStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
