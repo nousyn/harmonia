@@ -1,53 +1,119 @@
 {
     "name": "dev",
     "description": "软件开发流程",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "author": "harmonia",
-    "phases": [
+    "coordinator": "coordinator",
+    "root": {
+        "type": "sequence",
+        "id": "main",
+        "children": [
+            {
+                "type": "task",
+                "id": "clarify",
+                "role": "coordinator",
+                "afterComplete": {
+                    "inject": ["需求澄清完成。请检查 prd 和 user-stories 是否已写入，以及 prd 是否需要审批。"]
+                }
+            },
+            {
+                "type": "gate",
+                "id": "prd-gate",
+                "conditions": [
+                    { "type": "artifact_exists", "artifact": "prd" },
+                    { "type": "artifact_exists", "artifact": "user-stories" },
+                    { "type": "artifact_approved", "artifact": "prd" }
+                ],
+                "pass": {
+                    "type": "task",
+                    "id": "design",
+                    "role": "architect",
+                    "beforeDispatch": {
+                        "inject": ["请基于 prd 和 user-stories 进行技术设计。产出 tech-design 和 task-breakdown。"]
+                    },
+                    "afterComplete": {
+                        "inject": ["设计阶段完成。请确认 tech-design 和 task-breakdown 已写入。"]
+                    }
+                },
+                "fail": {
+                    "goto": "clarify",
+                    "maxRetries": 5,
+                    "onExhausted": "escalate"
+                }
+            },
+            {
+                "type": "gate",
+                "id": "design-gate",
+                "conditions": [
+                    { "type": "artifact_exists", "artifact": "tech-design" },
+                    { "type": "artifact_exists", "artifact": "task-breakdown" }
+                ],
+                "pass": {
+                    "type": "task",
+                    "id": "develop",
+                    "role": "developer",
+                    "beforeDispatch": {
+                        "inject": ["请基于 task-breakdown 和 tech-design 实现代码。"]
+                    },
+                    "afterComplete": {
+                        "inject": ["开发阶段完成。代码已实现。"]
+                    }
+                },
+                "fail": {
+                    "goto": "design",
+                    "maxRetries": 3,
+                    "onExhausted": "escalate"
+                }
+            },
+            {
+                "type": "task",
+                "id": "test",
+                "role": "tester",
+                "beforeDispatch": {
+                    "inject": ["请基于 prd、user-stories 编写测试计划并执行测试，产出 test-report。"]
+                },
+                "afterComplete": {
+                    "inject": ["测试阶段完成。请检查 test-report 结果。"]
+                }
+            },
+            {
+                "type": "gate",
+                "id": "test-gate",
+                "conditions": [
+                    {
+                        "type": "artifact_field",
+                        "artifact": "test-report",
+                        "field": "result",
+                        "operator": "eq",
+                        "value": "pass"
+                    }
+                ],
+                "pass": {
+                    "type": "task",
+                    "id": "deliver",
+                    "role": "coordinator",
+                    "beforeDispatch": {
+                        "inject": ["所有测试通过。请进行最终交付验收，产出 retrospective。"]
+                    }
+                },
+                "fail": {
+                    "goto": "develop",
+                    "maxRetries": 3,
+                    "onExhausted": "escalate"
+                }
+            }
+        ]
+    },
+    "floatingNodes": [
         {
-            "id": "clarify",
-            "name": "需求澄清",
-            "roles": ["pm"],
-            "outputs": ["prd", "user-stories"],
-            "description": "与用户沟通，明确需求范围、功能点、约束条件"
-        },
-        {
-            "id": "design",
-            "name": "方案设计",
-            "roles": ["architect"],
-            "inputs": ["prd", "user-stories"],
-            "outputs": ["tech-design", "task-breakdown"],
-            "description": "分析代码库，制定技术方案，拆解开发任务"
-        },
-        {
-            "id": "develop",
-            "name": "开发",
-            "roles": ["developer"],
-            "inputs": ["task-breakdown", "tech-design"],
-            "outputs": ["code"],
-            "description": "按任务拆解编码实现"
-        },
-        {
-            "id": "test",
-            "name": "测试",
-            "roles": ["tester"],
-            "inputs": ["code", "prd", "user-stories"],
-            "outputs": ["test-report"],
-            "description": "编写测试、执行测试、输出测试报告"
-        },
-        {
-            "id": "deliver",
-            "name": "交付验收",
-            "roles": ["pm"],
-            "inputs": ["test-report", "code"],
-            "outputs": ["retrospective"],
-            "description": "验收成果，确认需求满足，输出复盘记录"
+            "type": "task",
+            "id": "escalate",
+            "role": "coordinator"
         }
     ],
-    "docs": {
+    "artifacts": {
         "prd": {
             "name": "需求文档",
-            "scale": { "small": "lite", "medium": "full", "large": "full" },
             "review": true,
             "steps": [
                 {
@@ -77,30 +143,21 @@
             ]
         },
         "user-stories": {
-            "name": "用户故事 + 验收标准",
-            "scale": { "small": "full", "medium": "full", "large": "full" },
-            "review": false
+            "name": "用户故事 + 验收标准"
         },
         "fsd": {
-            "name": "功能规格",
-            "scale": { "small": "skip", "medium": "full", "large": "full" },
-            "review": false
+            "name": "功能规格"
         },
         "prototype": {
             "name": "高保真原型",
             "format": "html",
-            "scale": { "small": "skip", "medium": "full", "large": "full" },
             "review": true
         },
         "project-plan": {
-            "name": "项目计划",
-            "scale": { "small": "skip", "medium": "full", "large": "full" },
-            "review": false
+            "name": "项目计划"
         },
         "tech-design": {
             "name": "技术方案",
-            "scale": { "small": "lite", "medium": "full", "large": "full" },
-            "review": false,
             "steps": [
                 {
                     "id": "analysis",
@@ -129,19 +186,13 @@
             ]
         },
         "data-model": {
-            "name": "数据模型设计",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" },
-            "review": false
+            "name": "数据模型设计"
         },
         "api-design": {
-            "name": "API 设计",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" },
-            "review": false
+            "name": "API 设计"
         },
         "task-breakdown": {
             "name": "任务拆解",
-            "scale": { "small": "full", "medium": "full", "large": "full" },
-            "review": false,
             "steps": [
                 {
                     "id": "coarse",
@@ -170,45 +221,23 @@
             ]
         },
         "risk-assessment": {
-            "name": "技术风险评估",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" },
-            "review": false
+            "name": "技术风险评估"
         },
         "test-plan": {
-            "name": "测试计划",
-            "scale": { "small": "skip", "medium": "full", "large": "full" },
-            "review": false
+            "name": "测试计划"
         },
         "test-report": {
-            "name": "测试报告",
-            "scale": { "small": "lite", "medium": "full", "large": "full" },
-            "review": false
+            "name": "测试报告"
         },
         "deploy": {
-            "name": "部署文档",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" },
-            "review": false
+            "name": "部署文档"
         },
         "retrospective": {
-            "name": "复盘记录",
-            "scale": { "small": "skip", "medium": "optional", "large": "full" },
-            "review": false
+            "name": "复盘记录"
         },
         "code": {
             "name": "代码实现",
-            "external": true,
-            "scale": { "small": "full", "medium": "full", "large": "full" },
-            "review": false
-        }
-    },
-    "scale_criteria": {
-        "description": "PM 根据以下维度判断项目规模",
-        "dimensions": {
-            "feature_count": { "small": "1-3", "medium": "4-10", "large": "10+" },
-            "frontend_backend_split": { "small": false, "medium": "maybe", "large": true },
-            "data_persistence": { "small": "none_or_simple", "medium": "yes", "large": "complex" },
-            "external_integrations": { "small": "none", "medium": "few", "large": "many" },
-            "parallel_developers": { "small": 1, "medium": "1-2", "large": "3+" }
+            "external": true
         }
     }
 }
