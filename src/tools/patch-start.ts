@@ -3,8 +3,10 @@
  * Start a new patch for a registered project.
  *
  * Creates the patch directory (patch-N/), initializes state.json with
- * clarify/design phases skipped, scale=small, type=patch.
+ * node-based workflow state, type=patch.
  * Optionally links to an issue via issue_id.
+ *
+ * After initialization, starts the workflow engine and returns initial nextAction.
  *
  * Guards:
  * - Project must be registered (use project_init first)
@@ -15,12 +17,15 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getProject, startPatch, getPatchDir } from '../core/registry.js';
 import { loadWorkflow } from '../core/workflow.js';
-import { initProjectState } from '../core/state.js';
+import { initWorkflowState, persistState } from '../core/state.js';
+import { startWorkflow } from '../core/workflow-engine.js';
+import { formatNextAction } from './engine-helpers.js';
+import type { EngineContext, GateContext } from '../core/workflow-engine.js';
 
 export function registerPatchStart(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'patch_start',
-        'Start a new patch for a registered project. Patches are lightweight fix cycles — clarify and design phases are skipped, scale is fixed to small. Use this for bug fixes, small improvements, or resolving issues.',
+        'Start a new patch for a registered project. Patches are lightweight fix cycles for bug fixes and small improvements. Use this for resolving issues found during testing or from user feedback.',
         {
             project_name: z.string().describe('项目名称'),
             description: z.string().optional().describe('补丁描述（简要说明修复内容）'),
@@ -64,8 +69,34 @@ export function registerPatchStart(server: McpServer, builtinDir: string, custom
                 // Load workflow and initialize state in patch mode
                 const wf = await loadWorkflow(builtinDir, customDir, entry.workflow);
                 const patchDir = getPatchDir(project_name, newPatch);
-                const state = await initProjectState(project_name, entry.dir, wf, newPatch, 'patch', patchDir);
+                const state = await initWorkflowState(
+                    project_name,
+                    entry.dir,
+                    wf,
+                    newPatch,
+                    'patch',
+                    patchDir,
+                );
 
+                // Start the workflow engine
+                const emptyGate: GateContext = {
+                    artifactExists: () => false,
+                    artifactApproved: () => false,
+                    artifactField: () => undefined,
+                };
+                const engineCtx: EngineContext = {
+                    gate: emptyGate,
+                    getRolePrompt: (role: string) => {
+                        const roleDef = wf.roles[role];
+                        return roleDef?.prompt ?? `Role "${role}" prompt not found`;
+                    },
+                    getInputArtifacts: () => [],
+                };
+
+                const result = startWorkflow(wf.definition, state, engineCtx);
+                await persistState(project_name, newPatch, result.state, patchDir);
+
+                const nextActionText = formatNextAction(result.nextAction);
                 const descLine = description ? `描述: ${description}` : '';
                 const issueLine = issue_id ? `关联 issue: ${issue_id}` : '';
 
@@ -79,13 +110,10 @@ export function registerPatchStart(server: McpServer, builtinDir: string, custom
                                 `项目: ${project_name}`,
                                 `源代码目录: ${entry.dir}`,
                                 `工作流: ${wf.definition.name}`,
-                                `规模: small (固定)`,
-                                `当前阶段: ${state.currentPhase}`,
-                                `跳过阶段: clarify, design`,
                                 descLine,
                                 issueLine,
                                 ``,
-                                `下一步: 开始开发。使用 role_dispatch 分配开发者，或直接使用 doc_write 编写文档。`,
+                                nextActionText,
                             ]
                                 .filter(Boolean)
                                 .join('\n'),

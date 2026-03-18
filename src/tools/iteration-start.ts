@@ -2,24 +2,31 @@
  * MCP Tool: iteration_start
  * Start a new iteration for a registered project.
  *
- * Creates the iteration directory (iter-N/), initializes state.json,
- * and updates the registry with the new iteration number.
+ * Creates the iteration directory (iter-N/), initializes state.json
+ * with node-based workflow state, and updates the registry.
+ *
+ * After initialization, starts the workflow engine to activate the root
+ * node and returns the initial nextAction.
  *
  * Guards:
  * - Project must be registered (use project_init first)
- * - If a current iteration exists, all phases must be completed (or use force)
+ * - If a current iteration exists, workflow must be completed (or use force)
  */
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getProject, startIteration, getIterationDir, resolveContextDir } from '../core/registry.js';
 import { loadWorkflow } from '../core/workflow.js';
-import { initProjectState, readState } from '../core/state.js';
+import { initWorkflowState, readState } from '../core/state.js';
+import { startWorkflow } from '../core/workflow-engine.js';
+import { persistState } from '../core/state.js';
+import { formatNextAction } from './engine-helpers.js';
+import type { EngineContext, GateContext } from '../core/workflow-engine.js';
 
 export function registerIterationStart(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'iteration_start',
-        'Start a new iteration for a registered project. Creates iteration directory, initializes state, and updates registry. Call this after project_init to begin the first iteration, or after completing all phases to start a new iteration.',
+        'Start a new iteration for a registered project. Creates iteration directory, initializes state, and updates registry. Call this after project_init to begin the first iteration, or after completing the workflow to start a new iteration.',
         {
             project_name: z.string().describe('项目名称'),
             force: z.boolean().optional().describe('强制开始新迭代，即使当前迭代未完成 (default: false)'),
@@ -40,27 +47,36 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                     };
                 }
 
-                // Guard: if there's a current iteration, check if all phases are completed
+                // Guard: if there's a current iteration, check if the workflow root is completed
                 if (entry.currentIteration > 0 && !force) {
                     try {
-                        // Resolve the current iteration's context dir
                         const currentIterDir = entry.activeContext
                             ? resolveContextDir(project_name, `iter-${entry.currentIteration}`)?.dir
                             : undefined;
                         const currentState = await readState(project_name, entry.currentIteration, currentIterDir);
-                        const incompletePhases = currentState.phases.filter(
-                            (p) => p.status !== 'completed' && p.status !== 'skipped',
+                        const rootState = currentState.nodes[Object.keys(currentState.nodes)[0]];
+                        // Check if any node is still active or pending (workflow not done)
+                        const incompleteNodes = Object.values(currentState.nodes).filter(
+                            (n) => n.status === 'active' || n.status === 'pending',
                         );
-                        if (incompletePhases.length > 0) {
-                            const phaseList = incompletePhases.map((p) => `${p.id} (${p.status})`).join(', ');
+                        if (incompleteNodes.length > 0) {
+                            const summary = incompleteNodes
+                                .slice(0, 5)
+                                .map((n) => `${n.id} (${n.status})`)
+                                .join(', ');
+                            const moreText =
+                                incompleteNodes.length > 5
+                                    ? ` ...及其他 ${incompleteNodes.length - 5} 个节点`
+                                    : '';
                             return {
                                 content: [
                                     {
                                         type: 'text' as const,
                                         text: [
-                                            `当前迭代 (iter-${entry.currentIteration}) 尚有未完成的阶段: ${phaseList}`,
+                                            `当前迭代 (iter-${entry.currentIteration}) 工作流尚未完成。`,
+                                            `未完成节点: ${summary}${moreText}`,
                                             ``,
-                                            `请先完成当前迭代的所有阶段，或使用 force=true 强制开始新迭代。`,
+                                            `请先完成当前迭代的工作流，或使用 force=true 强制开始新迭代。`,
                                         ].join('\n'),
                                     },
                                 ],
@@ -78,7 +94,7 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                 // Load workflow and initialize state
                 const wf = await loadWorkflow(builtinDir, customDir, entry.workflow);
                 const newIterDir = getIterationDir(project_name, newIteration);
-                const state = await initProjectState(
+                const state = await initWorkflowState(
                     project_name,
                     entry.dir,
                     wf,
@@ -86,6 +102,26 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                     'iteration',
                     newIterDir,
                 );
+
+                // Start the workflow engine — activates root node and returns initial nextAction
+                const emptyGate: GateContext = {
+                    artifactExists: () => false,
+                    artifactApproved: () => false,
+                    artifactField: () => undefined,
+                };
+                const engineCtx: EngineContext = {
+                    gate: emptyGate,
+                    getRolePrompt: (role: string) => {
+                        const roleDef = wf.roles[role];
+                        return roleDef?.prompt ?? `Role "${role}" prompt not found`;
+                    },
+                    getInputArtifacts: () => [],
+                };
+
+                const result = startWorkflow(wf.definition, state, engineCtx);
+                await persistState(project_name, newIteration, result.state, newIterDir);
+
+                const nextActionText = formatNextAction(result.nextAction);
 
                 return {
                     content: [
@@ -97,10 +133,9 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                                 `项目: ${project_name}`,
                                 `源代码目录: ${entry.dir}`,
                                 `工作流: ${wf.definition.name}`,
-                                `规模: (未设定)`,
-                                `当前阶段: ${state.currentPhase}`,
+                                `可用角色: ${Object.keys(wf.roles).join(', ')}`,
                                 ``,
-                                `下一步: 与用户沟通需求，编写 PRD，PRD 审批通过后调用 project_set_scale 设定项目规模。`,
+                                nextActionText,
                             ].join('\n'),
                         },
                     ],
