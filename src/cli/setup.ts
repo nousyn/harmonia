@@ -1,8 +1,10 @@
 /**
  * CLI command: harmonia setup
  *
- * Prompt injection + hook installation only.
- * No project registration, no state init — PM does that at runtime via MCP tools.
+ * Prompt injection only.
+ * No project registration, no state init, no hook installation.
+ * PM does project registration at runtime via MCP tools (project_init),
+ * which also handles hook installation.
  *
  * Usage:
  *   harmonia setup [options]
@@ -14,8 +16,6 @@
 import { resolve } from 'node:path';
 import type { AgentType } from '@s_s/agent-kit';
 import { detectHostAgent, injectPrompt } from '../setup/inject.js';
-import { installHooks } from '../hooks/install.js';
-import { getGlobalDir } from '../core/registry.js';
 
 const VALID_AGENTS = ['opencode', 'claude-code', 'codex', 'openclaw'] as const;
 
@@ -66,23 +66,6 @@ export async function runSetup(opts: SetupOptions): Promise<void> {
     const action = result.created ? 'Created' : result.replaced ? 'Updated' : 'Appended to';
     console.log(`  [done] ${action} ${result.filePath}`);
 
-    // 3. Install hooks
-    try {
-        const hookResult = await installHooks(agentType, {
-            dataDir: getGlobalDir(),
-        });
-        if (hookResult.success) {
-            console.log(`  [done] Hooks installed (${hookResult.filesWritten.length} files)`);
-            for (const w of hookResult.warnings) {
-                console.log(`  [warn] ${w}`);
-            }
-        } else {
-            console.log(`  [fail] Hook install failed: ${hookResult.error ?? 'unknown'}`);
-        }
-    } catch (err) {
-        console.log(`  [fail] Hook install error: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    // 4. Summary
-    console.log(`\n  Ready. Run your agent and call project_status() to begin.\n`);
+    // 3. Summary
+    console.log(`\n  Ready. Run your agent and call project_init() to register a project.\n`);
 }

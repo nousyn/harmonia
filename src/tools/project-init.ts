@@ -1,10 +1,10 @@
 /**
  * MCP Tool: project_init
- * Register a new Harmonia project in the global registry.
+ * Register a new Harmonia project in the global registry and install workflow hooks.
  *
- * This tool ONLY registers the project — it does NOT create iteration directories
- * or initialize state. After registration, call `iteration_start` to begin the
- * first iteration.
+ * This tool registers the project AND installs workflow-defined hooks for the
+ * detected agent. It does NOT create iteration directories or initialize state.
+ * After registration, call `iteration_start` to begin the first iteration.
  *
  * Supports an optional `workflow` parameter. When multiple workflows are
  * available and none is specified, returns an error with the available list
@@ -13,8 +13,14 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { createKit, defineHooks, type HookSet, type HookInstallResult } from '@s_s/agent-kit';
 import { loadWorkflow, listWorkflows } from '../core/workflow.js';
-import { registerProject, getProject } from '../core/registry.js';
+import { registerProject, getProject, getGlobalDir } from '../core/registry.js';
+import { detectHostAgent } from '../setup/inject.js';
+import type { HookCreatorContext } from '../core/types.js';
+
+/** Shared kit instance for hook installation */
+const kit = createKit('harmonia');
 
 export function registerProjectInit(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
@@ -140,6 +146,31 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
             // Register project (creates global data dir + project source dir)
             await registerProject(project_name, project_dir, workflowName);
 
+            // Install workflow hooks if the plugin provides a hook creator
+            let hookMessage = '';
+            if (wf.hooks) {
+                try {
+                    const agentType = await detectHostAgent(project_dir);
+                    const context: HookCreatorContext = {
+                        defineHooks,
+                        dataDir: getGlobalDir(),
+                        projectName: project_name,
+                    };
+                    const hookSet = wf.hooks(agentType, context) as HookSet | HookSet[];
+                    const hookResult: HookInstallResult = await kit.installHooks(agentType, hookSet);
+                    if (hookResult.success) {
+                        hookMessage = `\nHooks 已安装 (${hookResult.filesWritten.length} 个文件)`;
+                        if (hookResult.warnings.length > 0) {
+                            hookMessage += `\n警告: ${hookResult.warnings.join('; ')}`;
+                        }
+                    } else {
+                        hookMessage = `\n[warn] Hook 安装失败: ${hookResult.error ?? '未知错误'}`;
+                    }
+                } catch (err) {
+                    hookMessage = `\n[warn] Hook 安装出错: ${err instanceof Error ? err.message : String(err)}`;
+                }
+            }
+
             return {
                 content: [
                     {
@@ -150,6 +181,7 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
                             `源代码目录: ${project_dir}`,
                             `工作流: ${wf.definition.name} (${wf.definition.description})`,
                             `可用角色: ${Object.keys(wf.roles).join(', ')}`,
+                            hookMessage,
                             ``,
                             `下一步: 调用 iteration_start(project_name="${project_name}") 开始第一轮迭代。`,
                         ].join('\n'),

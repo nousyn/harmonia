@@ -1,16 +1,16 @@
 /**
- * Setup injection — detect host agent type and inject PM guidance into config.
+ * Setup injection — detect host agent type and inject coordinator guidance into config.
  *
  * Delegates to @s_s/agent-kit for agent detection, prompt injection, and
  * marker management. Harmonia provides the prompt content via templates.ts.
  *
- * Always uses global scope — PM prompt is project-agnostic and should be
+ * Always uses global scope — coordinator prompt is project-agnostic and should be
  * written to the agent's global config directory (e.g. ~/.openclaw/workspace/AGENTS.md).
  */
 
 import { createKit, detectAgent, type AgentType } from '@s_s/agent-kit';
 import { readFile } from 'node:fs/promises';
-import { generatePmPrompt } from './templates.js';
+import { generateCoordinatorPrompt } from './templates.js';
 
 /** Shared kit instance — binds all marker tags to "harmonia" */
 const kit = createKit('harmonia');
@@ -32,11 +32,11 @@ export async function detectHostAgent(projectDir: string): Promise<AgentType> {
 }
 
 /**
- * Inject the Harmonia PM guidance block into the agent's **global** config file.
+ * Inject the Harmonia coordinator guidance block into the agent's **global** config file.
  * If a harmonia block already exists, it is replaced (idempotent).
  * If the file doesn't exist, it is created.
  *
- * Uses global scope because PM prompt is project-agnostic.
+ * Uses global scope because coordinator prompt is project-agnostic.
  * This writes to the agent's global config directory:
  *   - opencode:    ~/.config/opencode/AGENTS.md
  *   - claude-code: ~/.claude/CLAUDE.md
@@ -46,7 +46,7 @@ export async function detectHostAgent(projectDir: string): Promise<AgentType> {
 export async function injectPrompt(
     agentType: AgentType,
 ): Promise<{ filePath: string; created: boolean; replaced: boolean }> {
-    const prompt = generatePmPrompt();
+    const prompt = generateCoordinatorPrompt();
     const globalScope = { scope: 'global' as const };
 
     // Check pre-existing state for return value
