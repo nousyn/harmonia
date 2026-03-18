@@ -11,7 +11,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { getGlobalDir, getProjectDataDir } from './registry.js';
-import type { CapabilityOverride, DocDefinition, OverrideConfig, RoleOverride } from './types.js';
+import type { CapabilityOverride, ArtifactDefinition, OverrideConfig, RoleOverride } from './types.js';
 
 const OVERRIDES_FILE = 'overrides.json';
 
@@ -120,7 +120,7 @@ export async function getMergedOverrides(projectName: string): Promise<OverrideC
  *
  * Priority: project override > global override > workflow default
  */
-export function resolveDocReview(docId: string, docDef: DocDefinition, overrides: OverrideConfig): boolean {
+export function resolveDocReview(docId: string, docDef: ArtifactDefinition, overrides: OverrideConfig): boolean {
     const review = overrides.review;
 
     // Override is a per-doc record

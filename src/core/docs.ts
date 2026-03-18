@@ -12,7 +12,7 @@
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getIterationDir } from './registry.js';
-import type { DocDefinition } from './types.js';
+import type { ArtifactDefinition } from './types.js';
 
 function docsDir(projectName: string, iteration: number, contextDir?: string): string {
     const base = contextDir ?? getIterationDir(projectName, iteration);
@@ -22,7 +22,7 @@ function docsDir(projectName: string, iteration: number, contextDir?: string): s
 /**
  * Get file extension for a doc based on its definition.
  */
-function getDocExtension(docDef?: DocDefinition): string {
+function getDocExtension(docDef?: ArtifactDefinition): string {
     return docDef?.format === 'html' ? '.html' : '.md';
 }
 
@@ -34,7 +34,7 @@ export async function writeDoc(
     iteration: number,
     docId: string,
     content: string,
-    docDef?: DocDefinition,
+    docDef?: ArtifactDefinition,
     contextDir?: string,
 ): Promise<string> {
     const dir = docsDir(projectName, iteration, contextDir);

@@ -9,12 +9,12 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { getIterationDir } from './registry.js';
-import type { DocStepState, DocStepRecord } from './types.js';
+import type { ArtifactStepState, ArtifactStepRecord } from './types.js';
 
 const STEPS_FILE = 'steps.json';
 
 interface StepsData {
-    docs: Record<string, DocStepState>;
+    docs: Record<string, ArtifactStepState>;
 }
 
 function stepsPath(projectName: string, iteration: number, contextDir?: string): string {
@@ -29,7 +29,7 @@ export async function readSteps(
     projectName: string,
     iteration: number,
     contextDir?: string,
-): Promise<Record<string, DocStepState>> {
+): Promise<Record<string, ArtifactStepState>> {
     try {
         const content = await readFile(stepsPath(projectName, iteration, contextDir), 'utf-8');
         const data = JSON.parse(content) as StepsData;
@@ -45,7 +45,7 @@ export async function readSteps(
 async function writeSteps(
     projectName: string,
     iteration: number,
-    docs: Record<string, DocStepState>,
+    docs: Record<string, ArtifactStepState>,
     contextDir?: string,
 ): Promise<void> {
     const filePath = stepsPath(projectName, iteration, contextDir);
@@ -57,12 +57,12 @@ async function writeSteps(
 /**
  * Get the step state for a specific document.
  */
-export async function getDocStepState(
+export async function getArtifactStepState(
     projectName: string,
     iteration: number,
     docId: string,
     contextDir?: string,
-): Promise<DocStepState | null> {
+): Promise<ArtifactStepState | null> {
     const docs = await readSteps(projectName, iteration, contextDir);
     return docs[docId] ?? null;
 }
@@ -70,7 +70,7 @@ export async function getDocStepState(
 /**
  * Get the set of completed step IDs for a document.
  */
-export function getCompletedStepIds(state: DocStepState | null): Set<string> {
+export function getCompletedStepIds(state: ArtifactStepState | null): Set<string> {
     if (!state) return new Set();
     return new Set(state.completedSteps.map((s) => s.stepId));
 }
@@ -79,7 +79,7 @@ export function getCompletedStepIds(state: DocStepState | null): Set<string> {
  * Record a step as completed. If the step was already completed,
  * it is overwritten and all subsequent steps are cleared (rollback).
  *
- * @returns The updated DocStepState
+ * @returns The updated ArtifactStepState
  */
 export async function recordStepCompletion(
     projectName: string,
@@ -89,13 +89,13 @@ export async function recordStepCompletion(
     artifactPath: string,
     allStepIds: string[],
     contextDir?: string,
-): Promise<DocStepState> {
+): Promise<ArtifactStepState> {
     const docs = await readSteps(projectName, iteration, contextDir);
     let state = docs[docId];
 
     if (!state) {
         state = {
-            docId,
+            artifactId: docId,
             completedSteps: [],
             finalized: false,
         };
@@ -118,7 +118,7 @@ export async function recordStepCompletion(
     }
 
     // Record the new step
-    const record: DocStepRecord = {
+    const record: ArtifactStepRecord = {
         stepId,
         completedAt: new Date().toISOString(),
         artifactPath,
@@ -138,7 +138,7 @@ export async function markFinalized(
     iteration: number,
     docId: string,
     contextDir?: string,
-): Promise<DocStepState> {
+): Promise<ArtifactStepState> {
     const docs = await readSteps(projectName, iteration, contextDir);
     const state = docs[docId];
 
@@ -162,6 +162,6 @@ export async function isDocFinalized(
     docId: string,
     contextDir?: string,
 ): Promise<boolean> {
-    const state = await getDocStepState(projectName, iteration, docId, contextDir);
+    const state = await getArtifactStepState(projectName, iteration, docId, contextDir);
     return state?.finalized ?? false;
 }

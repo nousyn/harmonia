@@ -1,20 +1,22 @@
 /**
- * Document schema loader and validator.
+ * Artifact schema loader and validator.
  *
  * Loads schema definitions from the resolved workflow directory's schemas/ subdirectory
- * and validates document content against them before writing.
+ * and validates artifact content against them before writing.
+ *
+ * Scale concept has been removed — required fields are now simple booleans.
  */
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { DocSchema, DocSchemaSection, ProjectScale } from './types.js';
+import type { ArtifactSchema, ArtifactSchemaSection } from './types.js';
 import { resolveWorkflowDir } from './workflow.js';
 
 // ─── Schema Loading ───
 
 /**
- * Load a document schema from the workflow's schemas directory.
- * Returns undefined if no schema file exists for this doc_id.
+ * Load an artifact schema from the workflow's schemas directory.
+ * Returns undefined if no schema file exists for this artifact_id.
  *
  * For step schemas, pass a composite id like "prd.requirements".
  */
@@ -23,12 +25,12 @@ export async function loadDocSchema(
     customDir: string,
     workflowName: string,
     docId: string,
-): Promise<DocSchema | undefined> {
+): Promise<ArtifactSchema | undefined> {
     const workflowDir = await resolveWorkflowDir(builtinDir, customDir, workflowName);
     const schemaPath = join(workflowDir, 'schemas', `${docId}.json`);
     try {
         const raw = await readFile(schemaPath, 'utf-8');
-        return JSON.parse(raw) as DocSchema;
+        return JSON.parse(raw) as ArtifactSchema;
     } catch {
         return undefined;
     }
@@ -88,7 +90,7 @@ function extractHeadings(content: string): string[] {
  * Check if a required section is present in the document headings.
  * Matches primary heading or any alias, with level-aware + normalized comparison.
  */
-function sectionPresent(section: DocSchemaSection, headings: string[]): boolean {
+function sectionPresent(section: ArtifactSchemaSection, headings: string[]): boolean {
     const candidates = [section.heading, ...(section.aliases ?? [])];
     const level = headingLevel(section.heading);
 
@@ -106,18 +108,31 @@ function sectionPresent(section: DocSchemaSection, headings: string[]): boolean 
 }
 
 /**
- * Validate document content against a schema.
+ * Resolve whether a section/field is required.
  *
- * @param content  - Document content (markdown, HTML, or JSON)
+ * The `required` field can be either:
+ * - A boolean (new format)
+ * - An object with scale keys (old format, still in some schema files)
+ *
+ * This function handles both for backward compatibility during migration.
+ */
+function isRequired(required: boolean | Record<string, boolean>): boolean {
+    if (typeof required === 'boolean') return required;
+    // Old scale-based format: treat as required if ANY scale requires it
+    return Object.values(required).some(Boolean);
+}
+
+/**
+ * Validate artifact content against a schema.
+ *
+ * @param content  - Artifact content (markdown, HTML, or JSON)
  * @param schema   - Schema definition
- * @param scale    - Project scale (affects which sections are required). When null, scale-dependent checks are skipped.
- * @param isHtml   - Whether the document is HTML format
- * @param isJson   - Whether the document is JSON format (for step artifacts)
+ * @param isHtml   - Whether the artifact is HTML format
+ * @param isJson   - Whether the artifact is JSON format (for step artifacts)
  */
 export function validateDoc(
     content: string,
-    schema: DocSchema,
-    scale: ProjectScale | null,
+    schema: ArtifactSchema,
     isHtml: boolean = false,
     isJson: boolean = false,
 ): ValidationResult {
@@ -145,9 +160,7 @@ export function validateDoc(
         const headings = extractHeadings(content);
 
         for (const section of schema.sections) {
-            // When scale is null, skip scale-dependent section requirements
-            const isRequired = scale !== null ? section.required[scale] : false;
-            if (isRequired && !sectionPresent(section, headings)) {
+            if (isRequired(section.required) && !sectionPresent(section, headings)) {
                 const aliasList = section.aliases?.length ? `（或: ${section.aliases.join(', ')}）` : '';
                 errors.push({
                     type: 'missing_section',
@@ -185,9 +198,7 @@ export function validateDoc(
 
         if (parsed) {
             for (const fieldDef of schema.jsonFields) {
-                // When scale is null, skip scale-dependent field requirements
-                const isRequired = scale !== null ? fieldDef.required[scale] : false;
-                if (!isRequired) continue;
+                if (!isRequired(fieldDef.required)) continue;
 
                 const value = parsed[fieldDef.field];
 
@@ -236,27 +247,25 @@ export function validateDoc(
  */
 export interface StepSchemaEntry {
     step: { id: string; name: string; format: 'json' | 'md'; description: string };
-    schema: DocSchema | undefined;
+    schema: ArtifactSchema | undefined;
 }
 
 /**
- * Format a document schema into human-readable writing guidance.
+ * Format an artifact schema into human-readable writing guidance.
  *
  * Used by:
  * - role_dispatch: inject Document Requirements into the dispatch data package
- * - doc_schema tool: return guidance on demand for PM
+ * - artifact_schema tool: return guidance on demand for coordinator
  *
- * @param docId         Document ID (e.g. "prd", "tech-design")
- * @param docDef        Document definition from workflow.json
- * @param schema        Main document schema (may be undefined if no schema file exists)
- * @param scale         Current project scale (filters required sections/fields)
- * @param stepSchemas   Step schemas (only relevant when doc has steps and scale >= medium)
+ * @param docId         Artifact ID (e.g. "prd", "tech-design")
+ * @param docDef        Artifact definition from workflow.json
+ * @param schema        Main artifact schema (may be undefined if no schema file exists)
+ * @param stepSchemas   Step schemas (only relevant when artifact has steps)
  */
 export function formatSchemaGuidance(
     docId: string,
     docDef: { name: string; format?: 'md' | 'html' },
-    schema: DocSchema | undefined,
-    scale: ProjectScale,
+    schema: ArtifactSchema | undefined,
     stepSchemas?: StepSchemaEntry[],
 ): string {
     const lines: string[] = [];
@@ -280,7 +289,7 @@ export function formatSchemaGuidance(
 
     // Required sections (markdown docs)
     if (schema?.sections) {
-        const required = schema.sections.filter((s) => s.required[scale]);
+        const required = schema.sections.filter((s) => isRequired(s.required));
         if (required.length > 0) {
             lines.push('');
             lines.push('### 必需章节');
@@ -303,7 +312,7 @@ export function formatSchemaGuidance(
 
     // Required JSON fields (for top-level JSON docs without steps)
     if (schema?.jsonFields) {
-        const required = schema.jsonFields.filter((f) => f.required[scale]);
+        const required = schema.jsonFields.filter((f) => isRequired(f.required));
         if (required.length > 0) {
             lines.push('');
             lines.push('### 必需 JSON 字段');
@@ -316,10 +325,10 @@ export function formatSchemaGuidance(
         }
     }
 
-    // Step schemas (only for scale >= medium)
-    if (stepSchemas && stepSchemas.length > 0 && (scale === 'medium' || scale === 'large')) {
+    // Step schemas
+    if (stepSchemas && stepSchemas.length > 0) {
         lines.push('');
-        lines.push('### 分步写入（medium/large 规模）');
+        lines.push('### 分步写入');
         for (let i = 0; i < stepSchemas.length; i++) {
             const { step, schema: stepSchema } = stepSchemas[i];
             const formatLabel = step.format === 'json' ? 'JSON 格式' : 'Markdown 格式';
@@ -328,7 +337,7 @@ export function formatSchemaGuidance(
             if (stepSchema) {
                 // Step-level required JSON fields
                 if (stepSchema.jsonFields) {
-                    const reqFields = stepSchema.jsonFields.filter((f) => f.required[scale]);
+                    const reqFields = stepSchema.jsonFields.filter((f) => isRequired(f.required));
                     if (reqFields.length > 0) {
                         const fieldDescs = reqFields.map((f) => {
                             let d = f.field;
@@ -342,7 +351,7 @@ export function formatSchemaGuidance(
 
                 // Step-level required sections
                 if (stepSchema.sections) {
-                    const reqSections = stepSchema.sections.filter((s) => s.required[scale]);
+                    const reqSections = stepSchema.sections.filter((s) => isRequired(s.required));
                     if (reqSections.length > 0) {
                         const sectionNames = reqSections.map((s) => s.heading.replace(/^#+\s*/, ''));
                         lines.push(`   必需章节: ${sectionNames.join(', ')}`);

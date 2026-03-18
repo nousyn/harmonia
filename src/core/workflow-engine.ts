@@ -195,12 +195,8 @@ function activateTask(
 ): { state: WorkflowState; nextAction: NextAction } {
     state.activeNodeId = node.id;
 
-    const rolePrompt = context.getRolePrompt
-        ? context.getRolePrompt(node.role, node.id, gateResults)
-        : undefined;
-    const inputArtifacts = context.getInputArtifacts
-        ? context.getInputArtifacts(node.id)
-        : undefined;
+    const rolePrompt = context.getRolePrompt ? context.getRolePrompt(node.role, node.id, gateResults) : undefined;
+    const inputArtifacts = context.getInputArtifacts ? context.getInputArtifacts(node.id) : undefined;
 
     return {
         state,
@@ -711,11 +707,7 @@ function handleGoto(
  * Execute goto state reset: reset target node and all subsequent nodes to pending.
  * Increment retry count on the target node.
  */
-function executeGoto(
-    state: WorkflowState,
-    definition: WorkflowDefinition,
-    targetId: string,
-): WorkflowState {
+function executeGoto(state: WorkflowState, definition: WorkflowDefinition, targetId: string): WorkflowState {
     // Collect all node IDs that need to be reset:
     // the target node itself + all nodes that come after it in execution order
     const resetIds = collectSubsequentNodeIds(definition.root, targetId);
@@ -832,9 +824,7 @@ function collectAllNodeIds(node: WorkflowNode, ids: Set<string>): void {
  * All conditions must pass for the gate to pass (AND logic).
  */
 export function evaluateGate(gate: GateNode, gateCtx: GateContext): GateEvaluationResult {
-    const results: GateConditionResult[] = gate.conditions.map((condition) =>
-        evaluateCondition(condition, gateCtx),
-    );
+    const results: GateConditionResult[] = gate.conditions.map((condition) => evaluateCondition(condition, gateCtx));
 
     return {
         passed: results.every((r) => r.met),
@@ -868,7 +858,7 @@ function evaluateCondition(condition: GateCondition, ctx: GateContext): GateCond
  */
 function evaluateFieldCondition(
     actualValue: unknown,
-    operator: import('./types.js').FieldOperator,
+    operator: import('./types.js').ArtifactFieldOperator,
     expectedValue: unknown,
 ): boolean {
     switch (operator) {
@@ -877,17 +867,13 @@ function evaluateFieldCondition(
         case 'neq':
             return actualValue !== expectedValue;
         case 'gt':
-            return typeof actualValue === 'number' && typeof expectedValue === 'number'
-                && actualValue > expectedValue;
+            return typeof actualValue === 'number' && typeof expectedValue === 'number' && actualValue > expectedValue;
         case 'lt':
-            return typeof actualValue === 'number' && typeof expectedValue === 'number'
-                && actualValue < expectedValue;
+            return typeof actualValue === 'number' && typeof expectedValue === 'number' && actualValue < expectedValue;
         case 'gte':
-            return typeof actualValue === 'number' && typeof expectedValue === 'number'
-                && actualValue >= expectedValue;
+            return typeof actualValue === 'number' && typeof expectedValue === 'number' && actualValue >= expectedValue;
         case 'lte':
-            return typeof actualValue === 'number' && typeof expectedValue === 'number'
-                && actualValue <= expectedValue;
+            return typeof actualValue === 'number' && typeof expectedValue === 'number' && actualValue <= expectedValue;
         case 'contains':
             if (typeof actualValue === 'string' && typeof expectedValue === 'string') {
                 return actualValue.includes(expectedValue);
@@ -1031,11 +1017,7 @@ function handleDispatchRequest(
  * Used for query_status events — tells the coordinator what to do next
  * based on the current workflow state.
  */
-function computeStatusAction(
-    state: WorkflowState,
-    definition: WorkflowDefinition,
-    context: EngineContext,
-): NextAction {
+function computeStatusAction(state: WorkflowState, definition: WorkflowDefinition, context: EngineContext): NextAction {
     // Collect all node statuses for a summary
     const activeNodes: string[] = [];
     const pendingNodes: string[] = [];
@@ -1143,11 +1125,7 @@ function findParent(
 /**
  * Find a node by ID anywhere in the workflow tree (including floating nodes).
  */
-function findNode(
-    root: WorkflowNode,
-    targetId: string,
-    floatingNodes?: TaskNode[],
-): WorkflowNode | null {
+function findNode(root: WorkflowNode, targetId: string, floatingNodes?: TaskNode[]): WorkflowNode | null {
     // Check the tree
     const found = findNodeInTree(root, targetId);
     if (found) return found;

@@ -8,12 +8,12 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { getIterationDir } from './registry.js';
-import type { DocReviewState, ReviewStatus } from './types.js';
+import type { ReviewState, ReviewStatus } from './types.js';
 
 const REVIEWS_FILE = 'reviews.json';
 
 interface ReviewsData {
-    docs: Record<string, DocReviewState>;
+    docs: Record<string, ReviewState>;
 }
 
 function reviewsPath(projectName: string, iteration: number, contextDir?: string): string {
@@ -28,7 +28,7 @@ export async function readReviews(
     projectName: string,
     iteration: number,
     contextDir?: string,
-): Promise<Record<string, DocReviewState>> {
+): Promise<Record<string, ReviewState>> {
     try {
         const content = await readFile(reviewsPath(projectName, iteration, contextDir), 'utf-8');
         const data = JSON.parse(content) as ReviewsData;
@@ -44,7 +44,7 @@ export async function readReviews(
 async function writeReviews(
     projectName: string,
     iteration: number,
-    docs: Record<string, DocReviewState>,
+    docs: Record<string, ReviewState>,
     contextDir?: string,
 ): Promise<void> {
     const filePath = reviewsPath(projectName, iteration, contextDir);
@@ -61,10 +61,10 @@ export async function submitForReview(
     iteration: number,
     docId: string,
     contextDir?: string,
-): Promise<DocReviewState> {
+): Promise<ReviewState> {
     const reviews = await readReviews(projectName, iteration, contextDir);
-    const state: DocReviewState = {
-        docId,
+    const state: ReviewState = {
+        artifactId: docId,
         status: 'pending',
         submittedAt: new Date().toISOString(),
     };
@@ -83,7 +83,7 @@ export async function resolveReview(
     status: 'approved' | 'rejected',
     comment?: string,
     contextDir?: string,
-): Promise<DocReviewState> {
+): Promise<ReviewState> {
     const reviews = await readReviews(projectName, iteration, contextDir);
     const existing = reviews[docId];
 
@@ -113,7 +113,7 @@ export async function getDocReview(
     iteration: number,
     docId: string,
     contextDir?: string,
-): Promise<DocReviewState | null> {
+): Promise<ReviewState | null> {
     const reviews = await readReviews(projectName, iteration, contextDir);
     return reviews[docId] ?? null;
 }
@@ -125,7 +125,7 @@ export async function getPendingReviews(
     projectName: string,
     iteration: number,
     contextDir?: string,
-): Promise<DocReviewState[]> {
+): Promise<ReviewState[]> {
     const reviews = await readReviews(projectName, iteration, contextDir);
     return Object.values(reviews).filter((r) => r.status === 'pending');
 }

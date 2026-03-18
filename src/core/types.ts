@@ -1,28 +1,31 @@
 /**
  * Core type definitions for Harmonia.
  *
- * Architecture: Core provides generic collaboration primitives.
+ * Architecture: Core provides composable collaboration primitives.
  * Workflow plugins use these primitives to define specific processes.
  *
- * Key concepts:
- * - WorkflowNode: tree-structured workflow definition (task/sequence/parallel/gate)
- * - WorkflowState: runtime node states
- * - NextAction: unified return structure telling coordinator what to do next
- * - Artifact: generic output unit (replaces "doc")
- * - Plugin: workflow plugin interface
+ * This file defines:
+ * - Workflow node types (task, sequence, parallel, gate)
+ * - Workflow state (node-based, not phase-based)
+ * - Engine types (nextAction, events, gate evaluation)
+ * - Artifact system (renamed from doc)
+ * - Plugin interface
+ * - Session & Dispatch tracking (unchanged)
+ * - Override configuration (simplified to 2-layer)
+ * - Sequential step tracking (unchanged)
+ * - Issue tracking (unchanged)
+ * - Review state (unchanged)
  */
-
-// ─── Re-exports ───
 
 /** Agent type for spawning team member agents (re-exported from @s_s/agent-kit) */
 import type { AgentType } from '@s_s/agent-kit';
 export type { AgentType };
 
-// ─── Workflow Node Types (workflow.json tree structure) ───
+// ─── Workflow Node Types ───
 
 export type NodeType = 'task' | 'sequence' | 'parallel' | 'gate';
 
-/** Hook configuration for task nodes (beforeDispatch / afterComplete) */
+/** Hook configuration for beforeDispatch / afterComplete */
 export interface NodeHook {
     /** Extra prompt text to inject */
     inject?: string[];
@@ -32,9 +35,9 @@ export interface NodeHook {
 
 /** Failure handler for task and parallel nodes */
 export interface FailureHandler {
-    /** Node ID to jump back to */
+    /** Target node ID to jump back to (must satisfy ancestor-chain constraint) */
     goto: string;
-    /** Max retry attempts (undefined = infinite) */
+    /** Max retry count; omit for unlimited */
     maxRetries?: number;
     /** Floating node ID to jump to when retries exhausted */
     onExhausted?: string;
@@ -42,9 +45,9 @@ export interface FailureHandler {
 
 /** Goto target for gate fail paths */
 export interface GotoTarget {
-    /** Node ID to jump back to */
+    /** Target node ID to jump back to */
     goto: string;
-    /** Max retry attempts (undefined = infinite) */
+    /** Max retry count; omit for unlimited */
     maxRetries?: number;
     /** Floating node ID to jump to when retries exhausted */
     onExhausted?: string;
@@ -84,38 +87,34 @@ export interface ParallelNode {
     onFailed?: FailureHandler;
 }
 
-// ─── Gate Conditions ───
+// ─── Gate Types ───
 
-/** Condition types for gate evaluation */
-export type GateConditionType = 'artifact_exists' | 'artifact_approved' | 'artifact_field';
-
-/** Operators for artifact_field conditions */
-export type FieldOperator = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'in';
-
-/** Base gate condition */
-interface GateConditionBase {
-    type: GateConditionType;
+/** Gate condition types */
+export interface ArtifactExistsCondition {
+    type: 'artifact_exists';
     /** Artifact ID to check */
     artifact: string;
 }
 
-/** Check if an artifact has been written */
-export interface ArtifactExistsCondition extends GateConditionBase {
-    type: 'artifact_exists';
-}
-
-/** Check if an artifact has been approved */
-export interface ArtifactApprovedCondition extends GateConditionBase {
+export interface ArtifactApprovedCondition {
     type: 'artifact_approved';
+    /** Artifact ID to check */
+    artifact: string;
 }
 
-/** Check a field value within an artifact */
-export interface ArtifactFieldCondition extends GateConditionBase {
+export type ArtifactFieldOperator = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'in';
+
+/** @deprecated Use ArtifactFieldOperator */
+export type FieldOperator = ArtifactFieldOperator;
+
+export interface ArtifactFieldCondition {
     type: 'artifact_field';
-    /** Field path within the artifact (top-level key) */
+    /** Artifact ID to check */
+    artifact: string;
+    /** Field path within the artifact */
     field: string;
     /** Comparison operator */
-    operator: FieldOperator;
+    operator: ArtifactFieldOperator;
     /** Expected value */
     value: unknown;
 }
@@ -126,11 +125,11 @@ export type GateCondition = ArtifactExistsCondition | ArtifactApprovedCondition 
 export interface GateNode {
     type: 'gate';
     id: string;
-    /** Conditions to evaluate (all must pass) */
+    /** All conditions must be met for pass */
     conditions: GateCondition[];
-    /** Node to activate when all conditions pass */
+    /** Path when all conditions pass (inline node) */
     pass: WorkflowNode;
-    /** Node to activate or goto target when conditions fail */
+    /** Path when conditions fail — inline node or goto */
     fail: WorkflowNode | GotoTarget;
 }
 
@@ -139,172 +138,36 @@ export type WorkflowNode = TaskNode | SequenceNode | ParallelNode | GateNode;
 
 // ─── Workflow Definition (workflow.json root) ───
 
+/** Complete workflow definition loaded from workflow.json */
 export interface WorkflowDefinition {
-    /** Workflow name, e.g. "dev" */
     name: string;
-    /** Human-readable description */
     description: string;
-    /** Semver version */
     version?: string;
-    /** Author */
+    /** Author of this workflow */
     author?: string;
-    /** Coordinator role ID — the role that talks to users and drives the workflow */
+    /** Coordinator role ID — every workflow must have one */
     coordinator: string;
     /** Root node of the workflow tree */
     root: WorkflowNode;
-    /** Floating nodes — independent nodes referenced by onExhausted/onFailed */
+    /** Standalone nodes referenced by onExhausted/onFailed */
     floatingNodes?: TaskNode[];
 }
 
-// ─── Gate Evaluation Result ───
+// ─── Artifact System (renamed from Doc) ───
 
-export interface GateConditionResult {
-    /** The condition that was evaluated */
-    condition: GateCondition;
-    /** Whether the condition was met */
-    met: boolean;
-    /** Actual value found (for artifact_field) */
-    actualValue?: unknown;
-}
-
-export interface GateEvaluationResult {
-    /** Whether all conditions passed */
-    passed: boolean;
-    /** Per-condition evaluation details */
-    conditions: GateConditionResult[];
-}
-
-// ─── Workflow State (runtime, stored in state.json) ───
-
-export type NodeStatus = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled' | 'skipped';
-export type ContextType = 'iteration' | 'patch';
-
-/** Runtime state of a single node */
-export interface NodeState {
-    /** Node ID (matches WorkflowNode.id) */
-    id: string;
-    /** Current status */
-    status: NodeStatus;
-    /** Number of times this node has been retried via goto (0 = first execution) */
-    retryCount: number;
-    /** When this node was first activated */
-    startedAt?: string;
-    /** When this node completed or failed */
-    completedAt?: string;
-    /** Error message if failed */
-    error?: string;
-}
-
-/** Complete workflow state persisted to state.json */
-export interface WorkflowState {
-    /** Project name (unique identifier) */
-    projectName: string;
-    /** Absolute path to the project source directory */
-    projectDir: string;
-    /** Workflow name, e.g. "dev" */
-    workflow: string;
-    /** Context type: "iteration" or "patch" */
-    type: ContextType;
-    /** Iteration or patch number */
-    iteration: number;
-    /** Currently active node ID (null when workflow is completed or not started) */
-    activeNodeId: string | null;
-    /** State of all nodes, keyed by node ID */
-    nodes: Record<string, NodeState>;
-    /** Timestamp of state creation */
-    createdAt: string;
-    /** Last updated timestamp */
-    updatedAt: string;
-}
-
-// ─── NextAction (unified return from Core tools) ───
-
-export type NextActionType =
-    | 'dispatch'
-    | 'write_artifact'
-    | 'approve_artifact'
-    | 'wait'
-    | 'completed'
-    | 'evaluate_gate';
-
-export interface NextAction {
-    /** What the coordinator should do next */
-    type: NextActionType;
-    /** Relevant node ID */
-    nodeId?: string;
-    /** Role to dispatch to (when type='dispatch') */
-    role?: string;
-    /** Human-readable instructions for the coordinator */
-    instructions: string;
-    /** Fully assembled prompt for the team member (role prompt + inject + context) */
-    rolePrompt?: string;
-    /** Artifact IDs the team member should reference */
-    inputArtifacts?: string[];
-    /** Gate evaluation results (when returning from a gate fail → goto) */
-    gateResults?: GateEvaluationResult;
-}
-
-// ─── Workflow Events (input to engine) ───
-
-export type WorkflowEvent =
-    | { type: 'node_completed'; nodeId: string; result?: unknown }
-    | { type: 'node_failed'; nodeId: string; error: string }
-    | { type: 'artifact_written'; artifactId: string }
-    | { type: 'artifact_approved'; artifactId: string }
-    | { type: 'dispatch_requested'; nodeId: string }
-    | { type: 'query_status' };
-
-// ─── Action System (node hooks) ───
-
-export interface ActionContext {
-    /** Current node ID */
-    nodeId: string;
-    /** Current node's role */
-    role: string;
-    /** Current retry count (0 = first execution) */
-    retryCount: number;
-    /** Project name */
-    projectName: string;
-    /** Plugin custom configuration (opaque to Core) */
-    pluginConfig: unknown;
-    /** Gate evaluation result (when node was reached via goto from a gate fail) */
-    gateResults?: GateEvaluationResult;
-    /** Current workflow state snapshot */
-    workflowState: WorkflowState;
-    /** Artifact access API */
-    artifacts: {
-        read: (artifactId: string) => Promise<string>;
-        list: () => Promise<string[]>;
-    };
-    /** Task result (only available in afterComplete hooks) */
-    taskResult?: unknown;
-}
-
-export interface ActionResult {
-    /** Dynamic prompt text to inject into rolePrompt or coordinator instructions */
-    inject?: string[];
-    /** Additional data to pass to subsequent processing */
-    data?: unknown;
-}
-
-/** Action handler function signature */
-export type ActionHandler = (context: ActionContext) => Promise<ActionResult>;
-
-// ─── Artifact System (replaces "doc") ───
-
-/** Step definition within an artifact (for sequential writing mode) */
+/** Step definition within an artifact (for sequential mode) */
 export interface ArtifactStepDefinition {
     /** Step ID, e.g. "requirements", "draft", "final" */
     id: string;
     /** Human-readable name */
     name: string;
-    /** Output format for this step's artifact */
+    /** Output format for this step */
     format: 'json' | 'md';
     /** Description shown to agent */
     description: string;
 }
 
-/** Artifact definition (declared in workflow plugin) */
+/** Artifact definition — metadata for an artifact type */
 export interface ArtifactDefinition {
     /** Human-readable name */
     name: string;
@@ -348,11 +211,11 @@ export interface ArtifactSchema {
     sections?: ArtifactSchemaSection[];
     /** Required HTML tags for html-format artifacts */
     htmlTags?: string[];
-    /** Required top-level JSON fields (for JSON step artifacts) */
+    /** Required top-level JSON fields */
     jsonFields?: ArtifactSchemaJsonField[];
     /** Minimum content length in characters */
     minLength?: number;
-    /** Human-readable guidance for agents — describes content scope and boundaries */
+    /** Human-readable guidance for agents */
     guidance?: string;
 }
 
@@ -361,50 +224,231 @@ export interface ArtifactSchema {
 export interface RoleCapability {
     /** Unique ID for this capability */
     id: string;
-    /** Human-readable description of what this capability does */
+    /** Human-readable description */
     description: string;
     /** Associated artifact ID — if set, this capability produces this artifact */
     artifact?: string;
 }
 
 export interface RoleFrontmatter {
-    /** Model level: "low", "medium", "high" */
     model: string;
-    /** Session persistence: "none", "persistent", "optional" */
     session: 'none' | 'persistent' | 'optional';
-    /** Whether multiple instances can run in parallel */
     parallel: boolean;
     /** Capabilities this role provides (used by override system) */
     capabilities?: RoleCapability[];
 }
 
 export interface RoleDefinition {
-    /** Role ID (filename without extension) */
     id: string;
-    /** Parsed frontmatter */
     frontmatter: RoleFrontmatter;
-    /** Role prompt (markdown body) */
     prompt: string;
+}
+
+// ─── Workflow State (runtime, stored in state.json) ───
+
+export type NodeStatus = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled' | 'skipped';
+export type ContextType = 'iteration' | 'patch';
+
+/** Runtime state of a single node */
+export interface NodeState {
+    /** Node ID (matches definition) */
+    id: string;
+    /** Current status */
+    status: NodeStatus;
+    /** Number of times this node has been retried (0 = first execution) */
+    retryCount: number;
+    /** When this node became active */
+    startedAt?: string;
+    /** When this node completed (or failed) */
+    completedAt?: string;
+    /** Error message if failed */
+    error?: string;
+}
+
+/** Complete workflow state (persisted in state.json) */
+export interface WorkflowState {
+    /** Project name (unique identifier) */
+    projectName: string;
+    /** Absolute path to the project source directory */
+    projectDir: string;
+    /** Workflow plugin name, e.g. "dev" */
+    workflow: string;
+    /** Context type: iteration or patch */
+    type: ContextType;
+    /** Iteration or patch number */
+    iteration: number;
+    /** Currently active node ID (null when workflow is completed or not started) */
+    activeNodeId: string | null;
+    /** State of every node, keyed by node ID */
+    nodes: Record<string, NodeState>;
+    /** Timestamp of state initialization */
+    createdAt: string;
+    /** Last updated timestamp */
+    updatedAt: string;
+}
+
+// ─── Engine Types (nextAction, events, gate evaluation) ───
+
+/** Per-condition evaluation detail */
+export interface GateConditionResult {
+    /** The condition that was evaluated */
+    condition: GateCondition;
+    /** Whether the condition was met */
+    met: boolean;
+    /** Actual value found (for artifact_field conditions) */
+    actualValue?: unknown;
+}
+
+/** Gate evaluation result */
+export interface GateEvaluationResult {
+    /** Whether all conditions passed */
+    passed: boolean;
+    /** Per-condition evaluation details */
+    conditions: GateConditionResult[];
+}
+
+/** nextAction type — tells the coordinator what to do next */
+export type NextActionType =
+    | 'dispatch'
+    | 'write_artifact'
+    | 'approve_artifact'
+    | 'wait'
+    | 'completed'
+    | 'evaluate_gate'
+    | 'none';
+
+/** Unified nextAction return structure */
+export interface NextAction {
+    /** What the coordinator should do */
+    type: NextActionType;
+    /** Target node ID (if applicable) */
+    nodeId?: string;
+    /** Role to dispatch (if type is 'dispatch') */
+    role?: string;
+    /** Human-readable instructions for the coordinator */
+    instructions: string;
+    /** Fully assembled prompt for the team member (if dispatching) */
+    rolePrompt?: string;
+    /** Artifact IDs the team member should reference */
+    inputArtifacts?: string[];
+    /** Gate evaluation results (if coming from a gate fail/goto) */
+    gateResults?: GateEvaluationResult;
+}
+
+/** Events that trigger engine state transitions */
+export type WorkflowEvent =
+    | { type: 'node_completed'; nodeId: string; result?: unknown }
+    | { type: 'node_failed'; nodeId: string; error: string }
+    | { type: 'artifact_written'; artifactId: string }
+    | { type: 'artifact_approved'; artifactId: string }
+    | { type: 'dispatch_requested'; nodeId: string }
+    | { type: 'query_status' };
+
+// ─── Action System (node hooks) ───
+
+/** Context passed to action handlers */
+export interface ActionContext {
+    /** Current node ID */
+    nodeId: string;
+    /** Current node's role */
+    role: string;
+    /** Current retry count (0 = first execution) */
+    retryCount: number;
+    /** Project name */
+    projectName: string;
+    /** Plugin-specific configuration (opaque to Core) */
+    pluginConfig: unknown;
+    /** Gate evaluation results (if arriving via goto from gate fail) */
+    gateResults?: GateEvaluationResult;
+    /** Current workflow state snapshot */
+    workflowState: WorkflowState;
+    /** Artifact access API */
+    artifacts: {
+        read: (artifactId: string) => Promise<string>;
+        list: () => Promise<string[]>;
+    };
+    /** Task completion result (only in afterComplete) */
+    taskResult?: unknown;
+}
+
+/** Return value from action handlers */
+export interface ActionResult {
+    /** Dynamic prompt text to inject */
+    inject?: string[];
+    /** Additional data to pass downstream */
+    data?: unknown;
+}
+
+/** Action handler function signature */
+export type ActionHandler = (context: ActionContext) => Promise<ActionResult>;
+
+// ─── Plugin Interface ───
+
+/** Hook creator function signature */
+export type HookCreator = (agentType: AgentType, context: HookCreatorContext) => unknown;
+
+/** Context passed to plugin's createHooks function */
+export interface HookCreatorContext {
+    /** defineHooks function from agent-kit */
+    defineHooks: unknown;
+    /** Harmonia data directory */
+    dataDir: string;
+    /** Project name */
+    projectName: string;
+}
+
+/** Complete loaded workflow plugin */
+export interface WorkflowPlugin {
+    /** Plugin name (matches workflow name) */
+    name: string;
+    /** Workflow tree definition */
+    definition: WorkflowDefinition;
+    /** Role definitions keyed by role ID */
+    roles: Record<string, RoleDefinition>;
+    /** Artifact schemas keyed by artifact ID */
+    artifactSchemas: Record<string, ArtifactSchema>;
+    /** Artifact definitions keyed by artifact ID */
+    artifactDefinitions: Record<string, ArtifactDefinition>;
+    /** Registered actions (from tools.ts) */
+    actions?: Record<string, ActionHandler>;
+    /** Hook creator (from hooks.ts) */
+    hooks?: HookCreator;
+    /** Plugin-specific configuration (from config.json) */
+    config?: unknown;
+    /** Filesystem path to the plugin directory */
+    pluginDir: string;
+}
+
+/** Plugin entry in config.json */
+export interface PluginEntry {
+    /** Workflow name */
+    name?: string;
+    /** Filesystem path to the plugin directory */
+    path: string;
+    /** Plugin-specific configuration */
+    config?: unknown;
+}
+
+/** Global config.json structure */
+export interface GlobalConfig {
+    /** Registered workflow plugins */
+    workflows: Record<string, PluginEntry>;
 }
 
 // ─── Review State (<data_dir>/<project>/reviews.json) ───
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
 
-export interface ArtifactReviewState {
-    /** Artifact ID */
+export interface ReviewState {
+    /** Artifact ID (renamed from docId) */
     artifactId: string;
-    /** Current review status */
     status: ReviewStatus;
-    /** When submitted for review */
     submittedAt: string;
-    /** When reviewed */
     reviewedAt?: string;
-    /** Review comment */
     comment?: string;
 }
 
-// ─── Session & Dispatch Tracking ───
+// ─── Session & Dispatch Tracking (unchanged) ───
 
 export type SessionStatus = 'active' | 'idle' | 'closed' | 'lost';
 
@@ -419,7 +463,7 @@ export interface SessionRecord {
     agentType?: AgentType;
     /** Current session status */
     status: SessionStatus;
-    /** Coordinator-defined label, e.g. "dev-auth-module" */
+    /** Coordinator-defined label */
     label?: string;
     /** When this session was created */
     createdAt: string;
@@ -434,16 +478,16 @@ export interface DispatchRecord {
     id: string;
     /** Role dispatched */
     role: string;
-    /** Associated Harmonia session ID */
+    /** Associated session ID (set when agent is launched) */
     sessionId?: string;
     /** Task description for the dispatched role */
     taskBrief: string;
     /** Current dispatch status */
     status: DispatchStatus;
+    /** Node ID this dispatch is for */
+    nodeId?: string;
     /** Expected output artifact IDs from this dispatch */
     expectedOutputs: string[];
-    /** Associated workflow node ID */
-    nodeId?: string;
     /** When this dispatch was created */
     createdAt: string;
     /** Last updated timestamp */
@@ -454,7 +498,7 @@ export interface DispatchRecord {
     note?: string;
 }
 
-// ─── Override Configuration ───
+// ─── Override Configuration (simplified to 2-layer) ───
 
 export type OverrideToolType = 'skill' | 'mcp';
 
@@ -465,7 +509,7 @@ export interface CapabilityOverride {
     tool: string;
     /** MCP server name (required when type is "mcp") */
     server?: string;
-    /** Static parameters to always pass when calling the tool */
+    /** Static parameters to always pass */
     params?: Record<string, unknown>;
     /** Additional notes for prompt generation */
     notes?: string;
@@ -475,20 +519,15 @@ export interface CapabilityOverride {
 export interface RoleOverride {
     /** Agent type to use for this role */
     agent?: AgentType;
-    /** Model to use for this role (overrides the role's default model level) */
+    /** Model to use (overrides role's default) */
     model?: string;
-    /** Capability overrides for this role */
+    /** Capability overrides */
     capabilities?: Record<string, CapabilityOverride>;
 }
 
 /**
- * Override configuration — two-layer merge: project-level > workflow defaults.
- *
- * review: boolean | Record<artifactId, boolean>
- *   - boolean: global toggle for all artifacts
- *   - Record: per-artifact toggle
- *
- * roles: Record<roleId, RoleOverride>
+ * Override configuration (project-level only, no global layer).
+ * Merges: project-level > workflow defaults.
  */
 export interface OverrideConfig {
     /** Review overrides — global toggle or per-artifact */
@@ -497,7 +536,7 @@ export interface OverrideConfig {
     roles?: Record<string, RoleOverride>;
 }
 
-// ─── Sequential Step State (<data_dir>/<project>/steps.json) ───
+// ─── Sequential Step State (unchanged, renamed terminology) ───
 
 /** Step completion record */
 export interface ArtifactStepRecord {
@@ -521,7 +560,7 @@ export interface ArtifactStepState {
     finalizedAt?: string;
 }
 
-// ─── Issue Tracking (<data_dir>/<project>/issues.json) ───
+// ─── Issue Tracking (unchanged) ───
 
 export type IssueStatus = 'open' | 'closed';
 export type IssueSource = 'test' | 'user-feedback';
@@ -550,69 +589,6 @@ export interface Issue {
     createdAt: string;
     /** When this issue was closed */
     closedAt?: string;
-}
-
-// ─── Plugin Interface ───
-
-/** Hook creator function — provided by workflow plugin */
-export type HookCreator = (agentType: AgentType, context: HookContext) => unknown;
-
-/** Context passed to plugin's createHooks function */
-export interface HookContext {
-    /** defineHooks function from agent-kit */
-    defineHooks: unknown;
-    /** Harmonia data directory */
-    dataDir: string;
-    /** Current project name */
-    projectName: string;
-}
-
-/** Plugin registration context (passed to registerActions) */
-export interface PluginContext {
-    /** Plugin custom configuration (from config.json) */
-    pluginConfig: unknown;
-    /** Harmonia data directory */
-    dataDir: string;
-    /** Current project name */
-    projectName: string;
-}
-
-/** Loaded workflow plugin — everything Core needs to run a workflow */
-export interface WorkflowPlugin {
-    /** Workflow name */
-    name: string;
-    /** Parsed workflow definition (node tree) */
-    definition: WorkflowDefinition;
-    /** Role definitions (keyed by role ID) */
-    roles: Record<string, RoleDefinition>;
-    /** Artifact schemas (keyed by artifact ID) */
-    artifactSchemas: Record<string, ArtifactSchema>;
-    /** Artifact definitions (keyed by artifact ID) */
-    artifactDefinitions: Record<string, ArtifactDefinition>;
-    /** Registered action handlers (keyed by action name) */
-    actions: Record<string, ActionHandler>;
-    /** Hook creator function (if plugin provides hooks) */
-    hookCreator?: HookCreator;
-    /** Plugin custom configuration */
-    config?: unknown;
-    /** Filesystem path to the plugin directory */
-    pluginDir: string;
-}
-
-/** Plugin entry in config.json */
-export interface PluginEntry {
-    /** Workflow name */
-    name: string;
-    /** Filesystem path to the plugin directory */
-    path: string;
-    /** Plugin custom configuration */
-    config?: unknown;
-}
-
-/** Global config.json structure */
-export interface GlobalConfig {
-    /** Registered workflow plugins */
-    workflows: Record<string, { path: string; config?: unknown }>;
 }
 
 // ─── Validation ───

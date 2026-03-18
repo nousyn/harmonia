@@ -88,9 +88,7 @@ function parseRoleFile(id: string, content: string): RoleDefinition {
     const parsed = YAML.parse(yamlBlock) as Record<string, unknown> | null;
     const fm = parsed ?? {};
 
-    const capabilities = Array.isArray(fm.capabilities)
-        ? (fm.capabilities as RoleCapability[])
-        : undefined;
+    const capabilities = Array.isArray(fm.capabilities) ? (fm.capabilities as RoleCapability[]) : undefined;
 
     const frontmatter: RoleFrontmatter = {
         model: (fm.model as string) ?? 'medium',
@@ -191,18 +189,12 @@ async function loadSchemas(pluginPath: string): Promise<Record<string, ArtifactS
  * Try to load actions from tools.ts (optional).
  * The tools.ts module should export a registerActions function.
  */
-async function loadActions(
-    pluginPath: string,
-): Promise<Record<string, ActionHandler>> {
+async function loadActions(pluginPath: string): Promise<Record<string, ActionHandler>> {
     const toolsPath = join(pluginPath, 'tools.ts');
     const toolsJsPath = join(pluginPath, 'tools.js');
 
     // Try .js first (compiled), then .ts
-    const actualPath = (await fileExists(toolsJsPath))
-        ? toolsJsPath
-        : (await fileExists(toolsPath))
-            ? toolsPath
-            : null;
+    const actualPath = (await fileExists(toolsJsPath)) ? toolsJsPath : (await fileExists(toolsPath)) ? toolsPath : null;
 
     if (!actualPath) {
         return {};
@@ -234,11 +226,7 @@ async function loadHookCreator(pluginPath: string): Promise<HookCreator | undefi
     const hooksPath = join(pluginPath, 'hooks.ts');
     const hooksJsPath = join(pluginPath, 'hooks.js');
 
-    const actualPath = (await fileExists(hooksJsPath))
-        ? hooksJsPath
-        : (await fileExists(hooksPath))
-            ? hooksPath
-            : null;
+    const actualPath = (await fileExists(hooksJsPath)) ? hooksJsPath : (await fileExists(hooksPath)) ? hooksPath : null;
 
     if (!actualPath) {
         return undefined;
@@ -301,7 +289,7 @@ export async function loadPlugin(
     const actions = await loadActions(pluginPath);
 
     // Step 6: Load hook creator (optional)
-    const hookCreator = await loadHookCreator(pluginPath);
+    const hooks = await loadHookCreator(pluginPath);
 
     return {
         name: definition.name,
@@ -310,7 +298,7 @@ export async function loadPlugin(
         artifactSchemas,
         artifactDefinitions,
         actions,
-        hookCreator,
+        hooks,
         config,
         pluginDir: pluginPath,
     };
