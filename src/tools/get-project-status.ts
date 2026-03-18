@@ -1,8 +1,10 @@
 /**
  * MCP Tool: project_status
- * Read the current project status with rich context for PM decision-making.
- * Includes phase progress, documents, pending reviews, dispatch records,
- * active sessions, and intelligent next-step suggestions.
+ * Read the current project status with rich context for coordinator decision-making.
+ *
+ * Node-based architecture: displays workflow tree with node states instead of phases.
+ * Includes artifacts, pending reviews, dispatch records, active sessions,
+ * workflow engine nextAction, and intelligent next-step suggestions.
  *
  * When called without project_name, returns a summary list of all projects.
  */
@@ -10,157 +12,127 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readState } from '../core/state.js';
-import { loadWorkflow } from '../core/workflow.js';
 import { listDocs } from '../core/docs.js';
 import { readReviews } from '../core/reviews.js';
-import { getMergedOverrides } from '../core/overrides.js';
 import { readDispatches, readSessions } from '../core/dispatch.js';
 import { readSteps, getCompletedStepIds } from '../core/steps.js';
 import { listProjects, getProject, resolveContextDir } from '../core/registry.js';
 import { readIssues } from '../core/issues.js';
+import { processWorkflowEvent, loadWorkflowForContext, formatNextAction } from './engine-helpers.js';
+import { resolveActive, isError } from './utils.js';
 import type {
+    ArtifactDefinition,
+    ArtifactStepState,
     DispatchRecord,
-    DocDefinition,
-    DocReviewState,
-    DocStepState,
-    LoadedWorkflow,
-    PhaseDefinition,
-    ProjectScale,
-    ProjectState,
+    NodeState,
+    ReviewState,
     SessionRecord,
+    WorkflowNode,
+    WorkflowPlugin,
+    WorkflowState,
 } from '../core/types.js';
 
-/**
- * Derive next-step suggestions based on current project state, including dispatch awareness.
- */
-function deriveNextSteps(
-    state: ProjectState,
-    wf: LoadedWorkflow,
-    existingDocs: string[],
-    pendingReviews: DocReviewState[],
-    dispatches: DispatchRecord[],
-    sessions: SessionRecord[],
-    openIssueCount: number,
-): string[] {
-    const suggestions: string[] = [];
-    const currentPhaseDef = wf.definition.phases.find((p) => p.id === state.currentPhase);
+// ─── Node Tree Formatting ───
 
-    if (!currentPhaseDef) return ['Unknown phase — check project state.'];
-
-    // If scale is not set, that's the most important next step
-    if (state.scale === null) {
-        // Check if PRD exists and is approved
-        const hasPrdApproved = pendingReviews.length === 0; // simplified check
-        suggestions.push(`项目规模 (scale) 尚未设定。请先完成 PRD 编写和审批，然后调用 project_set_scale 设定规模。`);
+/** Status icon for node display */
+function statusIcon(status: string): string {
+    switch (status) {
+        case 'completed':
+            return '✓';
+        case 'active':
+            return '●';
+        case 'failed':
+            return '✗';
+        case 'cancelled':
+            return '—';
+        case 'skipped':
+            return '⊘';
+        case 'pending':
+        default:
+            return '○';
     }
+}
 
-    // If there are pending reviews, those block progress
-    if (pendingReviews.length > 0) {
-        const docNames = pendingReviews.map((r) => r.docId).join(', ');
-        suggestions.push(
-            `Review pending documents: ${docNames}. Present them to the user and call doc_approve after user feedback.`,
-        );
-    }
-
-    // Check dispatch states — find dispatches that need attention
-    const activeDispatches = dispatches.filter((d) => d.status === 'dispatched' || d.status === 'running');
-    const dispatchedNotRunning = dispatches.filter((d) => d.status === 'dispatched');
-    const runningDispatches = dispatches.filter((d) => d.status === 'running');
-    const failedDispatches = dispatches.filter((d) => d.status === 'failed');
-
-    if (dispatchedNotRunning.length > 0) {
-        for (const d of dispatchedNotRunning) {
-            suggestions.push(
-                `Dispatch ${d.id} (${d.role}) is created but not yet launched. Launch the agent and call dispatch_report to register it.`,
-            );
-        }
-    }
-
-    if (runningDispatches.length > 0) {
-        for (const d of runningDispatches) {
-            const session = sessions.find((s) => s.id === d.sessionId);
-            const agentInfo = session?.agentSessionId ? ` (agent session: ${session.agentSessionId})` : '';
-            suggestions.push(
-                `Dispatch ${d.id} (${d.role}) is running${agentInfo}. Check if the agent has finished, then call dispatch_report with status="completed" or "failed".`,
-            );
-        }
-    }
-
-    if (failedDispatches.length > 0) {
-        for (const d of failedDispatches) {
-            const reason = d.note ? ` Reason: ${d.note}` : '';
-            suggestions.push(
-                `Dispatch ${d.id} (${d.role}) failed.${reason} Consider re-dispatching with role_dispatch.`,
-            );
-        }
-    }
-
-    // Check which phase outputs are still missing (only when scale is set)
-    if (state.scale !== null) {
-        const scale = state.scale;
-        const missingOutputs = currentPhaseDef.outputs.filter((o) => {
-            const docDef = wf.definition.docs[o];
-            if (docDef?.external) return false;
-            const scaleVal = docDef?.scale[scale];
-            if (scaleVal === 'skip' || scaleVal === 'optional') return false;
-            return !existingDocs.includes(o);
-        });
-
-        if (missingOutputs.length > 0) {
-            const alreadyDispatched = activeDispatches.length > 0;
-            const nonPmRoles = currentPhaseDef.roles.filter((r) => r !== 'pm');
-
-            if (nonPmRoles.length > 0 && !alreadyDispatched) {
-                suggestions.push(
-                    `Dispatch ${nonPmRoles.join(', ')} to produce: ${missingOutputs.join(', ')}. Use role_dispatch to prepare task data.`,
-                );
-            } else if (nonPmRoles.length === 0) {
-                suggestions.push(`Produce remaining documents: ${missingOutputs.join(', ')}. Use doc_write for each.`);
-            }
-        } else if (pendingReviews.length === 0 && activeDispatches.length === 0) {
-            suggestions.push(
-                `All outputs for "${currentPhaseDef.name}" are complete. Advance with: phase_update(project_name, "${state.currentPhase}", "completed")`,
-            );
-        }
-    }
-
-    // Check for lost sessions
-    const lostSessions = sessions.filter((s) => s.status === 'lost');
-    if (lostSessions.length > 0) {
-        for (const s of lostSessions) {
-            suggestions.push(
-                `Session ${s.id} (${s.role}) is marked as lost. The agent may have crashed. Consider re-dispatching this role.`,
-            );
-        }
-    }
-
-    if (suggestions.length === 0) {
-        // Check if ALL phases are completed → recommend iteration_start for next iteration
-        const allPhasesCompleted = state.phases.every((p) => p.status === 'completed' || p.status === 'skipped');
-        if (allPhasesCompleted) {
-            suggestions.push(
-                `本次${state.type === 'patch' ? '补丁' : '迭代'}所有阶段已完成。如需开始新一轮迭代，请调用 iteration_start(project_name="${state.projectName}")。`,
-            );
-        } else {
-            suggestions.push(`Continue working on the "${currentPhaseDef.name}" phase.`);
-        }
-    }
-
-    // Always mention open issues if there are any
-    if (openIssueCount > 0) {
-        suggestions.push(
-            `有 ${openIssueCount} 个未关闭的 issue。可调用 patch_start 开始补丁修复，或 issue_list 查看详情。`,
-        );
-    }
-
-    return suggestions;
+/** Get dispatch info for a specific node (brief inline summary) */
+function getNodeDispatchInfo(nodeId: string, dispatches: DispatchRecord[]): string {
+    const nodeDispatches = dispatches.filter((d) => d.nodeId === nodeId);
+    if (nodeDispatches.length === 0) return '';
+    const active = nodeDispatches.find((d) => d.status === 'running' || d.status === 'dispatched');
+    if (active) return ` [${active.id}, ${active.status}]`;
+    const latest = nodeDispatches[nodeDispatches.length - 1];
+    return ` [${latest.id}, ${latest.status}]`;
 }
 
 /**
- * Format a dispatch record for display.
+ * Format the workflow tree recursively for display.
+ * Produces indented lines with status icons.
  */
+function formatNodeTree(
+    node: WorkflowNode,
+    states: Record<string, NodeState>,
+    dispatches: DispatchRecord[],
+    indent: number = 0,
+): string[] {
+    const lines: string[] = [];
+    const prefix = '  '.repeat(indent);
+    const nodeState = states[node.id];
+    const status = nodeState?.status ?? 'pending';
+    const icon = statusIcon(status);
+    const retryInfo = nodeState?.retryCount ? ` (retry ${nodeState.retryCount})` : '';
+
+    switch (node.type) {
+        case 'task': {
+            const dispatchInfo = getNodeDispatchInfo(node.id, dispatches);
+            lines.push(`${prefix}${icon} ${node.id} (task, ${node.role}) — ${status}${retryInfo}${dispatchInfo}`);
+            break;
+        }
+        case 'sequence': {
+            lines.push(`${prefix}${icon} ${node.id} (sequence) — ${status}`);
+            for (const child of node.children) {
+                lines.push(...formatNodeTree(child, states, dispatches, indent + 1));
+            }
+            break;
+        }
+        case 'parallel': {
+            lines.push(`${prefix}${icon} ${node.id} (parallel, ${node.failStrategy}) — ${status}`);
+            for (const child of node.children) {
+                lines.push(...formatNodeTree(child, states, dispatches, indent + 1));
+            }
+            break;
+        }
+        case 'gate': {
+            const condSummary = node.conditions
+                .map((c) => {
+                    if (c.type === 'artifact_exists') return `${c.artifact}?`;
+                    if (c.type === 'artifact_approved') return `${c.artifact}✓?`;
+                    return `${c.artifact}.${c.field}`;
+                })
+                .join(', ');
+            lines.push(`${prefix}${icon} ${node.id} (gate: ${condSummary}) — ${status}`);
+            // Show pass path
+            lines.push(...formatNodeTree(node.pass, states, dispatches, indent + 1));
+            // Show fail path if it's an inline node (not goto)
+            if ('type' in node.fail) {
+                lines.push(`${prefix}  ↳ fail:`);
+                lines.push(...formatNodeTree(node.fail, states, dispatches, indent + 2));
+            } else {
+                // Goto target
+                const maxR = node.fail.maxRetries != null ? `, max ${node.fail.maxRetries}` : '';
+                const exhaust = node.fail.onExhausted ? ` → ${node.fail.onExhausted}` : '';
+                lines.push(`${prefix}  ↳ fail: goto ${node.fail.goto}${maxR}${exhaust}`);
+            }
+            break;
+        }
+    }
+
+    return lines;
+}
+
+// ─── Dispatch & Session Formatting ───
+
+/** Format a dispatch record for display */
 function formatDispatch(d: DispatchRecord, sessions: SessionRecord[]): string {
-    const statusIcon =
+    const statusIcn =
         d.status === 'completed'
             ? '✓'
             : d.status === 'running'
@@ -173,13 +145,12 @@ function formatDispatch(d: DispatchRecord, sessions: SessionRecord[]): string {
     const session = sessions.find((s) => s.id === d.sessionId);
     const sessionInfo = session?.agentSessionId ? ` session:${session.agentSessionId}` : '';
     const note = d.note ? ` (${d.note})` : '';
+    const nodeInfo = d.nodeId ? ` node:${d.nodeId}` : '';
     const brief = d.taskBrief.length > 60 ? d.taskBrief.slice(0, 57) + '...' : d.taskBrief;
-    return `  ${statusIcon} ${d.id}  ${d.role.padEnd(12)} [${d.status}]  ${brief}${sessionInfo}${note}`;
+    return `  ${statusIcn} ${d.id}  ${d.role.padEnd(12)} [${d.status}]  ${brief}${nodeInfo}${sessionInfo}${note}`;
 }
 
-/**
- * Format a session record for display.
- */
+/** Format a session record for display */
 function formatSession(s: SessionRecord): string {
     const agentInfo = s.agentSessionId ? `agent:${s.agentSessionId}` : 'no agent ID';
     const label = s.label ? ` (${s.label})` : '';
@@ -187,16 +158,18 @@ function formatSession(s: SessionRecord): string {
     return `  ${s.id}  ${s.role.padEnd(12)} [${s.status}]  ${agentInfo}${agentType}${label}`;
 }
 
-/** Scales that activate sequential mode */
-const SEQUENTIAL_SCALES: Set<ProjectScale> = new Set(['medium', 'large']);
+// ─── Step Progress Formatting ───
 
 /**
- * Format step progress for a sequential document.
+ * Format step progress for a sequential artifact.
  * Returns lines like:
  *   Steps: [✓] 需求结构化 → [✓] 完整性校验 → [→] PRD 文档草稿 → [ ] PRD 最终版
  */
-function formatStepProgress(docDef: DocDefinition, stepState: DocStepState | undefined): string {
-    const steps = docDef.steps!;
+function formatStepProgress(
+    artifactDef: ArtifactDefinition,
+    stepState: ArtifactStepState | undefined,
+): string {
+    const steps = artifactDef.steps!;
     const completedIds = stepState ? getCompletedStepIds(stepState) : new Set<string>();
     const finalized = stepState?.finalized ?? false;
 
@@ -221,9 +194,52 @@ function formatStepProgress(docDef: DocDefinition, stepState: DocStepState | und
     return `  Steps: ${parts.join(' → ')}`;
 }
 
-/**
- * Build the project list summary (when project_name is not provided).
- */
+// ─── Artifact Formatting ───
+
+/** Format artifacts section — written artifacts + in-progress step artifacts */
+function formatArtifacts(
+    existingDocs: string[],
+    artifactDefs: Record<string, ArtifactDefinition>,
+    reviews: Record<string, ReviewState>,
+    stepsData: Record<string, ArtifactStepState>,
+): string {
+    const lines: string[] = [];
+
+    // Written artifacts
+    if (existingDocs.length > 0) {
+        for (const d of existingDocs) {
+            const review = reviews[d];
+            const reviewTag = review ? ` [${review.status}]` : '';
+            const artifactDef = artifactDefs[d];
+            const hasSteps = artifactDef?.steps?.length;
+            let line = `- ${d}${reviewTag}`;
+            if (hasSteps) {
+                line += '\n' + formatStepProgress(artifactDef, stepsData[d]);
+            }
+            lines.push(line);
+        }
+    }
+
+    // In-progress artifacts (steps started but not yet finalized/written)
+    const inProgressIds = Object.keys(stepsData).filter((id) => !existingDocs.includes(id));
+    for (const docId of inProgressIds) {
+        const artifactDef = artifactDefs[docId];
+        if (!artifactDef?.steps?.length) continue;
+        const stepState = stepsData[docId];
+        const completedCount = stepState?.completedSteps.length ?? 0;
+        if (completedCount === 0) continue;
+        lines.push(
+            `- ${docId} (in progress, ${completedCount}/${artifactDef.steps.length} steps)\n` +
+                formatStepProgress(artifactDef, stepState),
+        );
+    }
+
+    return lines.length > 0 ? lines.join('\n') : '(none yet)';
+}
+
+// ─── Project List ───
+
+/** Build project list summary (when project_name is not provided) */
 async function buildProjectList(): Promise<string> {
     const projectNames = await listProjects();
 
@@ -242,23 +258,25 @@ async function buildProjectList(): Promise<string> {
         try {
             const entry = await getProject(name);
             if (!entry || !entry.activeContext) {
-                rows.push(`| ${name} | ${entry?.dir ?? '?'} | (无活跃上下文) | - | - | - |`);
+                rows.push(`| ${name} | ${entry?.dir ?? '?'} | (无活跃上下文) | - | - |`);
                 continue;
             }
             const resolved = resolveContextDir(name, entry.activeContext);
             if (!resolved) {
-                rows.push(`| ${name} | ${entry.dir} | (上下文异常) | - | - | - |`);
+                rows.push(`| ${name} | ${entry.dir} | (上下文异常) | - | - |`);
                 continue;
             }
             const state = await readState(name, resolved.number, resolved.dir);
-            const scaleDisplay = state.scale ?? '(未设定)';
             const updated = state.updatedAt.split('T')[0];
             const contextDisplay = entry.activeContext;
+            // Determine workflow progress from node states
+            const nodeCount = Object.keys(state.nodes).length;
+            const completedCount = Object.values(state.nodes).filter((n) => n.status === 'completed').length;
             rows.push(
-                `| ${name} | ${state.projectDir} | ${state.currentPhase} | ${scaleDisplay} | ${contextDisplay} | ${updated} |`,
+                `| ${name} | ${state.projectDir} | ${state.workflow} | ${contextDisplay} (${completedCount}/${nodeCount}) | ${updated} |`,
             );
         } catch {
-            rows.push(`| ${name} | (无法读取状态) | - | - | - | - |`);
+            rows.push(`| ${name} | (无法读取状态) | - | - | - |`);
         }
     }
 
@@ -267,18 +285,20 @@ async function buildProjectList(): Promise<string> {
         '',
         `共 ${projectNames.length} 个项目:`,
         '',
-        '| 项目 | 目录 | 阶段 | 规模 | 上下文 | 更新时间 |',
-        '|------|------|------|------|--------|----------|',
+        '| 项目 | 目录 | 工作流 | 上下文 (进度) | 更新时间 |',
+        '|------|------|--------|---------------|----------|',
         ...rows,
         '',
         '使用 project_status(project_name) 查看项目详情。',
     ].join('\n');
 }
 
+// ─── Tool Registration ───
+
 export function registerGetProjectStatus(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'project_status',
-        '查看项目状态。不传 project_name 则返回所有项目的摘要列表；传入 project_name 则返回该项目的详细状态（阶段、文档、dispatch、session、下一步建议）。',
+        '查看项目状态。不传 project_name 则返回所有项目的摘要列表；传入 project_name 则返回该项目的详细状态（节点树、文档、dispatch、session、下一步建议）。',
         {
             project_name: z.string().optional().describe('项目名称。不传则返回所有项目的摘要列表。'),
         },
@@ -291,139 +311,83 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
 
             // Detail mode — specific project
             try {
-                // Resolve project entry
-                const entry = await getProject(project_name);
-                if (!entry) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `项目 "${project_name}" 未注册。使用 project_status() 查看所有项目，或 project_init 创建新项目。`,
-                            },
-                        ],
-                        isError: true,
-                    };
+                // Resolve active context
+                const ctx = await resolveActive(project_name);
+                if (isError(ctx)) {
+                    // Check if project exists but has no active context
+                    const entry = await getProject(project_name);
+                    if (entry && !entry.activeContext) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: [
+                                        `# Project: ${project_name}`,
+                                        ``,
+                                        `Source directory: ${entry.dir}`,
+                                        `Registered: ${entry.createdAt}`,
+                                        `Iterations: ${entry.totalIterations}`,
+                                        `Patches: ${entry.totalPatches}`,
+                                        `Active context: (none)`,
+                                        ``,
+                                        `项目已注册但尚未开始迭代或补丁。请调用 iteration_start(project_name="${project_name}") 开始第一次迭代，或 patch_start 开始补丁。`,
+                                    ].join('\n'),
+                                },
+                            ],
+                        };
+                    }
+                    return ctx;
                 }
 
-                if (!entry.activeContext) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: [
-                                    `# Project: ${project_name}`,
-                                    ``,
-                                    `Source directory: ${entry.dir}`,
-                                    `Registered: ${entry.createdAt}`,
-                                    `Iterations: ${entry.totalIterations}`,
-                                    `Patches: ${entry.totalPatches}`,
-                                    `Active context: (none)`,
-                                    ``,
-                                    `项目已注册但尚未开始迭代或补丁。请调用 iteration_start(project_name="${project_name}") 开始第一次迭代，或 patch_start 开始补丁。`,
-                                ].join('\n'),
-                            },
-                        ],
-                    };
-                }
-
-                const resolved = resolveContextDir(project_name, entry.activeContext);
-                if (!resolved) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `项目 "${project_name}" 的 activeContext "${entry.activeContext}" 无法解析。数据可能已损坏。`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-
-                const contextDir = resolved.dir;
-                const contextNumber = resolved.number;
-                const state = await readState(project_name, contextNumber, contextDir);
-                const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
-                const docs = await listDocs(project_name, contextNumber, contextDir);
-                const reviews = await readReviews(project_name, contextNumber, contextDir);
-                const overrides = await getMergedOverrides(project_name);
-                const dispatches = await readDispatches(project_name, contextNumber, contextDir);
-                const sessions = await readSessions(project_name, contextNumber, contextDir);
-                const stepsData = await readSteps(project_name, contextNumber, contextDir);
+                const { wf, state } = await loadWorkflowForContext(builtinDir, customDir, project_name, ctx);
+                const docs = await listDocs(project_name, ctx.number, ctx.dir);
+                const reviews = await readReviews(project_name, ctx.number, ctx.dir);
+                const dispatches = await readDispatches(project_name, ctx.number, ctx.dir);
+                const sessions = await readSessions(project_name, ctx.number, ctx.dir);
+                const stepsData = await readSteps(project_name, ctx.number, ctx.dir);
                 const issues = await readIssues(project_name);
 
-                const scaleDisplay = state.scale ?? '(未设定)';
+                // ── Workflow Tree ──
+                const treeLines = formatNodeTree(wf.definition.root, state.nodes, dispatches);
 
-                // Phase summary
-                const phasesSummary = state.phases
-                    .map((p) => {
-                        const def = wf.definition.phases.find((pd) => pd.id === p.id);
-                        const marker = p.id === state.currentPhase ? ' <-- current' : '';
-                        const name = def ? ` (${def.name})` : '';
-                        return `  ${p.id}${name}: ${p.status}${p.blockedReason ? ` [blocked: ${p.blockedReason}]` : ''}${marker}`;
-                    })
-                    .join('\n');
+                // Floating nodes (if any have been activated)
+                const floatingLines: string[] = [];
+                if (wf.definition.floatingNodes) {
+                    for (const fn of wf.definition.floatingNodes) {
+                        const fnState = state.nodes[fn.id];
+                        if (fnState && fnState.status !== 'pending') {
+                            floatingLines.push(
+                                `  ${statusIcon(fnState.status)} ${fn.id} (floating, ${fn.role}) — ${fnState.status}`,
+                            );
+                        }
+                    }
+                }
 
-                const currentPhaseDef = wf.definition.phases.find((p) => p.id === state.currentPhase);
+                // ── Artifacts ──
+                const artifactsSection = formatArtifacts(docs, wf.artifactDefinitions, reviews, stepsData);
 
-                // Categorize documents
+                // ── Pending Reviews ──
                 const pendingReviews = Object.values(reviews).filter((r) => r.status === 'pending');
-
-                // Build pending reviews section
                 const pendingSection =
                     pendingReviews.length > 0
                         ? pendingReviews
-                              .map((r) => `- ${r.docId} (submitted: ${r.submittedAt.split('T')[0]})`)
+                              .map((r) => `- ${r.artifactId} (submitted: ${r.submittedAt.split('T')[0]})`)
                               .join('\n')
                         : '(none)';
 
-                // Build documents section with status and step progress
-                const docsSection =
-                    docs.length > 0
-                        ? docs
-                              .map((d) => {
-                                  const review = reviews[d];
-                                  const reviewTag = review ? ` [${review.status}]` : '';
-                                  const docDef = wf.definition.docs[d];
-                                  const hasSteps =
-                                      docDef?.steps?.length &&
-                                      state.scale !== null &&
-                                      SEQUENTIAL_SCALES.has(state.scale);
-                                  let line = `- ${d}${reviewTag}`;
-                                  if (hasSteps) {
-                                      line += '\n' + formatStepProgress(docDef, stepsData[d]);
-                                  }
-                                  return line;
-                              })
-                              .join('\n')
-                        : '(none yet)';
-
-                // Show step progress for docs not yet written but with active steps
-                const inProgressStepDocs = Object.keys(stepsData).filter((docId) => !docs.includes(docId));
-                const inProgressSection = inProgressStepDocs
-                    .map((docId) => {
-                        const docDef = wf.definition.docs[docId];
-                        if (!docDef?.steps?.length) return null;
-                        const stepState = stepsData[docId];
-                        const completedCount = stepState?.completedSteps.length ?? 0;
-                        if (completedCount === 0) return null;
-                        return (
-                            `- ${docId} (in progress, ${completedCount}/${docDef.steps.length} steps)\n` +
-                            formatStepProgress(docDef, stepState)
-                        );
-                    })
-                    .filter(Boolean)
-                    .join('\n');
-
-                // Build sessions section
+                // ── Sessions ──
                 const activeSessions = sessions.filter((s) => s.status !== 'closed');
                 const sessionsSection =
                     activeSessions.length > 0 ? activeSessions.map((s) => formatSession(s)).join('\n') : '(none)';
 
-                // Build dispatches section
+                // ── Dispatches ──
+                const recentDispatches = dispatches.slice(-10); // Show last 10
                 const dispatchesSection =
-                    dispatches.length > 0 ? dispatches.map((d) => formatDispatch(d, sessions)).join('\n') : '(none)';
+                    recentDispatches.length > 0
+                        ? recentDispatches.map((d) => formatDispatch(d, sessions)).join('\n')
+                        : '(none)';
 
-                // Build issues section
+                // ── Issues ──
                 const openIssues = issues.filter((i) => i.status === 'open');
                 const closedIssues = issues.filter((i) => i.status === 'closed');
                 const issuesSummary =
@@ -439,31 +403,15 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                           ].join('\n')
                         : '(none)';
 
-                // Expected outputs — only when scale is set
-                let expectedOutputsLine = '';
-                if (currentPhaseDef?.outputs && state.scale !== null) {
-                    const scale = state.scale;
-                    const filtered = currentPhaseDef.outputs.filter((o) => {
-                        const d = wf.definition.docs[o];
-                        if (!d) return true;
-                        const sv = d.scale[scale];
-                        return sv !== 'skip' && sv !== 'optional';
-                    });
-                    expectedOutputsLine = `Expected outputs: ${filtered.join(', ')}`;
-                } else if (currentPhaseDef?.outputs) {
-                    expectedOutputsLine = `Expected outputs: (需先设定 scale 才能确定)`;
-                }
-
-                // Derive next steps (now dispatch-aware)
-                const nextSteps = deriveNextSteps(
-                    state,
-                    wf,
-                    docs,
-                    pendingReviews,
-                    dispatches,
-                    sessions,
-                    openIssues.length,
+                // ── Engine Next Action ──
+                const engineResult = await processWorkflowEvent(
+                    builtinDir,
+                    customDir,
+                    project_name,
+                    ctx,
+                    { type: 'query_status' },
                 );
+                const nextActionText = formatNextAction(engineResult.nextAction);
 
                 return {
                     content: [
@@ -474,28 +422,22 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                                 ``,
                                 `Source directory: ${state.projectDir}`,
                                 `Workflow: ${state.workflow}`,
-                                `Scale: ${scaleDisplay}`,
-                                `Active context: ${entry.activeContext} (${resolved.type} #${contextNumber})`,
-                                `Iterations: ${entry.currentIteration} / ${entry.totalIterations}`,
-                                `Patches: ${entry.currentPatch} / ${entry.totalPatches}`,
+                                `Active context: ${ctx.activeContext} (${ctx.type} #${ctx.number})`,
+                                `Iterations: ${ctx.entry.currentIteration} / ${ctx.entry.totalIterations}`,
+                                `Patches: ${ctx.entry.currentPatch} / ${ctx.entry.totalPatches}`,
                                 `Created: ${state.createdAt}`,
                                 `Updated: ${state.updatedAt}`,
                                 ``,
-                                `## Phases`,
-                                phasesSummary,
-                                ``,
-                                `## Current Phase`,
-                                currentPhaseDef
-                                    ? `${currentPhaseDef.name} (${currentPhaseDef.id}): ${currentPhaseDef.description}`
-                                    : 'Unknown',
-                                currentPhaseDef?.roles ? `Roles: ${currentPhaseDef.roles.join(', ')}` : '',
-                                expectedOutputsLine,
+                                `## Workflow Tree`,
+                                ...treeLines,
+                                ...(floatingLines.length > 0 ? ['', '### Floating Nodes', ...floatingLines] : []),
                                 ``,
                                 `## Sessions`,
                                 sessionsSection,
                                 ``,
                                 `## Dispatches`,
                                 dispatchesSection,
+                                dispatches.length > 10 ? `  (showing last 10 of ${dispatches.length})` : '',
                                 ``,
                                 `## Issues`,
                                 issuesSummary,
@@ -503,13 +445,14 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                                 `## Pending Reviews`,
                                 pendingSection,
                                 ``,
-                                `## Documents`,
-                                docsSection,
-                                ...(inProgressSection ? [``, `## In-Progress Steps`, inProgressSection] : []),
+                                `## Artifacts`,
+                                artifactsSection,
                                 ``,
-                                `## Next Steps`,
-                                nextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
-                            ].join('\n'),
+                                `## Next Action`,
+                                nextActionText || '(no action needed)',
+                            ]
+                                .filter((line) => line !== undefined)
+                                .join('\n'),
                         },
                     ],
                 };
