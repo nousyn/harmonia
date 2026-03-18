@@ -16,5 +16,6 @@
             "aliases": ["## Field Definitions", "## 字段说明", "## 表结构"]
         }
     ],
-    "minLength": 100
+    "minLength": 100,
+    "guidance": "数据模型设计，定义实体、关系和字段。适用于需要数据持久化的项目。"
 }

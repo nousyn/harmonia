@@ -6,5 +6,6 @@
             "aliases": ["## Task List", "## 任务清单", "## Tasks"]
         }
     ],
-    "minLength": 80
+    "minLength": 80,
+    "guidance": "将粗粒度任务细化为具体的开发任务，每个任务应包含明确的输入、输出和完成标准。"
 }

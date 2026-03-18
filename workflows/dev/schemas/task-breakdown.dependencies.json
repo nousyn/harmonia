@@ -16,5 +16,6 @@
             "required": { "small": false, "medium": false, "large": true },
             "type": "array"
         }
-    ]
+    ],
+    "guidance": "分析任务间的依赖关系，确定执行顺序和可并行的任务组。输出结构化 JSON。"
 }

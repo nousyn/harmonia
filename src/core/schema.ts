@@ -228,6 +228,143 @@ export function validateDoc(
     };
 }
 
+// ─── Schema Guidance ───
+
+/**
+ * Step schema entry for formatSchemaGuidance.
+ * Each entry pairs a step definition with its loaded schema (if any).
+ */
+export interface StepSchemaEntry {
+    step: { id: string; name: string; format: 'json' | 'md'; description: string };
+    schema: DocSchema | undefined;
+}
+
+/**
+ * Format a document schema into human-readable writing guidance.
+ *
+ * Used by:
+ * - role_dispatch: inject Document Requirements into the dispatch data package
+ * - doc_schema tool: return guidance on demand for PM
+ *
+ * @param docId         Document ID (e.g. "prd", "tech-design")
+ * @param docDef        Document definition from workflow.json
+ * @param schema        Main document schema (may be undefined if no schema file exists)
+ * @param scale         Current project scale (filters required sections/fields)
+ * @param stepSchemas   Step schemas (only relevant when doc has steps and scale >= medium)
+ */
+export function formatSchemaGuidance(
+    docId: string,
+    docDef: { name: string; format?: 'md' | 'html' },
+    schema: DocSchema | undefined,
+    scale: ProjectScale,
+    stepSchemas?: StepSchemaEntry[],
+): string {
+    const lines: string[] = [];
+
+    lines.push(`## 文档要求: ${docDef.name} (${docId})`);
+    lines.push('');
+
+    // Format
+    const format = docDef.format === 'html' ? 'HTML' : 'Markdown';
+    lines.push(`格式: ${format}`);
+
+    // Min length
+    if (schema?.minLength) {
+        lines.push(`最小长度: ${schema.minLength} 字符`);
+    }
+
+    // Guidance
+    if (schema?.guidance) {
+        lines.push(`内容指引: ${schema.guidance}`);
+    }
+
+    // Required sections (markdown docs)
+    if (schema?.sections) {
+        const required = schema.sections.filter((s) => s.required[scale]);
+        if (required.length > 0) {
+            lines.push('');
+            lines.push('### 必需章节');
+            for (const section of required) {
+                // Strip leading ## from heading for display
+                const heading = section.heading.replace(/^#+\s*/, '');
+                lines.push(`- ${heading}`);
+            }
+        }
+    }
+
+    // Required HTML tags
+    if (schema?.htmlTags && schema.htmlTags.length > 0) {
+        lines.push('');
+        lines.push('### 必需 HTML 标签');
+        for (const tag of schema.htmlTags) {
+            lines.push(`- <${tag}>`);
+        }
+    }
+
+    // Required JSON fields (for top-level JSON docs without steps)
+    if (schema?.jsonFields) {
+        const required = schema.jsonFields.filter((f) => f.required[scale]);
+        if (required.length > 0) {
+            lines.push('');
+            lines.push('### 必需 JSON 字段');
+            for (const field of required) {
+                let desc = `- ${field.field}`;
+                if (field.type) desc += ` (${field.type})`;
+                if (field.minItems) desc += `, ≥${field.minItems} 项`;
+                lines.push(desc);
+            }
+        }
+    }
+
+    // Step schemas (only for scale >= medium)
+    if (stepSchemas && stepSchemas.length > 0 && (scale === 'medium' || scale === 'large')) {
+        lines.push('');
+        lines.push('### 分步写入（medium/large 规模）');
+        for (let i = 0; i < stepSchemas.length; i++) {
+            const { step, schema: stepSchema } = stepSchemas[i];
+            const formatLabel = step.format === 'json' ? 'JSON 格式' : 'Markdown 格式';
+            lines.push(`${i + 1}. ${step.id}（${step.name}）— ${formatLabel}`);
+
+            if (stepSchema) {
+                // Step-level required JSON fields
+                if (stepSchema.jsonFields) {
+                    const reqFields = stepSchema.jsonFields.filter((f) => f.required[scale]);
+                    if (reqFields.length > 0) {
+                        const fieldDescs = reqFields.map((f) => {
+                            let d = f.field;
+                            if (f.type) d += ` (${f.type})`;
+                            if (f.minItems) d += `, ≥${f.minItems} 项`;
+                            return d;
+                        });
+                        lines.push(`   必需字段: ${fieldDescs.join(', ')}`);
+                    }
+                }
+
+                // Step-level required sections
+                if (stepSchema.sections) {
+                    const reqSections = stepSchema.sections.filter((s) => s.required[scale]);
+                    if (reqSections.length > 0) {
+                        const sectionNames = reqSections.map((s) => s.heading.replace(/^#+\s*/, ''));
+                        lines.push(`   必需章节: ${sectionNames.join(', ')}`);
+                    }
+                }
+
+                // Step-level min length
+                if (stepSchema.minLength) {
+                    lines.push(`   最小长度: ${stepSchema.minLength} 字符`);
+                }
+
+                // Step-level guidance
+                if (stepSchema.guidance) {
+                    lines.push(`   指引: ${stepSchema.guidance}`);
+                }
+            }
+        }
+    }
+
+    return lines.join('\n');
+}
+
 /**
  * Format validation errors into a human-readable string for tool response.
  */

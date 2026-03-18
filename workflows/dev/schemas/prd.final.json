@@ -26,5 +26,6 @@
             "aliases": ["## Constraints and Assumptions", "## 约束条件", "## 前提假设"]
         }
     ],
-    "minLength": 200
+    "minLength": 200,
+    "guidance": "PRD 最终版，需包含所有必需章节。内容聚焦于产品需求，不涉及技术实现方案。"
 }

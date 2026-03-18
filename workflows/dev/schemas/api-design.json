@@ -21,5 +21,6 @@
             "aliases": ["## Authentication", "## Auth", "## 权限"]
         }
     ],
-    "minLength": 100
+    "minLength": 100,
+    "guidance": "API 接口设计文档，定义端点、请求/响应格式、错误码和认证方式。适用于有前后端分离或外部集成的项目。"
 }

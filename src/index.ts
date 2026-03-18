@@ -98,6 +98,7 @@ Setup options:
     const { registerReportDispatch } = await import('./tools/report-dispatch.js');
     const { registerPatchStart } = await import('./tools/patch-start.js');
     const { registerIssueTools } = await import('./tools/issue-tools.js');
+    const { registerDocSchema } = await import('./tools/doc-schema.js');
 
     // Custom workflows directory: <data_dir>/.workflows
     const CUSTOM_WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
@@ -121,6 +122,7 @@ Setup options:
     registerReportDispatch(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerPatchStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
     registerIssueTools(server);
+    registerDocSchema(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

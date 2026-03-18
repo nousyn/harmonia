@@ -21,5 +21,6 @@
             "required": { "small": true, "medium": true, "large": true },
             "type": "string"
         }
-    ]
+    ],
+    "guidance": "分析现有架构和技术约束，提出可行方案并给出推荐。输出结构化 JSON，聚焦技术可行性分析。"
 }

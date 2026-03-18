@@ -21,5 +21,6 @@
             "required": { "small": true, "medium": true, "large": true },
             "type": "string"
         }
-    ]
+    ],
+    "guidance": "将用户原始需求结构化为 JSON 格式。只提取需求信息（功能列表、约束、优先级、范围），不做技术分析或方案设计。"
 }

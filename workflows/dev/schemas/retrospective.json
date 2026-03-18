@@ -16,5 +16,6 @@
             "aliases": ["## Improvements", "## 后续改进", "## 待改进"]
         }
     ],
-    "minLength": 50
+    "minLength": 50,
+    "guidance": "项目复盘记录，总结项目执行情况、经验教训和改进建议。"
 }

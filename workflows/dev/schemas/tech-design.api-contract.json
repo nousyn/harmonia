@@ -16,5 +16,6 @@
             "required": { "small": false, "medium": false, "large": true },
             "type": "array"
         }
-    ]
+    ],
+    "guidance": "定义 API 契约：端点、请求/响应格式、错误码。输出结构化 JSON，作为前后端协作的接口规范。"
 }

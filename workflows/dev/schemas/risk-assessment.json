@@ -11,5 +11,6 @@
             "aliases": ["## Mitigation", "## 应对策略", "## 缓解方案"]
         }
     ],
-    "minLength": 100
+    "minLength": 100,
+    "guidance": "技术风险评估，识别项目中的技术风险和不确定性，并提出缓解措施。"
 }

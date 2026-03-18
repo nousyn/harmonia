@@ -11,5 +11,6 @@
             "aliases": ["## Technology Stack", "## 技术栈", "## Tech Stack"]
         }
     ],
-    "minLength": 150
+    "minLength": 150,
+    "guidance": "技术方案草稿，聚焦架构概述和技术选型两个核心章节。"
 }

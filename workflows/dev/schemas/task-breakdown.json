@@ -6,5 +6,6 @@
             "aliases": ["## Task List", "## 任务清单", "## Tasks"]
         }
     ],
-    "minLength": 100
+    "minLength": 100,
+    "guidance": "任务拆解文档，将技术方案拆分为可执行的开发任务。每个任务要具体到开发者能直接开始编码。"
 }

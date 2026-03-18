@@ -11,5 +11,6 @@
             "required": { "small": false, "medium": true, "large": true },
             "type": "string"
         }
-    ]
+    ],
+    "guidance": "按功能模块粗粒度拆分任务，标注预估工作量。聚焦任务划分的合理性，不需要细化到具体实现步骤。"
 }

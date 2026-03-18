@@ -11,5 +11,6 @@
             "aliases": ["## Functional Requirements", "## 需求列表", "## 功能列表"]
         }
     ],
-    "minLength": 150
+    "minLength": 150,
+    "guidance": "基于结构化需求生成 PRD 草稿。聚焦核心需求描述，不需要覆盖所有章节。"
 }

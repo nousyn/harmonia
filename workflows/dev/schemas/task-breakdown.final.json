@@ -6,5 +6,6 @@
             "aliases": ["## Task List", "## 任务清单", "## Tasks"]
         }
     ],
-    "minLength": 100
+    "minLength": 100,
+    "guidance": "任务拆解最终版，整合依赖关系和执行顺序。每个任务需标注是否可并行、依赖哪些前置任务。"
 }

@@ -20,6 +20,8 @@ import { readState } from '../core/state.js';
 import { readDoc } from '../core/docs.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession } from '../core/dispatch.js';
+import { loadDocSchema, formatSchemaGuidance } from '../core/schema.js';
+import type { StepSchemaEntry } from '../core/schema.js';
 import { resolveActive, isError } from './utils.js';
 import type {
     CapabilityOverride,
@@ -27,6 +29,7 @@ import type {
     PhaseDefinition,
     ProjectScale,
     WorkflowDefinition,
+    DocDefinition,
 } from '../core/types.js';
 
 /**
@@ -229,6 +232,19 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 // Build human-readable summary for the agent
                 const agentLine = roleConfig.agent ? `\n- Agent: ${roleConfig.agent}` : '';
                 const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
+
+                // Build document requirements section (only when scale is set)
+                const docRequirements = state.scale
+                    ? await buildDocRequirements(
+                          expectedOutputs,
+                          wf.definition,
+                          state.scale,
+                          builtinDir,
+                          customDir,
+                          state.workflow,
+                      )
+                    : '';
+
                 const summary = [
                     `# Dispatch: ${role}`,
                     ``,
@@ -269,11 +285,13 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                     `## Next Step`,
                     `After launching the agent, call \`dispatch_report\` with dispatch_id="${dispatch.id}" and the agent's session ID.`,
                     `When the agent finishes, call \`dispatch_report\` again with status="completed" (or "failed").`,
-                    ``,
-                    `## Role Prompt`,
-                    ``,
-                    fullPrompt,
                 );
+
+                if (docRequirements) {
+                    summary.push(``, docRequirements);
+                }
+
+                summary.push(``, `## Role Prompt`, ``, fullPrompt);
 
                 return {
                     content: [
@@ -333,4 +351,48 @@ function buildSessionGuidance(
     ]
         .filter(Boolean)
         .join('\n');
+}
+
+/**
+ * Build Document Requirements section for the dispatch data package.
+ * Loads schemas for each expected output doc and formats them as writing guidance.
+ */
+async function buildDocRequirements(
+    expectedOutputs: string[],
+    workflowDef: WorkflowDefinition,
+    scale: ProjectScale,
+    builtinDir: string,
+    customDir: string,
+    workflowName: string,
+): Promise<string> {
+    if (expectedOutputs.length === 0 || scale === null) return '';
+
+    const sections: string[] = [];
+
+    for (const docId of expectedOutputs) {
+        const docDef = workflowDef.docs[docId] as DocDefinition | undefined;
+        if (!docDef) continue;
+
+        // Load main schema
+        const schema = await loadDocSchema(builtinDir, customDir, workflowName, docId);
+
+        // Load step schemas if doc has steps
+        let stepSchemas: StepSchemaEntry[] | undefined;
+        if (docDef.steps && docDef.steps.length > 0) {
+            stepSchemas = [];
+            for (const step of docDef.steps) {
+                const stepSchema = await loadDocSchema(builtinDir, customDir, workflowName, `${docId}.${step.id}`);
+                stepSchemas.push({ step, schema: stepSchema });
+            }
+        }
+
+        // Skip if no schema at all (no main schema and no step schemas)
+        if (!schema && (!stepSchemas || stepSchemas.every((s) => !s.schema))) continue;
+
+        sections.push(formatSchemaGuidance(docId, docDef, schema, scale, stepSchemas));
+    }
+
+    if (sections.length === 0) return '';
+
+    return ['## Document Requirements', '', ...sections].join('\n');
 }

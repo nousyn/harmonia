@@ -89,6 +89,8 @@ export interface DocSchema {
     jsonFields?: DocSchemaJsonField[];
     /** Minimum content length in characters (optional) */
     minLength?: number;
+    /** Human-readable guidance for agents — describes content scope and boundaries */
+    guidance?: string;
 }
 
 /**

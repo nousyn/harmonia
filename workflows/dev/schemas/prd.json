@@ -26,5 +26,6 @@
             "aliases": ["## Constraints and Assumptions", "## 约束条件", "## 前提假设"]
         }
     ],
-    "minLength": 200
+    "minLength": 200,
+    "guidance": "PRD 描述产品需求（做什么），不涉及技术实现（怎么做）。技术选型、架构设计、代码实现方案属于 tech-design 文档，不应出现在 PRD 中。"
 }

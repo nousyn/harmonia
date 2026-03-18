@@ -16,5 +16,6 @@
             "aliases": ["## Configuration", "## 环境配置", "## 配置项"]
         }
     ],
-    "minLength": 100
+    "minLength": 100,
+    "guidance": "部署文档，描述部署环境要求、部署步骤和配置说明。"
 }

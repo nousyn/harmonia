@@ -20,5 +20,6 @@
             "required": { "small": true, "medium": true, "large": true },
             "type": "string"
         }
-    ]
+    ],
+    "guidance": "对已结构化的需求进行完整性检查。评估需求覆盖率、识别遗漏和冲突，给出是否通过的判定。"
 }
