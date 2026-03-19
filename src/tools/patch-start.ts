@@ -69,14 +69,16 @@ export function registerPatchStart(server: McpServer, builtinDir: string, custom
                 // Load workflow and initialize state in patch mode
                 const wf = await loadWorkflow(builtinDir, customDir, entry.workflow);
                 const patchDir = getPatchDir(project_name, newPatch);
-                const state = await initWorkflowState(
-                    project_name,
-                    entry.dir,
-                    wf,
-                    newPatch,
-                    'patch',
-                    patchDir,
-                );
+                const state = await initWorkflowState(project_name, entry.dir, wf, newPatch, 'patch', patchDir);
+
+                // Persist patch metadata (issue_id, description)
+                if (issue_id || description) {
+                    state.meta = {
+                        ...(description ? { description } : {}),
+                        ...(issue_id ? { issueId: issue_id } : {}),
+                    };
+                    await persistState(project_name, newPatch, state, patchDir);
+                }
 
                 // Start the workflow engine
                 const emptyGate: GateContext = {

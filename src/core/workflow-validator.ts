@@ -5,20 +5,14 @@
  * Checks:
  * 1. ID uniqueness across tree + floating nodes
  * 2. Goto target legality (exists + reachable in execution order)
- * 3. Cycle detection (no exit-less loops; maxRetries with onExhausted = ok)
+ * 3. Cycle detection (no exit-less loops; maxRetries = ok, bubbleFailure or onExhausted provides exit)
  * 4. failStrategy required for parallel nodes
  * 5. Floating node reference validity (onExhausted targets exist in floatingNodes)
  * 6. Role reference validity (task.role must exist in provided roles set)
  * 7. Coordinator validity (definition.coordinator must exist in roles)
  */
 
-import type {
-    WorkflowDefinition,
-    WorkflowNode,
-    GotoTarget,
-    FailureHandler,
-    ValidationError,
-} from './types.js';
+import type { WorkflowDefinition, WorkflowNode, GotoTarget, FailureHandler, ValidationError } from './types.js';
 
 /** Represents a goto edge for cycle detection */
 interface GotoEdge {
@@ -26,7 +20,7 @@ interface GotoEdge {
     from: string;
     /** Target node ID */
     to: string;
-    /** Whether this edge has a maxRetries with onExhausted (provides an exit) */
+    /** Whether this edge has maxRetries set (provides a guaranteed exit path) */
     hasExit: boolean;
 }
 
@@ -61,10 +55,7 @@ function collectSubtreeIds(node: WorkflowNode, ids: Set<string>): void {
  * @param availableRoles - Set of role IDs available in the role registry
  * @returns Array of validation errors (empty = valid)
  */
-export function validateWorkflow(
-    definition: WorkflowDefinition,
-    availableRoles: Set<string>,
-): ValidationError[] {
+export function validateWorkflow(definition: WorkflowDefinition, availableRoles: Set<string>): ValidationError[] {
     const errors: ValidationError[] = [];
     const allIds = new Map<string, string>(); // id → location description
     const floatingNodeIds = new Set<string>();
@@ -372,7 +363,7 @@ function validateGotoRef(
     gotoEdges.push({
         from: sourceNodeId,
         to: targetId,
-        hasExit: target.maxRetries !== undefined && target.onExhausted !== undefined,
+        hasExit: target.maxRetries !== undefined,
     });
 }
 
@@ -405,8 +396,8 @@ function validateFailureHandler(
 /**
  * Detect cycles in goto edges that have no exit.
  *
- * A goto edge with hasExit=true (maxRetries + onExhausted) has a guaranteed exit path,
- * so it does not contribute to exit-less cycles.
+ * A goto edge with hasExit=true (maxRetries set) has a guaranteed exit path
+ * (either via onExhausted or bubbleFailure), so it does not contribute to exit-less cycles.
  *
  * We look for strongly connected components in the subgraph of exit-less goto edges.
  * Any node that can reach itself through exit-less gotos forms a problematic cycle.
@@ -439,7 +430,7 @@ function detectCycles(edges: GotoEdge[], errors: ValidationError[]): void {
             reported.add(edge.from);
             errors.push({
                 type: 'cycle',
-                message: `Detected exit-less cycle: node "${edge.from}" has goto to "${edge.to}" without maxRetries+onExhausted exit`,
+                message: `Detected exit-less cycle: node "${edge.from}" has goto to "${edge.to}" without maxRetries exit`,
                 nodeId: edge.from,
             });
         }
@@ -448,11 +439,7 @@ function detectCycles(edges: GotoEdge[], errors: ValidationError[]): void {
 
 // ─── Role Reference Validation ───
 
-function validateRoleReferences(
-    node: WorkflowNode,
-    availableRoles: Set<string>,
-    errors: ValidationError[],
-): void {
+function validateRoleReferences(node: WorkflowNode, availableRoles: Set<string>, errors: ValidationError[]): void {
     switch (node.type) {
         case 'task':
             if (!availableRoles.has(node.role)) {

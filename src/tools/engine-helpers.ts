@@ -24,9 +24,29 @@ export interface EngineResult {
 }
 
 /**
+ * Resolve a dot-separated field path on a JSON object.
+ * e.g. "result" on { result: "pass" } → "pass"
+ * e.g. "stats.total" on { stats: { total: 10 } } → 10
+ */
+function resolveFieldPath(obj: unknown, path: string): unknown {
+    const parts = path.split('.');
+    let current: unknown = obj;
+    for (const part of parts) {
+        if (current === null || current === undefined || typeof current !== 'object') {
+            return undefined;
+        }
+        current = (current as Record<string, unknown>)[part];
+    }
+    return current;
+}
+
+/**
  * Build a GateContext from the current project state.
  * This provides the artifact existence/approval/field checks
  * that the engine needs for gate evaluation.
+ *
+ * For artifact_field conditions, pre-loads and caches all existing
+ * JSON artifact contents so field access can be synchronous.
  */
 function buildGateContext(
     projectName: string,
@@ -34,23 +54,22 @@ function buildGateContext(
     contextDir: string,
     existingDocs: Set<string>,
     reviews: Record<string, { status: string }>,
-    readDocFn: (docId: string) => Promise<string>,
+    artifactCache: Map<string, unknown>,
 ): GateContext {
     return {
         artifactExists: (artifactId: string) => existingDocs.has(artifactId),
         artifactApproved: (artifactId: string) => reviews[artifactId]?.status === 'approved',
         artifactField: (artifactId: string, field: string) => {
-            // For synchronous field access we'd need cached content.
-            // For now return undefined — artifact_field gates will be
-            // re-evaluated when the engine processes the event.
-            // TODO: In Phase 4, consider caching artifact content for field access.
-            return undefined;
+            const content = artifactCache.get(artifactId);
+            if (content === undefined) return undefined;
+            return resolveFieldPath(content, field);
         },
     };
 }
 
 /**
  * Build the full EngineContext needed for engine operations.
+ * Pre-loads artifact content for field-based gate evaluation.
  */
 async function buildEngineContext(
     projectName: string,
@@ -63,14 +82,23 @@ async function buildEngineContext(
     const existingDocs = new Set(docList);
     const reviews = await readReviews(projectName, iteration, contextDir);
 
-    const gateCtx = buildGateContext(
-        projectName,
-        iteration,
-        contextDir,
-        existingDocs,
-        reviews,
-        (docId: string) => readDoc(projectName, iteration, docId, contextDir),
-    );
+    // Pre-load artifact content for field access (JSON artifacts only)
+    const artifactCache = new Map<string, unknown>();
+    for (const docId of docList) {
+        try {
+            const content = await readDoc(projectName, iteration, docId, contextDir);
+            // Try to parse as JSON; if it fails, store raw string
+            try {
+                artifactCache.set(docId, JSON.parse(content));
+            } catch {
+                artifactCache.set(docId, content);
+            }
+        } catch {
+            // Artifact listed but unreadable — skip
+        }
+    }
+
+    const gateCtx = buildGateContext(projectName, iteration, contextDir, existingDocs, reviews, artifactCache);
 
     return {
         gate: gateCtx,
@@ -108,7 +136,10 @@ export async function processWorkflowEvent(
 
     const result = computeNextAction(wf.definition, state, event, engineCtx);
 
-    await persistState(projectName, ctx.number, result.state, ctx.dir);
+    // Skip persisting state for read-only events (query_status doesn't modify state)
+    if (event.type !== 'query_status') {
+        await persistState(projectName, ctx.number, result.state, ctx.dir);
+    }
 
     return {
         state: result.state,

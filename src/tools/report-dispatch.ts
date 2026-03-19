@@ -28,8 +28,35 @@ import {
     isTerminalStatus,
 } from '../core/dispatch.js';
 import { resolveActive, isError } from './utils.js';
-import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
-import type { AgentType, DispatchRecord, SessionRecord } from '../core/types.js';
+import { loadWorkflowForContext, processWorkflowEvent, formatNextAction } from './engine-helpers.js';
+import { readDoc, listDocs } from '../core/docs.js';
+import { readState } from '../core/state.js';
+import type { AgentType, DispatchRecord, SessionRecord, ActionContext, TaskNode, WorkflowNode } from '../core/types.js';
+
+/**
+ * Find a task node by ID in the workflow tree (including floating nodes).
+ */
+function findTaskNodeById(node: WorkflowNode, nodeId: string): TaskNode | undefined {
+    if (node.type === 'task' && node.id === nodeId) return node;
+    switch (node.type) {
+        case 'sequence':
+        case 'parallel':
+            for (const child of node.children) {
+                const found = findTaskNodeById(child, nodeId);
+                if (found) return found;
+            }
+            break;
+        case 'gate':
+            const passResult = findTaskNodeById(node.pass, nodeId);
+            if (passResult) return passResult;
+            if ('type' in node.fail) {
+                const failResult = findTaskNodeById(node.fail as WorkflowNode, nodeId);
+                if (failResult) return failResult;
+            }
+            break;
+    }
+    return undefined;
+}
 
 export function registerReportDispatch(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
@@ -142,22 +169,74 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     // Trigger engine events for completed/failed (not cancelled — cancellation is manual)
                     if (dispatch.nodeId) {
                         if (effectiveStatus === 'completed') {
-                            const engineResult = await processWorkflowEvent(
-                                builtinDir,
-                                customDir,
-                                project_name,
-                                ctx,
-                                { type: 'node_completed', nodeId: dispatch.nodeId },
-                            );
+                            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                                type: 'node_completed',
+                                nodeId: dispatch.nodeId,
+                            });
                             nextActionText = formatNextAction(engineResult.nextAction);
+
+                            // Execute afterComplete hooks
+                            try {
+                                const { wf, state: currentState } = await loadWorkflowForContext(
+                                    builtinDir,
+                                    customDir,
+                                    project_name,
+                                    ctx,
+                                );
+                                let targetNode = findTaskNodeById(wf.definition.root, dispatch.nodeId);
+                                if (!targetNode && wf.definition.floatingNodes) {
+                                    targetNode = wf.definition.floatingNodes.find((fn) => fn.id === dispatch.nodeId);
+                                }
+                                if (targetNode?.afterComplete) {
+                                    const hookInjections: string[] = [];
+                                    if (targetNode.afterComplete.inject) {
+                                        hookInjections.push(...targetNode.afterComplete.inject);
+                                    }
+                                    if (targetNode.afterComplete.actions && wf.actions) {
+                                        const nodeState = currentState.nodes[dispatch.nodeId];
+                                        const actionCtx: ActionContext = {
+                                            nodeId: dispatch.nodeId,
+                                            role: dispatch.role,
+                                            retryCount: nodeState?.retryCount ?? 0,
+                                            projectName: project_name,
+                                            pluginConfig: wf.config,
+                                            workflowState: currentState,
+                                            artifacts: {
+                                                read: (artifactId: string) =>
+                                                    readDoc(project_name, ctx.number, artifactId, ctx.dir),
+                                                list: () => listDocs(project_name, ctx.number, ctx.dir),
+                                            },
+                                        };
+                                        for (const actionName of targetNode.afterComplete.actions) {
+                                            const handler = wf.actions[actionName];
+                                            if (handler) {
+                                                try {
+                                                    const actionResult = await handler(actionCtx);
+                                                    if (actionResult.inject) {
+                                                        hookInjections.push(...actionResult.inject);
+                                                    }
+                                                } catch (err) {
+                                                    console.warn(
+                                                        `[harmonia] afterComplete action "${actionName}" failed:`,
+                                                        err,
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (hookInjections.length > 0) {
+                                        results.push('', '## After-Complete Hook Output', ...hookInjections);
+                                    }
+                                }
+                            } catch (err) {
+                                console.warn('[harmonia] afterComplete hook processing failed:', err);
+                            }
                         } else if (effectiveStatus === 'failed') {
-                            const engineResult = await processWorkflowEvent(
-                                builtinDir,
-                                customDir,
-                                project_name,
-                                ctx,
-                                { type: 'node_failed', nodeId: dispatch.nodeId, error: note ?? 'Unknown failure' },
-                            );
+                            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                                type: 'node_failed',
+                                nodeId: dispatch.nodeId,
+                                error: note ?? 'Unknown failure',
+                            });
                             nextActionText = formatNextAction(engineResult.nextAction);
                         }
                     }

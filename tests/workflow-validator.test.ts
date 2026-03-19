@@ -296,23 +296,23 @@ describe('workflow-validator', () => {
             expect(cycleErrors).toHaveLength(0);
         });
 
-        it('should detect cycles with maxRetries but no onExhausted', () => {
-            // maxRetries without onExhausted means the goto will just stop retrying,
-            // but without an exit path, the node stays failed — not a clean exit
+        it('should not flag cycle when maxRetries is set without onExhausted', () => {
+            // maxRetries without onExhausted means the engine will bubbleFailure
+            // when retries are exhausted — this is a valid exit path
             const def = makeDefinition({
                 root: makeSequence('main', [
                     makeTask('t1', 'developer'),
                     makeGate('g1', makeTask('t2', 'developer'), {
                         goto: 't1',
                         maxRetries: 3,
-                        // no onExhausted
+                        // no onExhausted — engine will bubbleFailure
                     }),
                 ]),
             });
 
             const errors = validateWorkflow(def, DEFAULT_ROLES);
             const cycleErrors = errors.filter((e) => e.type === 'cycle');
-            expect(cycleErrors.length).toBeGreaterThanOrEqual(1);
+            expect(cycleErrors).toHaveLength(0);
         });
     });
 

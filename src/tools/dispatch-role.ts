@@ -21,7 +21,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { readDoc } from '../core/docs.js';
+import { readDoc, listDocs } from '../core/docs.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession } from '../core/dispatch.js';
 import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
@@ -36,6 +36,7 @@ import type {
     ArtifactDefinition,
     WorkflowPlugin,
     WorkflowState,
+    ActionContext,
 } from '../core/types.js';
 
 /**
@@ -335,7 +336,53 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
 
                 // Build the full prompt with overrides injected
                 const overrideSection = buildOverrideSection(role, overrides);
-                const fullPrompt = overrideSection ? `${roleDef.prompt}\n${overrideSection}` : roleDef.prompt;
+                let fullPrompt = overrideSection ? `${roleDef.prompt}\n${overrideSection}` : roleDef.prompt;
+
+                // Execute beforeDispatch hooks (if defined on the target node)
+                const hookInjections: string[] = [];
+                if (targetNode.beforeDispatch) {
+                    // Collect static inject text
+                    if (targetNode.beforeDispatch.inject) {
+                        hookInjections.push(...targetNode.beforeDispatch.inject);
+                    }
+
+                    // Execute registered actions
+                    if (targetNode.beforeDispatch.actions && wf.actions) {
+                        const nodeState = state.nodes[targetNodeId];
+                        const actionCtx: ActionContext = {
+                            nodeId: targetNodeId,
+                            role,
+                            retryCount: nodeState?.retryCount ?? 0,
+                            projectName: project_name,
+                            pluginConfig: wf.config,
+                            workflowState: state,
+                            artifacts: {
+                                read: (artifactId: string) => readDoc(project_name, ctx.number, artifactId, ctx.dir),
+                                list: () => listDocs(project_name, ctx.number, ctx.dir),
+                            },
+                        };
+                        for (const actionName of targetNode.beforeDispatch.actions) {
+                            const handler = wf.actions[actionName];
+                            if (handler) {
+                                try {
+                                    const result = await handler(actionCtx);
+                                    if (result.inject) {
+                                        hookInjections.push(...result.inject);
+                                    }
+                                } catch (err) {
+                                    console.warn(`[harmonia] beforeDispatch action "${actionName}" failed:`, err);
+                                }
+                            } else {
+                                console.warn(`[harmonia] beforeDispatch action "${actionName}" not registered`);
+                            }
+                        }
+                    }
+                }
+
+                // Append hook injections to the role prompt
+                if (hookInjections.length > 0) {
+                    fullPrompt += '\n\n' + hookInjections.join('\n\n');
+                }
 
                 // Read input artifacts
                 const artifactIds = input_artifact_ids ?? [];
@@ -370,13 +417,10 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 );
 
                 // Trigger engine event: dispatch_requested
-                const engineResult = await processWorkflowEvent(
-                    builtinDir,
-                    customDir,
-                    project_name,
-                    ctx,
-                    { type: 'dispatch_requested', nodeId: targetNodeId },
-                );
+                const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                    type: 'dispatch_requested',
+                    nodeId: targetNodeId,
+                });
 
                 const nextActionText = formatNextAction(engineResult.nextAction);
 
@@ -392,12 +436,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
 
                 // Build artifact requirements for expected outputs
-                const artifactRequirements = await buildArtifactRequirements(
-                    wf,
-                    builtinDir,
-                    customDir,
-                    state.workflow,
-                );
+                const artifactRequirements = await buildArtifactRequirements(wf, builtinDir, customDir, state.workflow);
 
                 const summary = [
                     `# Dispatch: ${role}`,

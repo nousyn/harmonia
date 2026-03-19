@@ -155,8 +155,11 @@ async function loadRoles(pluginPath: string): Promise<Record<string, RoleDefinit
             const content = await readFile(join(rolesDir, file), 'utf-8');
             roles[roleId] = parseRoleFile(roleId, content);
         }
-    } catch {
-        // roles/ directory is optional — plugin may not have any role files
+    } catch (err) {
+        // roles/ directory not found is normal; file parse errors should be logged
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.warn(`[harmonia] Warning: failed to load roles from ${rolesDir}:`, err);
+        }
     }
 
     return roles;
@@ -178,8 +181,11 @@ async function loadSchemas(pluginPath: string): Promise<Record<string, ArtifactS
             const content = await readFile(join(schemasDir, file), 'utf-8');
             schemas[schemaId] = JSON.parse(content) as ArtifactSchema;
         }
-    } catch {
-        // schemas/ directory is optional
+    } catch (err) {
+        // schemas/ directory not found is normal; parse errors should be logged
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.warn(`[harmonia] Warning: failed to load schemas from ${schemasDir}:`, err);
+        }
     }
 
     return schemas;
@@ -211,8 +217,8 @@ async function loadActions(pluginPath: string): Promise<Record<string, ActionHan
             });
             return actions;
         }
-    } catch {
-        // tools.ts exists but failed to load — not fatal
+    } catch (err) {
+        console.warn(`[harmonia] Warning: failed to load actions from ${actualPath}:`, err);
     }
 
     return {};
@@ -237,8 +243,8 @@ async function loadHookCreator(pluginPath: string): Promise<HookCreator | undefi
         if (typeof mod.createHooks === 'function') {
             return mod.createHooks as HookCreator;
         }
-    } catch {
-        // hooks.ts exists but failed to load — not fatal
+    } catch (err) {
+        console.warn(`[harmonia] Warning: failed to load hooks from ${actualPath}:`, err);
     }
 
     return undefined;

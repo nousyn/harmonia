@@ -285,6 +285,8 @@ export interface WorkflowState {
     createdAt: string;
     /** Last updated timestamp */
     updatedAt: string;
+    /** Optional metadata (e.g. patch description, linked issue) */
+    meta?: Record<string, unknown>;
 }
 
 // ─── Engine Types (nextAction, events, gate evaluation) ───

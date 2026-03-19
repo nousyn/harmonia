@@ -61,9 +61,9 @@ export async function resolveWorkflowDir(builtinDir: string, customDir: string, 
  * Load a single workflow by name using two-layer resolution.
  * Delegates to plugin.ts loadPlugin() internally.
  *
- * Note: skipValidation is always true because the dev workflow
- * hasn't been fully migrated yet (Phase 4). Once migrated,
- * validation will be enabled by default.
+ * Note: Validation is enabled by default. The workflow definition
+ * is validated against the loaded roles to catch structural issues
+ * at load time.
  *
  * @param builtinDir - Package built-in workflows directory
  * @param customDir  - User custom workflows directory (<data_dir>/.workflows)
@@ -73,8 +73,8 @@ export async function resolveWorkflowDir(builtinDir: string, customDir: string, 
  */
 export async function loadWorkflow(builtinDir: string, customDir: string, name: string): Promise<WorkflowPlugin> {
     const workflowDir = await resolveWorkflowDir(builtinDir, customDir, name);
-    // skipValidation=true: dev workflow not fully migrated yet (roles/coordinator.md missing)
-    return loadPlugin(workflowDir, undefined, true);
+    // Validation enabled — all roles (including coordinator.md) are now available
+    return loadPlugin(workflowDir, undefined, false);
 }
 
 /**
