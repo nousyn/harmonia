@@ -16,15 +16,13 @@
  * - Reminders scan all projects under DATA_DIR
  */
 
-import { defineHooks } from '@s_s/agent-kit';
-import type { HookParams } from './content.js';
 import {
     BLOCKED_COMMANDS,
     CODE_EXTENSIONS,
     DISPATCH_TIMEOUT_MINUTES,
     WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
-} from './content.js';
+} from './hooks-content.js';
 
 /**
  * Generate the OpenClaw handler.ts source code.
@@ -33,7 +31,7 @@ import {
  * 1. before_tool_call — boundary guard: block code edits and dev commands
  * 2. message_received — proactive reminders: dispatch timeout, idle timeout, pending reviews
  */
-function generateOpenClawHandler(params: HookParams): string {
+function generateOpenClawHandler(params) {
     const codeExtsJson = JSON.stringify(CODE_EXTENSIONS);
     const blockedCmdsJson = JSON.stringify(BLOCKED_COMMANDS);
 
@@ -216,11 +214,14 @@ export default async function handler(event: any) {
 }
 
 /**
- * Create OpenClaw hook definitions using agent-kit's defineHooks.
+ * Create OpenClaw hook definitions using defineHooks from context.
  *
  * Single definition with two events (OpenClaw only supports one HookDefinition).
+ *
+ * @param {Function} defineHooks - defineHooks function from agent-kit (passed via context)
+ * @param {{ dataDir: string }} params - Parameters to bake into hook content
  */
-export function createOpenClawHooks(params: HookParams) {
+export function createOpenClawHooks(defineHooks, params) {
     return defineHooks('openclaw', {
         events: ['message_received', 'before_tool_call'],
         content: generateOpenClawHandler(params),

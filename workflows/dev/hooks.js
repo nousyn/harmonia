@@ -1,39 +1,41 @@
 /**
  * Dev workflow plugin — hook creator.
  *
- * Self-contained entry point for hook creation. Contains the agent-type
- * routing logic and imports the compiled hook generators for each agent.
+ * Self-contained entry point for hook creation. All hook generation logic
+ * lives in sibling files within this directory — no cross-directory imports.
  *
  * This file is intentionally .js (not .ts) because it lives outside
  * the src/ directory and is loaded via dynamic import() by the plugin
  * system at runtime.
  *
- * Hook generators are compiled from src/hooks/ to build/hooks/ by tsc.
+ * The defineHooks function is received from Core via context — this module
+ * does NOT directly depend on @s_s/agent-kit.
  */
 
-import { createClaudeCodeHooks } from '../../build/hooks/claude-code.js';
-import { createOpenCodeHooks } from '../../build/hooks/opencode.js';
-import { createOpenClawHooks } from '../../build/hooks/openclaw.js';
+import { createClaudeCodeHooks } from './hooks-claude.js';
+import { createOpenCodeHooks } from './hooks-opencode.js';
+import { createOpenClawHooks } from './hooks-openclaw.js';
 
 /**
  * Create hook definitions for a specific agent type.
  *
- * Routes to the appropriate agent-specific hook generator.
- * This is the agent routing logic that was previously in src/hooks/install.ts.
+ * Routes to the appropriate agent-specific hook generator,
+ * passing through the defineHooks function from context.
  *
+ * @param {Function} defineHooks - defineHooks function from agent-kit (passed via context)
  * @param {string} agentType - Agent type (opencode, claude-code, openclaw, codex)
  * @param {{ dataDir: string }} params - Parameters to bake into hook content
  * @returns {import('@s_s/agent-kit').HookSet} Hook set for the agent
  */
-function createHooksForAgent(agentType, params) {
+function createHooksForAgent(defineHooks, agentType, params) {
     switch (agentType) {
         case 'claude-code':
         case 'codex':
-            return createClaudeCodeHooks(params);
+            return createClaudeCodeHooks(defineHooks, params);
         case 'opencode':
-            return createOpenCodeHooks(params);
+            return createOpenCodeHooks(defineHooks, params);
         case 'openclaw':
-            return createOpenClawHooks(params);
+            return createOpenClawHooks(defineHooks, params);
         default:
             throw new Error(`Unsupported agent type: ${agentType}`);
     }
@@ -50,8 +52,5 @@ function createHooksForAgent(agentType, params) {
  * @returns {import('@s_s/agent-kit').HookSet} Hook set for the agent
  */
 export function createHooks(agentType, context) {
-    return createHooksForAgent(agentType, { dataDir: context.dataDir });
+    return createHooksForAgent(context.defineHooks, agentType, { dataDir: context.dataDir });
 }
-
-// Also export createHooksForAgent for testing
-export { createHooksForAgent };

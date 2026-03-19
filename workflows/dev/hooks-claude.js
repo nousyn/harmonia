@@ -14,15 +14,13 @@
  * - Reminders scan all projects under DATA_DIR
  */
 
-import { defineHooks } from '@s_s/agent-kit';
-import type { HookParams } from './content.js';
 import {
     BLOCKED_COMMANDS,
     CODE_EXTENSIONS,
     DISPATCH_TIMEOUT_MINUTES,
     WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
-} from './content.js';
+} from './hooks-content.js';
 
 /**
  * Generate Claude Code PreToolUse hook script.
@@ -36,7 +34,7 @@ import {
  * - Read-only tools (Read, Glob, Grep, etc.)
  * - Write/Edit to non-code files (AGENTS.md, docs, etc.)
  */
-function generatePreToolUseScript(_params: HookParams): string {
+function generatePreToolUseScript(_params) {
     const codeExtsPattern = CODE_EXTENSIONS.map((e) => `*${e}`).join('|');
     const blockedCmdsChecks = BLOCKED_COMMANDS.map((cmd) => `  *"${cmd}"*) BLOCKED_CMD="${cmd}" ;;`).join('\n');
 
@@ -110,7 +108,7 @@ exit 0
  * - Idle timeout warning
  * - Pending artifact reviews
  */
-function generateUserPromptSubmitScript(params: HookParams): string {
+function generateUserPromptSubmitScript(params) {
     return `#!/bin/bash
 # Harmonia proactive reminder — UserPromptSubmit hook
 # Reads Harmonia data files and injects status reminders as context.
@@ -212,9 +210,12 @@ exit 0
 }
 
 /**
- * Create Claude Code hook definitions using agent-kit's defineHooks.
+ * Create Claude Code hook definitions using defineHooks from context.
+ *
+ * @param {Function} defineHooks - defineHooks function from agent-kit (passed via context)
+ * @param {{ dataDir: string }} params - Parameters to bake into hook content
  */
-export function createClaudeCodeHooks(params: HookParams) {
+export function createClaudeCodeHooks(defineHooks, params) {
     return defineHooks('claude-code', [
         {
             events: ['PreToolUse'],

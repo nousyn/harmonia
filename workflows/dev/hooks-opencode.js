@@ -20,15 +20,13 @@
  * - Reminders scan all projects under DATA_DIR
  */
 
-import { defineHooks } from '@s_s/agent-kit';
-import type { HookParams } from './content.js';
 import {
     BLOCKED_COMMANDS,
     CODE_EXTENSIONS,
     DISPATCH_TIMEOUT_MINUTES,
     WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
-} from './content.js';
+} from './hooks-content.js';
 
 /**
  * Generate the OpenCode plugin TypeScript source code.
@@ -37,7 +35,7 @@ import {
  * - tool.execute.before: soft boundary interception
  * - experimental.chat.messages.transform: proactive reminders
  */
-function generateOpenCodePlugin(params: HookParams): string {
+function generateOpenCodePlugin(params) {
     const codeExtsJson = JSON.stringify(CODE_EXTENSIONS);
     const blockedCmdsJson = JSON.stringify(BLOCKED_COMMANDS);
 
@@ -223,12 +221,15 @@ export default {
 }
 
 /**
- * Create OpenCode hook definitions using agent-kit's defineHooks.
+ * Create OpenCode hook definitions using defineHooks from context.
  *
  * Produces a single plugin file with both tool.execute.before and
  * experimental.chat.messages.transform hooks.
+ *
+ * @param {Function} defineHooks - defineHooks function from agent-kit (passed via context)
+ * @param {{ dataDir: string }} params - Parameters to bake into hook content
  */
-export function createOpenCodeHooks(params: HookParams) {
+export function createOpenCodeHooks(defineHooks, params) {
     return defineHooks('opencode', {
         events: ['tool.execute.before', 'experimental.chat.messages.transform'],
         content: generateOpenCodePlugin(params),

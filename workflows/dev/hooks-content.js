@@ -1,5 +1,5 @@
 /**
- * Hook content generation — shared configuration and rule definitions.
+ * Hook content — shared configuration and rule definitions.
  *
  * Hook scripts run on the agent side (shell scripts for Claude Code,
  * TS plugins for OpenCode, handlers for OpenClaw). They need to know:
@@ -9,15 +9,6 @@
  * Boundary guards work on tool names + code file extensions only.
  * Proactive reminders scan all projects under the data directory.
  */
-
-/**
- * Parameters needed to generate hook content.
- * Passed at install time and embedded into the generated scripts.
- */
-export interface HookParams {
-    /** Harmonia data directory (absolute path) */
-    dataDir: string;
-}
 
 // ─── Boundary Rules ───
 
@@ -37,7 +28,7 @@ export const BLOCKED_TOOLS = [
     'bash',
     'Terminal',
     'terminal',
-] as const;
+];
 
 /**
  * Shell commands that indicate development work (coordinator should not run these).
@@ -63,7 +54,7 @@ export const BLOCKED_COMMANDS = [
     'javac ',
     'mvn ',
     'gradle ',
-] as const;
+];
 
 /**
  * File extensions that indicate source code (coordinator should not modify these).
@@ -90,7 +81,7 @@ export const CODE_EXTENSIONS = [
     '.kt',
     '.vue',
     '.svelte',
-] as const;
+];
 
 /**
  * Harmonia MCP tool names — these are always allowed since coordinator uses them
@@ -113,7 +104,7 @@ export const HARMONIA_TOOLS = [
     'issue_create',
     'issue_update',
     'issue_list',
-] as const;
+];
 
 // ─── Timeout thresholds (minutes) ───
 
