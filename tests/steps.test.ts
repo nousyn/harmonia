@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import * as registry from '../src/core/registry.js';
 import {
     readSteps,
-    getDocStepState,
+    getArtifactStepState,
     getCompletedStepIds,
     recordStepCompletion,
     markFinalized,
@@ -40,9 +40,9 @@ describe('readSteps', () => {
     });
 });
 
-describe('getDocStepState', () => {
+describe('getArtifactStepState', () => {
     it('should return null when no step state exists for a doc', async () => {
-        const result = await getDocStepState('test-project', ITER, 'prd');
+        const result = await getArtifactStepState('test-project', ITER, 'prd');
         expect(result).toBeNull();
     });
 });
@@ -87,7 +87,7 @@ describe('recordStepCompletion', () => {
             PRD_STEPS,
         );
 
-        expect(state.docId).toBe('prd');
+        expect(state.artifactId).toBe('prd');
         expect(state.completedSteps).toHaveLength(1);
         expect(state.completedSteps[0].stepId).toBe('requirements');
         expect(state.completedSteps[0].artifactPath).toBe('docs/prd.requirements.json');
@@ -227,8 +227,8 @@ describe('recordStepCompletion', () => {
             TD_STEPS,
         );
 
-        const prdState = await getDocStepState('test-project', ITER, 'prd');
-        const tdState = await getDocStepState('test-project', ITER, 'tech-design');
+        const prdState = await getArtifactStepState('test-project', ITER, 'prd');
+        const tdState = await getArtifactStepState('test-project', ITER, 'tech-design');
 
         expect(prdState!.completedSteps).toHaveLength(1);
         expect(prdState!.completedSteps[0].stepId).toBe('requirements');

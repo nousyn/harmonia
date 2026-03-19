@@ -24,7 +24,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readDoc } from '../core/docs.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession } from '../core/dispatch.js';
-import { loadDocSchema, formatSchemaGuidance } from '../core/schema.js';
+import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
 import type { StepSchemaEntry } from '../core/schema.js';
 import { resolveActive, isError } from './utils.js';
 import { loadWorkflowForContext, processWorkflowEvent, formatNextAction } from './engine-helpers.js';
@@ -193,14 +193,14 @@ async function buildArtifactRequirements(
         if (!artifactDef || artifactDef.external) continue;
 
         // Load main schema
-        const schema = await loadDocSchema(builtinDir, customDir, workflowName, artifactId);
+        const schema = await loadArtifactSchema(builtinDir, customDir, workflowName, artifactId);
 
         // Load step schemas if artifact has steps
         let stepSchemas: StepSchemaEntry[] | undefined;
         if (artifactDef.steps && artifactDef.steps.length > 0) {
             stepSchemas = [];
             for (const step of artifactDef.steps) {
-                const stepSchema = await loadDocSchema(
+                const stepSchema = await loadArtifactSchema(
                     builtinDir,
                     customDir,
                     workflowName,

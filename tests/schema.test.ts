@@ -2,27 +2,27 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateDoc, loadDocSchema, formatValidationErrors } from '../src/core/schema.js';
-import type { DocSchema } from '../src/core/types.js';
+import { validateArtifact, loadArtifactSchema, formatValidationErrors } from '../src/core/schema.js';
+import type { ArtifactSchema } from '../src/core/types.js';
 
-// ─── validateDoc tests ───
+// ─── validateArtifact tests ───
 
-describe('validateDoc', () => {
-    const prdSchema: DocSchema = {
+describe('validateArtifact', () => {
+    const prdSchema: ArtifactSchema = {
         sections: [
             {
                 heading: '## 项目概述',
-                required: { small: true, medium: true, large: true },
+                required: true,
                 aliases: ['## Project Overview', '## 概述'],
             },
             {
                 heading: '## 功能需求',
-                required: { small: true, medium: true, large: true },
+                required: true,
                 aliases: ['## Functional Requirements'],
             },
             {
                 heading: '## 非功能需求',
-                required: { small: false, medium: true, large: true },
+                required: true,
                 aliases: ['## Non-Functional Requirements'],
             },
         ],
@@ -46,7 +46,7 @@ describe('validateDoc', () => {
             '这里有更多内容来满足最小长度要求...',
         ].join('\n');
 
-        const result = validateDoc(content, prdSchema, 'medium');
+        const result = validateArtifact(content, prdSchema);
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
     });
@@ -62,7 +62,7 @@ describe('validateDoc', () => {
             '更多填充内容来满足长度要求...',
         ].join('\n');
 
-        const result = validateDoc(content, prdSchema, 'medium');
+        const result = validateArtifact(content, prdSchema);
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.type === 'missing_section' && e.message.includes('功能需求'))).toBe(true);
         expect(result.errors.some((e) => e.type === 'missing_section' && e.message.includes('非功能需求'))).toBe(true);
@@ -85,11 +85,32 @@ describe('validateDoc', () => {
             'More content here to meet the minimum length requirement for the schema validator...',
         ].join('\n');
 
-        const result = validateDoc(content, prdSchema, 'large');
+        const result = validateArtifact(content, prdSchema);
         expect(result.valid).toBe(true);
     });
 
-    it('should skip optional sections for small scale', () => {
+    it('should skip non-required sections', () => {
+        const optionalSchema: ArtifactSchema = {
+            sections: [
+                {
+                    heading: '## 项目概述',
+                    required: true,
+                    aliases: ['## Project Overview', '## 概述'],
+                },
+                {
+                    heading: '## 功能需求',
+                    required: true,
+                    aliases: ['## Functional Requirements'],
+                },
+                {
+                    heading: '## 非功能需求',
+                    required: false,
+                    aliases: ['## Non-Functional Requirements'],
+                },
+            ],
+            minLength: 100,
+        };
+
         const content = [
             '# PRD',
             '',
@@ -101,27 +122,27 @@ describe('validateDoc', () => {
             '2. 另一个功能：支持多种文档格式的导出',
         ].join('\n');
 
-        // small scale: 非功能需求 is not required
-        const result = validateDoc(content, prdSchema, 'small');
+        // 非功能需求 is not required, so it should be skipped
+        const result = validateArtifact(content, optionalSchema);
         expect(result.valid).toBe(true);
     });
 
     it('should fail on empty content', () => {
-        const result = validateDoc('', prdSchema, 'medium');
+        const result = validateArtifact('', prdSchema);
         expect(result.valid).toBe(false);
         expect(result.errors).toHaveLength(1);
         expect(result.errors[0].type).toBe('empty_content');
     });
 
     it('should fail on whitespace-only content', () => {
-        const result = validateDoc('   \n\n  \t  ', prdSchema, 'medium');
+        const result = validateArtifact('   \n\n  \t  ', prdSchema);
         expect(result.valid).toBe(false);
         expect(result.errors[0].type).toBe('empty_content');
     });
 
     it('should fail when content is too short', () => {
         const content = '## 项目概述\n## 功能需求\nShort.';
-        const result = validateDoc(content, prdSchema, 'small');
+        const result = validateArtifact(content, prdSchema);
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.type === 'content_too_short')).toBe(true);
     });
@@ -129,36 +150,36 @@ describe('validateDoc', () => {
     // ─── HTML validation ───
 
     it('should validate HTML tags', () => {
-        const htmlSchema: DocSchema = {
+        const htmlSchema: ArtifactSchema = {
             htmlTags: ['html', 'body'],
             minLength: 50,
         };
 
         const validHtml =
             '<html>\n<head><title>Prototype</title></head>\n<body>\n<h1>Hello</h1>\n<p>Content here</p>\n</body>\n</html>';
-        const result = validateDoc(validHtml, htmlSchema, 'medium', true);
+        const result = validateArtifact(validHtml, htmlSchema, true);
         expect(result.valid).toBe(true);
     });
 
     it('should fail when required HTML tags are missing', () => {
-        const htmlSchema: DocSchema = {
+        const htmlSchema: ArtifactSchema = {
             htmlTags: ['html', 'body', 'nav'],
             minLength: 50,
         };
 
         const html =
             '<html>\n<head><title>Test</title></head>\n<body>\n<h1>Hello</h1>\n<p>No nav here</p>\n</body>\n</html>';
-        const result = validateDoc(html, htmlSchema, 'medium', true);
+        const result = validateArtifact(html, htmlSchema, true);
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.type === 'missing_html_tag' && e.message.includes('<nav>'))).toBe(true);
     });
 
     it('should not check markdown sections for HTML documents', () => {
-        const schema: DocSchema = {
+        const schema: ArtifactSchema = {
             sections: [
                 {
                     heading: '## 项目概述',
-                    required: { small: true, medium: true, large: true },
+                    required: true,
                 },
             ],
             htmlTags: ['html', 'body'],
@@ -167,48 +188,48 @@ describe('validateDoc', () => {
 
         const html =
             '<html>\n<head><title>Test</title></head>\n<body>\n<h1>No markdown headings</h1>\n</body>\n</html>';
-        const result = validateDoc(html, schema, 'medium', true);
+        const result = validateArtifact(html, schema, true);
         expect(result.valid).toBe(true);
     });
 
     // ─── Heading level matching ───
 
     it('should match heading levels correctly', () => {
-        const schema: DocSchema = {
+        const schema: ArtifactSchema = {
             sections: [
                 {
                     heading: '## 设计',
-                    required: { small: true, medium: true, large: true },
+                    required: true,
                 },
             ],
         };
 
         // ### 设计 should NOT match ## 设计 (different level)
         const content = '### 设计\n内容内容内容...';
-        const result = validateDoc(content, schema, 'small');
+        const result = validateArtifact(content, schema);
         expect(result.valid).toBe(false);
     });
 
     it('should match headings case-insensitively', () => {
-        const schema: DocSchema = {
+        const schema: ArtifactSchema = {
             sections: [
                 {
                     heading: '## API Design',
-                    required: { small: true, medium: true, large: true },
+                    required: true,
                     aliases: ['## Api design'],
                 },
             ],
         };
 
         const content = '## api design\nSome content here...';
-        const result = validateDoc(content, schema, 'small');
+        const result = validateArtifact(content, schema);
         expect(result.valid).toBe(true);
     });
 });
 
-// ─── loadDocSchema tests ───
+// ─── loadArtifactSchema tests ───
 
-describe('loadDocSchema', () => {
+describe('loadArtifactSchema', () => {
     let tempDir: string;
     const NO_CUSTOM_DIR = '/nonexistent-custom-workflows';
 
@@ -224,23 +245,23 @@ describe('loadDocSchema', () => {
     });
 
     it('should load a schema file', async () => {
-        const schema: DocSchema = {
+        const schema: ArtifactSchema = {
             sections: [
                 {
                     heading: '## Test',
-                    required: { small: true, medium: true, large: true },
+                    required: true,
                 },
             ],
             minLength: 50,
         };
         await writeFile(join(tempDir, 'dev', 'schemas', 'test-doc.json'), JSON.stringify(schema));
 
-        const loaded = await loadDocSchema(tempDir, NO_CUSTOM_DIR, 'dev', 'test-doc');
+        const loaded = await loadArtifactSchema(tempDir, NO_CUSTOM_DIR, 'dev', 'test-doc');
         expect(loaded).toEqual(schema);
     });
 
     it('should return undefined for non-existent schema', async () => {
-        const loaded = await loadDocSchema(tempDir, NO_CUSTOM_DIR, 'dev', 'nonexistent');
+        const loaded = await loadArtifactSchema(tempDir, NO_CUSTOM_DIR, 'dev', 'nonexistent');
         expect(loaded).toBeUndefined();
     });
 });

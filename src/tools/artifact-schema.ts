@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { loadDocSchema, formatSchemaGuidance, isRequired } from '../core/schema.js';
+import { loadArtifactSchema, formatSchemaGuidance, isRequired } from '../core/schema.js';
 import type { StepSchemaEntry } from '../core/schema.js';
 import { loadWorkflowForContext } from './engine-helpers.js';
 import { resolveActive, isError } from './utils.js';
@@ -70,7 +70,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                         };
                     }
 
-                    const stepSchema = await loadDocSchema(builtinDir, customDir, state.workflow, `${artifact_id}.${step}`);
+                    const stepSchema = await loadArtifactSchema(builtinDir, customDir, state.workflow, `${artifact_id}.${step}`);
                     const stepDefFound = artifactDef.steps.find((s) => s.id === step)!;
 
                     const lines: string[] = [];
@@ -121,14 +121,14 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                 }
 
                 // Full artifact schema
-                const schema = await loadDocSchema(builtinDir, customDir, state.workflow, artifact_id);
+                const schema = await loadArtifactSchema(builtinDir, customDir, state.workflow, artifact_id);
 
                 // Load step schemas if artifact has steps
                 let stepSchemas: StepSchemaEntry[] | undefined;
                 if (artifactDef.steps && artifactDef.steps.length > 0) {
                     stepSchemas = [];
                     for (const s of artifactDef.steps) {
-                        const stepSchema = await loadDocSchema(
+                        const stepSchema = await loadArtifactSchema(
                             builtinDir,
                             customDir,
                             state.workflow,

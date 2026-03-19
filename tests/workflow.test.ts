@@ -15,25 +15,25 @@ describe('workflow loader', () => {
         const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
         expect(wf.definition.name).toBe('dev');
-        expect(wf.definition.phases).toHaveLength(5);
-        expect(wf.definition.phases[0].id).toBe('clarify');
-        expect(wf.definition.phases[4].id).toBe('deliver');
+        expect(wf.definition.root.type).toBe('sequence');
+        expect(wf.definition.root.id).toBe('main');
+        expect(wf.definition.coordinator).toBe('coordinator');
     });
 
     it('should load all dev workflow roles', async () => {
         const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
         const roleIds = Object.keys(wf.roles).sort();
 
-        expect(roleIds).toEqual(['architect', 'developer', 'pm', 'tester']);
+        expect(roleIds).toEqual(['architect', 'coordinator', 'developer', 'tester']);
     });
 
     it('should parse role frontmatter correctly', async () => {
         const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
-        const pm = wf.roles['pm'];
-        expect(pm.frontmatter.model).toBe('medium');
-        expect(pm.frontmatter.session).toBe('none');
-        expect(pm.frontmatter.parallel).toBe(false);
+        const coordinator = wf.roles['coordinator'];
+        expect(coordinator.frontmatter.model).toBe('medium');
+        expect(coordinator.frontmatter.session).toBe('none');
+        expect(coordinator.frontmatter.parallel).toBe(false);
 
         const architect = wf.roles['architect'];
         expect(architect.frontmatter.model).toBe('strong');
@@ -53,59 +53,41 @@ describe('workflow loader', () => {
         }
     });
 
-    it('should have docs with scale definitions', async () => {
+    it('should have artifact definitions', async () => {
         const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
 
-        expect(wf.definition.docs['prd']).toBeDefined();
-        expect(wf.definition.docs['prd'].scale.small).toBe('lite');
-        expect(wf.definition.docs['prd'].scale.large).toBe('full');
+        expect(wf.artifactDefinitions['prd']).toBeDefined();
+        expect(wf.artifactDefinitions['user-stories']).toBeDefined();
+    });
+
+    it('should have review flags on appropriate artifacts', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
+
+        expect(wf.artifactDefinitions['prd'].review).toBe(true);
+        expect(wf.artifactDefinitions['prototype'].review).toBe(true);
+        expect(wf.artifactDefinitions['user-stories'].review).toBeFalsy();
+    });
+
+    it('should have artifact format defined for prototype', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
+        expect(wf.artifactDefinitions['prototype'].format).toBe('html');
     });
 
     it('should throw on non-existent workflow', async () => {
         await expect(loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'nonexistent')).rejects.toThrow();
     });
 
-    it('should parse role capabilities from frontmatter', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
-
-        const pm = wf.roles['pm'];
-        expect(pm.frontmatter.capabilities).toBeDefined();
-        expect(pm.frontmatter.capabilities!.length).toBeGreaterThan(0);
-
-        // Check a specific capability
-        const writePrd = pm.frontmatter.capabilities!.find((c) => c.id === 'write-prd');
-        expect(writePrd).toBeDefined();
-        expect(writePrd!.doc).toBe('prd');
-        expect(writePrd!.description).toBeTruthy();
-    });
-
-    it('should parse architect capabilities', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
-
-        const architect = wf.roles['architect'];
-        expect(architect.frontmatter.capabilities).toBeDefined();
-
-        const ids = architect.frontmatter.capabilities!.map((c) => c.id);
-        expect(ids).toContain('analyze-codebase');
-        expect(ids).toContain('write-tech-design');
-        expect(ids).toContain('write-task-breakdown');
-    });
-
-    it('should have doc format defined for prototype', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
-        expect(wf.definition.docs['prototype'].format).toBe('html');
-    });
-
-    it('should have review flags on appropriate docs', async () => {
-        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
-        expect(wf.definition.docs['prd'].review).toBe(true);
-        expect(wf.definition.docs['prototype'].review).toBe(true);
-        expect(wf.definition.docs['user-stories'].review).toBe(false);
-    });
-
     it('should have version and author metadata', async () => {
         const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
-        expect(wf.definition.version).toBe('1.0.0');
+        expect(wf.definition.version).toBe('2.0.0');
         expect(wf.definition.author).toBe('harmonia');
+    });
+
+    it('should have prd steps defined', async () => {
+        const wf = await loadWorkflow(WORKFLOWS_DIR, NO_CUSTOM_DIR, 'dev');
+        const prd = wf.artifactDefinitions['prd'];
+
+        expect(prd.steps).toHaveLength(4);
+        expect(prd.steps![0].id).toBe('requirements');
     });
 });

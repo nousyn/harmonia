@@ -1,5 +1,5 @@
 /**
- * Tests for the doc_schema MCP tool.
+ * Tests for the artifact_schema MCP tool.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -10,9 +10,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import * as registry from '../src/core/registry.js';
-import { registerDocSchema } from '../src/tools/doc-schema.js';
+import { registerArtifactSchema } from '../src/tools/artifact-schema.js';
 
-describe('doc_schema tool', () => {
+describe('artifact_schema tool', () => {
     let tempDir: string;
     let workflowsDir: string;
     let noCustomDir: string;
@@ -52,18 +52,15 @@ describe('doc_schema tool', () => {
             activeContext: 'iter-1',
         });
 
-        // Write state.json with medium scale
+        // Write state.json (node-based format)
         await writeFile(
             join(iterDir, 'state.json'),
             JSON.stringify({
                 projectName: 'test-project',
-                projectDir: '/tmp/src',
                 workflow: 'dev',
                 type: 'iteration',
                 iteration: ITER,
-                scale: 'medium',
-                currentPhase: 'clarify',
-                phases: [{ id: 'clarify', status: 'in_progress' }],
+                nodes: {},
                 createdAt: '2026-01-01T00:00:00Z',
                 updatedAt: '2026-01-01T00:00:00Z',
             }),
@@ -99,7 +96,7 @@ describe('doc_schema tool', () => {
 
         // Create MCP server + client
         server = new McpServer({ name: 'test', version: '0.0.1' });
-        registerDocSchema(server, workflowsDir, noCustomDir);
+        registerArtifactSchema(server, workflowsDir, noCustomDir);
 
         const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
         client = new Client({ name: 'test-client', version: '0.0.1' });
@@ -113,10 +110,10 @@ describe('doc_schema tool', () => {
 
     // ─── Basic queries ───
 
-    it('should return full document schema for prd', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+    it('should return full artifact schema for prd', async () => {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'prd',
+            artifact_id: 'prd',
         });
 
         expect(isError).toBe(false);
@@ -124,19 +121,19 @@ describe('doc_schema tool', () => {
         expect(text).toContain('格式: Markdown');
         expect(text).toContain('最小长度: 200 字符');
         expect(text).toContain('内容指引');
-        // medium scale: should list required sections
+        // should list required sections
         expect(text).toContain('项目概述');
         expect(text).toContain('功能需求');
         expect(text).toContain('非功能需求');
-        // medium scale: should show step schemas
+        // should show step schemas
         expect(text).toContain('分步写入');
         expect(text).toContain('requirements');
     });
 
     it('should return schema for tech-design', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'tech-design',
+            artifact_id: 'tech-design',
         });
 
         expect(isError).toBe(false);
@@ -147,9 +144,9 @@ describe('doc_schema tool', () => {
     // ─── Step-specific query ───
 
     it('should return specific step schema when step is specified', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'prd',
+            artifact_id: 'prd',
             step: 'requirements',
         });
 
@@ -160,9 +157,9 @@ describe('doc_schema tool', () => {
     });
 
     it('should return step schema for prd.draft', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'prd',
+            artifact_id: 'prd',
             step: 'draft',
         });
 
@@ -173,10 +170,10 @@ describe('doc_schema tool', () => {
 
     // ─── Error cases ───
 
-    it('should error for non-existent doc_id', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+    it('should error for non-existent artifact_id', async () => {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'nonexistent-doc',
+            artifact_id: 'nonexistent-doc',
         });
 
         expect(isError).toBe(true);
@@ -184,9 +181,9 @@ describe('doc_schema tool', () => {
     });
 
     it('should error for non-existent step', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'prd',
+            artifact_id: 'prd',
             step: 'nonexistent-step',
         });
 
@@ -194,10 +191,10 @@ describe('doc_schema tool', () => {
         expect(text).toContain('Step "nonexistent-step" not found');
     });
 
-    it('should error for step on doc without steps', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+    it('should error for step on artifact without steps', async () => {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'user-stories',
+            artifact_id: 'user-stories',
             step: 'draft',
         });
 
@@ -205,39 +202,12 @@ describe('doc_schema tool', () => {
         expect(text).toContain('not found');
     });
 
-    it('should error when scale is not set', async () => {
-        // Rewrite state with null scale
-        await writeFile(
-            join(iterDir, 'state.json'),
-            JSON.stringify({
-                projectName: 'test-project',
-                projectDir: '/tmp/src',
-                workflow: 'dev',
-                type: 'iteration',
-                iteration: ITER,
-                scale: null,
-                currentPhase: 'clarify',
-                phases: [{ id: 'clarify', status: 'in_progress' }],
-                createdAt: '2026-01-01T00:00:00Z',
-                updatedAt: '2026-01-01T00:00:00Z',
-            }),
-        );
-
-        const { text, isError } = await callTool('doc_schema', {
-            project_name: 'test-project',
-            doc_id: 'prd',
-        });
-
-        expect(isError).toBe(true);
-        expect(text).toContain('规模尚未设定');
-    });
-
-    // ─── Doc without schema ───
+    // ─── Artifact without schema ───
 
     it('should indicate when no schema exists', async () => {
-        const { text, isError } = await callTool('doc_schema', {
+        const { text, isError } = await callTool('artifact_schema', {
             project_name: 'test-project',
-            doc_id: 'code',
+            artifact_id: 'code',
         });
 
         // code is external, but should still not error — just say no schema

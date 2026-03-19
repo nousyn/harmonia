@@ -70,8 +70,8 @@ describe('patch_start tool', () => {
         const { text, isError } = await callTool('patch_start', { project_name: PROJECT });
         expect(isError).toBeFalsy();
         expect(text).toContain('patch-1');
-        expect(text).toContain('small');
-        expect(text).toContain('clarify, design');
+        // New architecture: patch_start returns nextAction info instead of scale/phases
+        expect(text).toContain('dev');
     });
 
     it('should create patch directory with state.json', async () => {
@@ -85,12 +85,12 @@ describe('patch_start tool', () => {
         const state = JSON.parse(await readFile(statePath, 'utf-8'));
 
         expect(state.type).toBe('patch');
-        expect(state.scale).toBe('small');
-        // clarify and design should be skipped
-        const clarify = state.phases.find((p: { id: string }) => p.id === 'clarify');
-        const design = state.phases.find((p: { id: string }) => p.id === 'design');
-        expect(clarify?.status).toBe('skipped');
-        expect(design?.status).toBe('skipped');
+        // New architecture: state uses node-based tracking instead of scale/phases
+        expect(state.nodes).toBeDefined();
+        expect(state.activeNodeId).toBeDefined();
+        // Verify workflow nodes exist
+        expect(state.nodes['main']).toBeDefined();
+        expect(state.nodes['clarify']).toBeDefined();
     });
 
     it('should auto-increment patch numbers', async () => {

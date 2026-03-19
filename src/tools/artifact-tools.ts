@@ -22,7 +22,7 @@ import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/workflow.js';
 import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
 import { submitForReview } from '../core/reviews.js';
-import { loadDocSchema, validateDoc, formatValidationErrors } from '../core/schema.js';
+import { loadArtifactSchema, validateArtifact, formatValidationErrors } from '../core/schema.js';
 import { getArtifactStepState, getCompletedStepIds, recordStepCompletion, markFinalized } from '../core/steps.js';
 import { resolveActive, isError } from './utils.js';
 import { processWorkflowEvent, loadWorkflowForContext, formatNextAction } from './engine-helpers.js';
@@ -124,9 +124,9 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             // ─── Normal Mode (no steps) ───
 
             // Schema validation — reject write if content doesn't meet requirements
-            const schema = await loadDocSchema(builtinDir, customDir, state.workflow, artifact_id);
+            const schema = await loadArtifactSchema(builtinDir, customDir, state.workflow, artifact_id);
             if (schema) {
-                const result = validateDoc(content, schema, isHtml);
+                const result = validateArtifact(content, schema, isHtml);
                 if (!result.valid) {
                     return {
                         content: [
@@ -393,9 +393,9 @@ async function handleSequentialWrite(
     // Step schema validation
     const isJson = stepDef.format === 'json';
     const stepSchemaId = `${artifactId}.${step}`;
-    const stepSchema = await loadDocSchema(builtinDir, customDir, workflowName, stepSchemaId);
+    const stepSchema = await loadArtifactSchema(builtinDir, customDir, workflowName, stepSchemaId);
     if (stepSchema) {
-        const result = validateDoc(content, stepSchema, false, isJson);
+        const result = validateArtifact(content, stepSchema, false, isJson);
         if (!result.valid) {
             return {
                 content: [
@@ -471,10 +471,10 @@ async function handleFinalStep(
     const isHtml = artifactDef.format === 'html';
 
     // Validate against the final artifact schema (e.g. prd.json)
-    const finalSchema = await loadDocSchema(builtinDir, customDir, workflowName, artifactId);
+    const finalSchema = await loadArtifactSchema(builtinDir, customDir, workflowName, artifactId);
     if (finalSchema) {
         const isJson = stepDef.format === 'json';
-        const result = validateDoc(content, finalSchema, isHtml, isJson);
+        const result = validateArtifact(content, finalSchema, isHtml, isJson);
         if (!result.valid) {
             return {
                 content: [

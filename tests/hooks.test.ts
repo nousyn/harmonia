@@ -58,11 +58,29 @@ describe('hook shared constants', () => {
 
     it('HARMONIA_TOOLS should include all MCP tools', () => {
         expect(HARMONIA_TOOLS).toContain('project_init');
-        expect(HARMONIA_TOOLS).toContain('project_set_scale');
+        expect(HARMONIA_TOOLS).toContain('project_status');
+        expect(HARMONIA_TOOLS).toContain('iteration_start');
+        expect(HARMONIA_TOOLS).toContain('patch_start');
         expect(HARMONIA_TOOLS).toContain('role_dispatch');
-        expect(HARMONIA_TOOLS).toContain('doc_write');
-        expect(HARMONIA_TOOLS).toContain('doc_read');
-        expect(HARMONIA_TOOLS).toContain('doc_approve');
+        expect(HARMONIA_TOOLS).toContain('dispatch_report');
+        expect(HARMONIA_TOOLS).toContain('artifact_write');
+        expect(HARMONIA_TOOLS).toContain('artifact_read');
+        expect(HARMONIA_TOOLS).toContain('artifact_list');
+        expect(HARMONIA_TOOLS).toContain('artifact_approve');
+        expect(HARMONIA_TOOLS).toContain('artifact_schema');
+        expect(HARMONIA_TOOLS).toContain('review_list');
+        expect(HARMONIA_TOOLS).toContain('role_prompt');
+        expect(HARMONIA_TOOLS).toContain('issue_create');
+        expect(HARMONIA_TOOLS).toContain('issue_update');
+        expect(HARMONIA_TOOLS).toContain('issue_list');
+        // Removed tools should not be present
+        expect(HARMONIA_TOOLS).not.toContain('doc_write');
+        expect(HARMONIA_TOOLS).not.toContain('doc_read');
+        expect(HARMONIA_TOOLS).not.toContain('doc_list');
+        expect(HARMONIA_TOOLS).not.toContain('doc_schema');
+        expect(HARMONIA_TOOLS).not.toContain('doc_approve');
+        expect(HARMONIA_TOOLS).not.toContain('project_set_scale');
+        expect(HARMONIA_TOOLS).not.toContain('phase_update');
         expect(HARMONIA_TOOLS).not.toContain('project_setup');
     });
 

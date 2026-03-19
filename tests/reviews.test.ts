@@ -24,7 +24,7 @@ describe('document review system', () => {
 
     it('should submit a document for review', async () => {
         const review = await submitForReview(TEST_PROJECT, ITER, 'prd');
-        expect(review.docId).toBe('prd');
+        expect(review.artifactId).toBe('prd');
         expect(review.status).toBe('pending');
         expect(review.submittedAt).toBeDefined();
     });
@@ -63,7 +63,7 @@ describe('document review system', () => {
         await submitForReview(TEST_PROJECT, ITER, 'prd');
         const review = await getDocReview(TEST_PROJECT, ITER, 'prd');
         expect(review).not.toBeNull();
-        expect(review!.docId).toBe('prd');
+        expect(review!.artifactId).toBe('prd');
     });
 
     it('should return null for non-existent doc review', async () => {
@@ -78,7 +78,7 @@ describe('document review system', () => {
 
         const pending = await getPendingReviews(TEST_PROJECT, ITER);
         expect(pending).toHaveLength(1);
-        expect(pending[0].docId).toBe('prototype');
+        expect(pending[0].artifactId).toBe('prototype');
     });
 
     it('should return empty list when no pending reviews', async () => {

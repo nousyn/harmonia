@@ -20,7 +20,7 @@ import { resolveWorkflowDir } from './workflow.js';
  *
  * For step schemas, pass a composite id like "prd.requirements".
  */
-export async function loadDocSchema(
+export async function loadArtifactSchema(
     builtinDir: string,
     customDir: string,
     workflowName: string,
@@ -130,7 +130,7 @@ export function isRequired(required: boolean | Record<string, boolean>): boolean
  * @param isHtml   - Whether the artifact is HTML format
  * @param isJson   - Whether the artifact is JSON format (for step artifacts)
  */
-export function validateDoc(
+export function validateArtifact(
     content: string,
     schema: ArtifactSchema,
     isHtml: boolean = false,
