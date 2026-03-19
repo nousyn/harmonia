@@ -1,7 +1,7 @@
 /**
- * Document review state management — <context_dir>/reviews.json
+ * Artifact review state management — <context_dir>/reviews.json
  *
- * Tracks which documents are pending review, approved, or rejected.
+ * Tracks which artifacts are pending review, approved, or rejected.
  * All public functions accept an optional contextDir parameter.
  */
 
@@ -13,7 +13,7 @@ import type { ReviewState, ReviewStatus } from './types.js';
 const REVIEWS_FILE = 'reviews.json';
 
 interface ReviewsData {
-    docs: Record<string, ReviewState>;
+    artifacts: Record<string, ReviewState>;
 }
 
 function reviewsPath(projectName: string, iteration: number, contextDir?: string): string {
@@ -32,7 +32,7 @@ export async function readReviews(
     try {
         const content = await readFile(reviewsPath(projectName, iteration, contextDir), 'utf-8');
         const data = JSON.parse(content) as ReviewsData;
-        return data.docs ?? {};
+        return data.artifacts ?? {};
     } catch {
         return {};
     }
@@ -44,55 +44,55 @@ export async function readReviews(
 async function writeReviews(
     projectName: string,
     iteration: number,
-    docs: Record<string, ReviewState>,
+    artifacts: Record<string, ReviewState>,
     contextDir?: string,
 ): Promise<void> {
     const filePath = reviewsPath(projectName, iteration, contextDir);
     await mkdir(dirname(filePath), { recursive: true });
-    const data: ReviewsData = { docs };
+    const data: ReviewsData = { artifacts };
     await writeFile(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
 /**
- * Submit a document for review. Sets status to "pending".
+ * Submit an artifact for review. Sets status to "pending".
  */
 export async function submitForReview(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     contextDir?: string,
 ): Promise<ReviewState> {
     const reviews = await readReviews(projectName, iteration, contextDir);
     const state: ReviewState = {
-        artifactId: docId,
+        artifactId,
         status: 'pending',
         submittedAt: new Date().toISOString(),
     };
-    reviews[docId] = state;
+    reviews[artifactId] = state;
     await writeReviews(projectName, iteration, reviews, contextDir);
     return state;
 }
 
 /**
- * Approve or reject a document review.
+ * Approve or reject an artifact review.
  */
 export async function resolveReview(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     status: 'approved' | 'rejected',
     comment?: string,
     contextDir?: string,
 ): Promise<ReviewState> {
     const reviews = await readReviews(projectName, iteration, contextDir);
-    const existing = reviews[docId];
+    const existing = reviews[artifactId];
 
     if (!existing) {
-        throw new Error(`No review pending for document "${docId}". Submit it for review first.`);
+        throw new Error(`No review pending for artifact "${artifactId}". Submit it for review first.`);
     }
 
     if (existing.status !== 'pending') {
-        throw new Error(`Document "${docId}" review is already ${existing.status}.`);
+        throw new Error(`Artifact "${artifactId}" review is already ${existing.status}.`);
     }
 
     existing.status = status;
@@ -106,16 +106,16 @@ export async function resolveReview(
 }
 
 /**
- * Get the review state for a specific document.
+ * Get the review state for a specific artifact.
  */
-export async function getDocReview(
+export async function getArtifactReview(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     contextDir?: string,
 ): Promise<ReviewState | null> {
     const reviews = await readReviews(projectName, iteration, contextDir);
-    return reviews[docId] ?? null;
+    return reviews[artifactId] ?? null;
 }
 
 /**

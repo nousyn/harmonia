@@ -10,7 +10,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ArtifactSchema, ArtifactSchemaSection } from './types.js';
-import { resolveWorkflowDir } from './workflow.js';
+import { resolveWorkflowDir } from './plugin.js';
 
 // ─── Schema Loading ───
 
@@ -38,7 +38,7 @@ export async function loadArtifactSchema(
 
 // ─── Validation ───
 
-export interface ValidationError {
+export interface ArtifactValidationError {
     /** Error type */
     type:
         | 'missing_section'
@@ -55,7 +55,7 @@ export interface ValidationError {
 
 export interface ValidationResult {
     valid: boolean;
-    errors: ValidationError[];
+    errors: ArtifactValidationError[];
 }
 
 /**
@@ -108,21 +108,6 @@ function sectionPresent(section: ArtifactSchemaSection, headings: string[]): boo
 }
 
 /**
- * Resolve whether a section/field is required.
- *
- * The `required` field can be either:
- * - A boolean (new format)
- * - An object with scale keys (old format, still in some schema files)
- *
- * This function handles both for backward compatibility during migration.
- */
-export function isRequired(required: boolean | Record<string, boolean>): boolean {
-    if (typeof required === 'boolean') return required;
-    // Old scale-based format: treat as required if ANY scale requires it
-    return Object.values(required).some(Boolean);
-}
-
-/**
  * Validate artifact content against a schema.
  *
  * @param content  - Artifact content (markdown, HTML, or JSON)
@@ -136,7 +121,7 @@ export function validateArtifact(
     isHtml: boolean = false,
     isJson: boolean = false,
 ): ValidationResult {
-    const errors: ValidationError[] = [];
+    const errors: ArtifactValidationError[] = [];
 
     // Empty content check
     const trimmed = content.trim();
@@ -160,7 +145,7 @@ export function validateArtifact(
         const headings = extractHeadings(content);
 
         for (const section of schema.sections) {
-            if (isRequired(section.required) && !sectionPresent(section, headings)) {
+            if (section.required && !sectionPresent(section, headings)) {
                 const aliasList = section.aliases?.length ? `（或: ${section.aliases.join(', ')}）` : '';
                 errors.push({
                     type: 'missing_section',
@@ -198,7 +183,7 @@ export function validateArtifact(
 
         if (parsed) {
             for (const fieldDef of schema.jsonFields) {
-                if (!isRequired(fieldDef.required)) continue;
+                if (!fieldDef.required) continue;
 
                 const value = parsed[fieldDef.field];
 
@@ -254,27 +239,27 @@ export interface StepSchemaEntry {
  * Format an artifact schema into human-readable writing guidance.
  *
  * Used by:
- * - role_dispatch: inject Document Requirements into the dispatch data package
+ * - role_dispatch: inject Artifact Requirements into the dispatch data package
  * - artifact_schema tool: return guidance on demand for coordinator
  *
- * @param docId         Artifact ID (e.g. "prd", "tech-design")
- * @param docDef        Artifact definition from workflow.json
+ * @param artifactId    Artifact ID (e.g. "prd", "tech-design")
+ * @param artifactDef   Artifact definition from workflow.json
  * @param schema        Main artifact schema (may be undefined if no schema file exists)
  * @param stepSchemas   Step schemas (only relevant when artifact has steps)
  */
 export function formatSchemaGuidance(
-    docId: string,
-    docDef: { name: string; format?: 'md' | 'html' | 'json' },
+    artifactId: string,
+    artifactDef: { name: string; format?: 'md' | 'html' | 'json' },
     schema: ArtifactSchema | undefined,
     stepSchemas?: StepSchemaEntry[],
 ): string {
     const lines: string[] = [];
 
-    lines.push(`## 文档要求: ${docDef.name} (${docId})`);
+    lines.push(`## 文档要求: ${artifactDef.name} (${artifactId})`);
     lines.push('');
 
     // Format
-    const format = docDef.format === 'html' ? 'HTML' : docDef.format === 'json' ? 'JSON' : 'Markdown';
+    const format = artifactDef.format === 'html' ? 'HTML' : artifactDef.format === 'json' ? 'JSON' : 'Markdown';
     lines.push(`格式: ${format}`);
 
     // Min length
@@ -289,7 +274,7 @@ export function formatSchemaGuidance(
 
     // Required sections (markdown docs)
     if (schema?.sections) {
-        const required = schema.sections.filter((s) => isRequired(s.required));
+        const required = schema.sections.filter((s) => s.required);
         if (required.length > 0) {
             lines.push('');
             lines.push('### 必需章节');
@@ -312,7 +297,7 @@ export function formatSchemaGuidance(
 
     // Required JSON fields (for top-level JSON docs without steps)
     if (schema?.jsonFields) {
-        const required = schema.jsonFields.filter((f) => isRequired(f.required));
+        const required = schema.jsonFields.filter((f) => f.required);
         if (required.length > 0) {
             lines.push('');
             lines.push('### 必需 JSON 字段');
@@ -337,7 +322,7 @@ export function formatSchemaGuidance(
             if (stepSchema) {
                 // Step-level required JSON fields
                 if (stepSchema.jsonFields) {
-                    const reqFields = stepSchema.jsonFields.filter((f) => isRequired(f.required));
+                    const reqFields = stepSchema.jsonFields.filter((f) => f.required);
                     if (reqFields.length > 0) {
                         const fieldDescs = reqFields.map((f) => {
                             let d = f.field;
@@ -351,7 +336,7 @@ export function formatSchemaGuidance(
 
                 // Step-level required sections
                 if (stepSchema.sections) {
-                    const reqSections = stepSchema.sections.filter((s) => isRequired(s.required));
+                    const reqSections = stepSchema.sections.filter((s) => s.required);
                     if (reqSections.length > 0) {
                         const sectionNames = reqSections.map((s) => s.heading.replace(/^#+\s*/, ''));
                         lines.push(`   必需章节: ${sectionNames.join(', ')}`);
@@ -377,7 +362,7 @@ export function formatSchemaGuidance(
 /**
  * Format validation errors into a human-readable string for tool response.
  */
-export function formatValidationErrors(errors: ValidationError[]): string {
+export function formatValidationErrors(errors: ArtifactValidationError[]): string {
     const lines = ['文档校验失败，请修正后重新提交：', ''];
     for (const err of errors) {
         lines.push(`- ${err.message}`);

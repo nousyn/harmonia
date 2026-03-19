@@ -16,7 +16,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getProject, startPatch, getPatchDir } from '../core/registry.js';
-import { loadWorkflow } from '../core/workflow.js';
+import { loadWorkflow } from '../core/plugin.js';
 import { initWorkflowState, persistState } from '../core/state.js';
 import { startWorkflow } from '../core/workflow-engine.js';
 import { formatNextAction } from './engine-helpers.js';

@@ -51,6 +51,7 @@ Every Harmonia tool returns a \`nextAction\` field that tells you exactly what t
 - **type: "approve_artifact"** — present an artifact for user approval
 - **type: "wait"** — wait for a running dispatch to complete
 - **type: "completed"** — workflow is finished
+- **type: "failed"** — workflow has failed (check instructions for details)
 
 Always follow the \`instructions\` in nextAction. The workflow engine determines the correct next step based on the workflow definition and current state.
 

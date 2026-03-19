@@ -1,8 +1,11 @@
 /**
- * Tests for P2 Agent Hook — content generation and routing logic.
+ * Tests for dev workflow hooks — content generation and routing logic.
  *
- * Tests Harmonia's own hook logic (content generation, parameter embedding,
+ * Tests Harmonia's hook logic (content generation, parameter embedding,
  * agent routing). Does NOT test agent-kit's defineHooks/installHooks.
+ *
+ * Hook generators live in src/hooks/ (compiled to build/hooks/).
+ * Agent routing logic lives in workflows/dev/hooks.js.
  *
  * Hooks are project-agnostic — only dataDir is baked in.
  */
@@ -15,13 +18,34 @@ import {
     CODE_EXTENSIONS,
     HARMONIA_TOOLS,
     DISPATCH_TIMEOUT_MINUTES,
-    PHASE_IDLE_TIMEOUT_MINUTES,
+    WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
 } from '../src/hooks/content.js';
 import { createClaudeCodeHooks } from '../src/hooks/claude-code.js';
 import { createOpenCodeHooks } from '../src/hooks/opencode.js';
 import { createOpenClawHooks } from '../src/hooks/openclaw.js';
-import { createHooksForAgent } from '../src/hooks/install.js';
+import type { AgentType } from '@s_s/agent-kit';
+
+/**
+ * Local helper replicating the agent routing from workflows/dev/hooks.js.
+ * The actual routing lives in a .js file that imports from build/,
+ * so we replicate it here for testability.
+ */
+function createHooksForAgent(agentType: AgentType, params: HookParams) {
+    switch (agentType) {
+        case 'claude-code':
+        case 'codex':
+            return createClaudeCodeHooks(params);
+        case 'opencode':
+            return createOpenCodeHooks(params);
+        case 'openclaw':
+            return createOpenClawHooks(params);
+        default: {
+            const _exhaustive: never = agentType;
+            throw new Error(`Unsupported agent type: ${_exhaustive}`);
+        }
+    }
+}
 
 const TEST_PARAMS: HookParams = {
     dataDir: '/test/data',
@@ -86,7 +110,7 @@ describe('hook shared constants', () => {
 
     it('timeout thresholds should be positive numbers', () => {
         expect(DISPATCH_TIMEOUT_MINUTES).toBeGreaterThan(0);
-        expect(PHASE_IDLE_TIMEOUT_MINUTES).toBeGreaterThan(0);
+        expect(WORKFLOW_IDLE_TIMEOUT_MINUTES).toBeGreaterThan(0);
         expect(REVIEW_PENDING_TIMEOUT_MINUTES).toBeGreaterThan(0);
     });
 });
@@ -186,7 +210,7 @@ describe('createClaudeCodeHooks', () => {
         it('should embed timeout thresholds', () => {
             expect(content).toContain(String(DISPATCH_TIMEOUT_MINUTES));
             expect(content).toContain(String(REVIEW_PENDING_TIMEOUT_MINUTES));
-            expect(content).toContain(String(PHASE_IDLE_TIMEOUT_MINUTES));
+            expect(content).toContain(String(WORKFLOW_IDLE_TIMEOUT_MINUTES));
         });
     });
 });
@@ -276,7 +300,7 @@ describe('createOpenCodeHooks', () => {
 
         it('should embed timeout thresholds', () => {
             expect(content).toContain(`DISPATCH_TIMEOUT_MINUTES = ${DISPATCH_TIMEOUT_MINUTES}`);
-            expect(content).toContain(`PHASE_IDLE_TIMEOUT_MINUTES = ${PHASE_IDLE_TIMEOUT_MINUTES}`);
+            expect(content).toContain(`WORKFLOW_IDLE_TIMEOUT_MINUTES = ${WORKFLOW_IDLE_TIMEOUT_MINUTES}`);
             expect(content).toContain(`REVIEW_PENDING_TIMEOUT_MINUTES = ${REVIEW_PENDING_TIMEOUT_MINUTES}`);
         });
 
@@ -370,7 +394,7 @@ describe('createOpenClawHooks', () => {
 
         it('should embed timeout thresholds', () => {
             expect(content).toContain(`DISPATCH_TIMEOUT_MINUTES = ${DISPATCH_TIMEOUT_MINUTES}`);
-            expect(content).toContain(`PHASE_IDLE_TIMEOUT_MINUTES = ${PHASE_IDLE_TIMEOUT_MINUTES}`);
+            expect(content).toContain(`WORKFLOW_IDLE_TIMEOUT_MINUTES = ${WORKFLOW_IDLE_TIMEOUT_MINUTES}`);
             expect(content).toContain(`REVIEW_PENDING_TIMEOUT_MINUTES = ${REVIEW_PENDING_TIMEOUT_MINUTES}`);
         });
     });

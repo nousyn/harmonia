@@ -1,6 +1,6 @@
 /**
  * MCP Tools: artifact_write / artifact_read / artifact_list
- * Read and write project artifacts under <data_dir>/<project_name>/docs/
+ * Read and write project artifacts under <data_dir>/<project_name>/artifacts/
  *
  * artifact_write validates content against artifact schemas and checks review
  * configuration. If validation fails, the write is rejected with specific
@@ -17,10 +17,10 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { writeDoc, readDoc, listDocs, writeStepArtifact } from '../core/docs.js';
+import { writeArtifact, readArtifact, listArtifacts, writeStepArtifact } from '../core/artifacts.js';
 import { readState } from '../core/state.js';
-import { loadWorkflow } from '../core/workflow.js';
-import { getMergedOverrides, resolveDocReview } from '../core/overrides.js';
+import { loadWorkflow } from '../core/plugin.js';
+import { getMergedOverrides, resolveArtifactReview } from '../core/overrides.js';
 import { submitForReview } from '../core/reviews.js';
 import { loadArtifactSchema, validateArtifact, formatValidationErrors } from '../core/schema.js';
 import { getArtifactStepState, getCompletedStepIds, recordStepCompletion, markFinalized } from '../core/steps.js';
@@ -47,7 +47,9 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             artifact_id: z
                 .string()
                 .describe('Artifact ID (e.g. prd, user-stories, fsd, prototype, tech-design, task-breakdown, etc.)'),
-            content: z.string().describe('Artifact content (markdown, HTML, or JSON depending on artifact type and step)'),
+            content: z
+                .string()
+                .describe('Artifact content (markdown, HTML, or JSON depending on artifact type and step)'),
             step: z
                 .string()
                 .optional()
@@ -141,17 +143,17 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             }
 
             // Write the artifact with correct extension
-            const filePath = await writeDoc(project_name, ctx.number, artifact_id, content, artifactDef, ctx.dir);
+            const filePath = await writeArtifact(project_name, ctx.number, artifact_id, content, artifactDef, ctx.dir);
 
             // Trigger engine event: artifact_written
-            const engineResult = await processWorkflowEvent(
-                builtinDir, customDir, project_name, ctx,
-                { type: 'artifact_written', artifactId: artifact_id },
-            );
+            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                type: 'artifact_written',
+                artifactId: artifact_id,
+            });
 
             // Check if review is required
             const overrides = await getMergedOverrides(project_name);
-            const needsReview = resolveDocReview(artifact_id, artifactDef, overrides);
+            const needsReview = resolveArtifactReview(artifact_id, artifactDef, overrides);
 
             if (needsReview) {
                 await submitForReview(project_name, ctx.number, artifact_id, ctx.dir);
@@ -179,7 +181,9 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
                 content: [
                     {
                         type: 'text' as const,
-                        text: `Artifact "${artifact_id}" written to ${filePath}` + formatNextAction(engineResult.nextAction),
+                        text:
+                            `Artifact "${artifact_id}" written to ${filePath}` +
+                            formatNextAction(engineResult.nextAction),
                     },
                 ],
             };
@@ -233,7 +237,7 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
                     contextDir = ctx.dir;
                 }
 
-                const artifactContent = await readDoc(project_name, contextNumber, artifact_id, contextDir);
+                const artifactContent = await readArtifact(project_name, contextNumber, artifact_id, contextDir);
                 return {
                     content: [
                         {
@@ -299,7 +303,7 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
                 contextLabel = ctx.activeContext;
             }
 
-            const docs = await listDocs(project_name, contextNumber, contextDir);
+            const docs = await listArtifacts(project_name, contextNumber, contextDir);
             return {
                 content: [
                     {
@@ -473,7 +477,7 @@ async function handleFinalStep(
     // Validate against the final artifact schema (e.g. prd.json)
     const finalSchema = await loadArtifactSchema(builtinDir, customDir, workflowName, artifactId);
     if (finalSchema) {
-        const isJson = stepDef.format === 'json';
+        const isJson = artifactDef.format === 'json';
         const result = validateArtifact(content, finalSchema, isHtml, isJson);
         if (!result.valid) {
             return {
@@ -494,20 +498,20 @@ async function handleFinalStep(
     }
 
     // Write the formal artifact
-    const filePath = await writeDoc(projectName, ctx.number, artifactId, content, artifactDef, ctx.dir);
+    const filePath = await writeArtifact(projectName, ctx.number, artifactId, content, artifactDef, ctx.dir);
 
     // Mark as finalized
     await markFinalized(projectName, ctx.number, artifactId, ctx.dir);
 
     // Trigger engine event: artifact_written
-    const engineResult = await processWorkflowEvent(
-        builtinDir, customDir, projectName, ctx,
-        { type: 'artifact_written', artifactId },
-    );
+    const engineResult = await processWorkflowEvent(builtinDir, customDir, projectName, ctx, {
+        type: 'artifact_written',
+        artifactId,
+    });
 
     // Check if review is required
     const overrides = await getMergedOverrides(projectName);
-    const needsReview = resolveDocReview(artifactId, artifactDef, overrides);
+    const needsReview = resolveArtifactReview(artifactId, artifactDef, overrides);
 
     if (needsReview) {
         await submitForReview(projectName, ctx.number, artifactId, ctx.dir);
@@ -535,7 +539,9 @@ async function handleFinalStep(
         content: [
             {
                 type: 'text' as const,
-                text: `所有步骤完成！Artifact "${artifactId}" 已写入 ${filePath}` + formatNextAction(engineResult.nextAction),
+                text:
+                    `所有步骤完成！Artifact "${artifactId}" 已写入 ${filePath}` +
+                    formatNextAction(engineResult.nextAction),
             },
         ],
     };

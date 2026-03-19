@@ -108,7 +108,12 @@
         {
             "type": "task",
             "id": "escalate",
-            "role": "coordinator"
+            "role": "coordinator",
+            "beforeDispatch": {
+                "inject": [
+                    "⚠️ 升级处理：某个流程门控（gate）的重试次数已耗尽，流程无法继续。请检查当前工作流状态（project_status），识别失败的 gate 和对应的条件，与用户沟通决定下一步行动方案。"
+                ]
+            }
         }
     ],
     "artifacts": {

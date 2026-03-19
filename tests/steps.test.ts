@@ -13,7 +13,7 @@ import {
     getCompletedStepIds,
     recordStepCompletion,
     markFinalized,
-    isDocFinalized,
+    isArtifactFinalized,
 } from '../src/core/steps.js';
 
 const ITER = 1;
@@ -60,12 +60,12 @@ describe('getCompletedStepIds', () => {
                 {
                     stepId: 'requirements',
                     completedAt: '2026-01-01T00:00:00Z',
-                    artifactPath: 'docs/prd.requirements.json',
+                    artifactPath: 'artifacts/prd.requirements.json',
                 },
                 {
                     stepId: 'completeness-check',
                     completedAt: '2026-01-01T00:01:00Z',
-                    artifactPath: 'docs/prd.completeness-check.json',
+                    artifactPath: 'artifacts/prd.completeness-check.json',
                 },
             ],
             finalized: false,
@@ -83,14 +83,14 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
 
         expect(state.artifactId).toBe('prd');
         expect(state.completedSteps).toHaveLength(1);
         expect(state.completedSteps[0].stepId).toBe('requirements');
-        expect(state.completedSteps[0].artifactPath).toBe('docs/prd.requirements.json');
+        expect(state.completedSteps[0].artifactPath).toBe('artifacts/prd.requirements.json');
         expect(state.finalized).toBe(false);
     });
 
@@ -100,7 +100,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
         const state = await recordStepCompletion(
@@ -108,7 +108,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'completeness-check',
-            'docs/prd.completeness-check.json',
+            'artifacts/prd.completeness-check.json',
             PRD_STEPS,
         );
 
@@ -123,14 +123,14 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
 
         const iterDir = registry.getIterationDir('test-project', ITER);
         const content = await readFile(join(iterDir, 'steps.json'), 'utf-8');
         const data = JSON.parse(content);
-        expect(data.docs.prd.completedSteps).toHaveLength(1);
+        expect(data.artifacts.prd.completedSteps).toHaveLength(1);
     });
 
     it('should rollback subsequent steps when overwriting a completed step', async () => {
@@ -140,7 +140,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
         await recordStepCompletion(
@@ -148,10 +148,10 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'completeness-check',
-            'docs/prd.completeness-check.json',
+            'artifacts/prd.completeness-check.json',
             PRD_STEPS,
         );
-        await recordStepCompletion('test-project', ITER, 'prd', 'draft', 'docs/prd.draft.md', PRD_STEPS);
+        await recordStepCompletion('test-project', ITER, 'prd', 'draft', 'artifacts/prd.draft.md', PRD_STEPS);
 
         // Re-write step 2 → should clear step 2 and 3, re-record step 2
         const state = await recordStepCompletion(
@@ -159,14 +159,14 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'completeness-check',
-            'docs/prd.completeness-check-v2.json',
+            'artifacts/prd.completeness-check-v2.json',
             PRD_STEPS,
         );
 
         expect(state.completedSteps).toHaveLength(2);
         expect(state.completedSteps[0].stepId).toBe('requirements');
         expect(state.completedSteps[1].stepId).toBe('completeness-check');
-        expect(state.completedSteps[1].artifactPath).toBe('docs/prd.completeness-check-v2.json');
+        expect(state.completedSteps[1].artifactPath).toBe('artifacts/prd.completeness-check-v2.json');
     });
 
     it('should reset finalized flag when overwriting a step', async () => {
@@ -176,7 +176,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
         await recordStepCompletion(
@@ -184,15 +184,15 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'completeness-check',
-            'docs/prd.completeness-check.json',
+            'artifacts/prd.completeness-check.json',
             PRD_STEPS,
         );
-        await recordStepCompletion('test-project', ITER, 'prd', 'draft', 'docs/prd.draft.md', PRD_STEPS);
-        await recordStepCompletion('test-project', ITER, 'prd', 'final', 'docs/prd.final.md', PRD_STEPS);
+        await recordStepCompletion('test-project', ITER, 'prd', 'draft', 'artifacts/prd.draft.md', PRD_STEPS);
+        await recordStepCompletion('test-project', ITER, 'prd', 'final', 'artifacts/prd.final.md', PRD_STEPS);
         await markFinalized('test-project', ITER, 'prd');
 
         // Verify finalized
-        expect(await isDocFinalized('test-project', ITER, 'prd')).toBe(true);
+        expect(await isArtifactFinalized('test-project', ITER, 'prd')).toBe(true);
 
         // Re-write step 3 → should reset finalized
         const state = await recordStepCompletion(
@@ -200,7 +200,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'draft',
-            'docs/prd.draft-v2.md',
+            'artifacts/prd.draft-v2.md',
             PRD_STEPS,
         );
         expect(state.finalized).toBe(false);
@@ -215,7 +215,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
         await recordStepCompletion(
@@ -223,7 +223,7 @@ describe('recordStepCompletion', () => {
             ITER,
             'tech-design',
             'analysis',
-            'docs/tech-design.analysis.json',
+            'artifacts/tech-design.analysis.json',
             TD_STEPS,
         );
 
@@ -244,7 +244,7 @@ describe('markFinalized', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
         const state = await markFinalized('test-project', ITER, 'prd');
@@ -258,9 +258,9 @@ describe('markFinalized', () => {
     });
 });
 
-describe('isDocFinalized', () => {
+describe('isArtifactFinalized', () => {
     it('should return false when no state exists', async () => {
-        expect(await isDocFinalized('test-project', ITER, 'prd')).toBe(false);
+        expect(await isArtifactFinalized('test-project', ITER, 'prd')).toBe(false);
     });
 
     it('should return false when not finalized', async () => {
@@ -269,10 +269,10 @@ describe('isDocFinalized', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
-        expect(await isDocFinalized('test-project', ITER, 'prd')).toBe(false);
+        expect(await isArtifactFinalized('test-project', ITER, 'prd')).toBe(false);
     });
 
     it('should return true when finalized', async () => {
@@ -281,10 +281,10 @@ describe('isDocFinalized', () => {
             ITER,
             'prd',
             'requirements',
-            'docs/prd.requirements.json',
+            'artifacts/prd.requirements.json',
             PRD_STEPS,
         );
         await markFinalized('test-project', ITER, 'prd');
-        expect(await isDocFinalized('test-project', ITER, 'prd')).toBe(true);
+        expect(await isArtifactFinalized('test-project', ITER, 'prd')).toBe(true);
     });
 });

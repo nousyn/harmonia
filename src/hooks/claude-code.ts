@@ -20,7 +20,7 @@ import {
     BLOCKED_COMMANDS,
     CODE_EXTENSIONS,
     DISPATCH_TIMEOUT_MINUTES,
-    PHASE_IDLE_TIMEOUT_MINUTES,
+    WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
 } from './content.js';
 
@@ -187,7 +187,7 @@ if [ -d "$DATA_DIR" ]; then
         STATE_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$(echo "$UPDATED_AT" | cut -c1-19)" +%s 2>/dev/null || echo "0")
         if [ "$STATE_EPOCH" != "0" ]; then
           IDLE_MIN=$(( (NOW_EPOCH - STATE_EPOCH) / 60 ))
-          if [ "$IDLE_MIN" -ge ${PHASE_IDLE_TIMEOUT_MINUTES} ]; then
+          if [ "$IDLE_MIN" -ge ${WORKFLOW_IDLE_TIMEOUT_MINUTES} ]; then
             add_reminder "- [$PROJECT_NAME] 工作流已空闲 $IDLE_MIN 分钟，建议调用 project_status 检查项目状态"
           fi
         fi

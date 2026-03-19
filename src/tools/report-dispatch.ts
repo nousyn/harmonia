@@ -28,35 +28,10 @@ import {
     isTerminalStatus,
 } from '../core/dispatch.js';
 import { resolveActive, isError } from './utils.js';
-import { loadWorkflowForContext, processWorkflowEvent, formatNextAction } from './engine-helpers.js';
-import { readDoc, listDocs } from '../core/docs.js';
+import { loadWorkflowForContext, processWorkflowEvent, formatNextAction, findTaskNode } from './engine-helpers.js';
+import { readArtifact, listArtifacts } from '../core/artifacts.js';
 import { readState } from '../core/state.js';
-import type { AgentType, DispatchRecord, SessionRecord, ActionContext, TaskNode, WorkflowNode } from '../core/types.js';
-
-/**
- * Find a task node by ID in the workflow tree (including floating nodes).
- */
-function findTaskNodeById(node: WorkflowNode, nodeId: string): TaskNode | undefined {
-    if (node.type === 'task' && node.id === nodeId) return node;
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                const found = findTaskNodeById(child, nodeId);
-                if (found) return found;
-            }
-            break;
-        case 'gate':
-            const passResult = findTaskNodeById(node.pass, nodeId);
-            if (passResult) return passResult;
-            if ('type' in node.fail) {
-                const failResult = findTaskNodeById(node.fail as WorkflowNode, nodeId);
-                if (failResult) return failResult;
-            }
-            break;
-    }
-    return undefined;
-}
+import type { AgentType, DispatchRecord, SessionRecord, ActionContext, TaskNode } from '../core/types.js';
 
 export function registerReportDispatch(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
@@ -166,7 +141,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
 
                     results.push(`Dispatch ${dispatch_id} → ${effectiveStatus}`);
 
-                    // Trigger engine events for completed/failed (not cancelled — cancellation is manual)
+                    // Trigger engine events for completed/failed/cancelled
                     if (dispatch.nodeId) {
                         if (effectiveStatus === 'completed') {
                             const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
@@ -183,10 +158,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                                     project_name,
                                     ctx,
                                 );
-                                let targetNode = findTaskNodeById(wf.definition.root, dispatch.nodeId);
-                                if (!targetNode && wf.definition.floatingNodes) {
-                                    targetNode = wf.definition.floatingNodes.find((fn) => fn.id === dispatch.nodeId);
-                                }
+                                let targetNode = findTaskNode(wf, dispatch.nodeId);
                                 if (targetNode?.afterComplete) {
                                     const hookInjections: string[] = [];
                                     if (targetNode.afterComplete.inject) {
@@ -203,8 +175,8 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                                             workflowState: currentState,
                                             artifacts: {
                                                 read: (artifactId: string) =>
-                                                    readDoc(project_name, ctx.number, artifactId, ctx.dir),
-                                                list: () => listDocs(project_name, ctx.number, ctx.dir),
+                                                    readArtifact(project_name, ctx.number, artifactId, ctx.dir),
+                                                list: () => listArtifacts(project_name, ctx.number, ctx.dir),
                                             },
                                         };
                                         for (const actionName of targetNode.afterComplete.actions) {
@@ -236,6 +208,15 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                                 type: 'node_failed',
                                 nodeId: dispatch.nodeId,
                                 error: note ?? 'Unknown failure',
+                            });
+                            nextActionText = formatNextAction(engineResult.nextAction);
+                        } else if (effectiveStatus === 'cancelled') {
+                            // Cancelled dispatches should also update node state via engine
+                            // so the node doesn't stay stuck in 'active' forever
+                            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                                type: 'node_failed',
+                                nodeId: dispatch.nodeId,
+                                error: note ?? 'Dispatch cancelled',
                             });
                             nextActionText = formatNextAction(engineResult.nextAction);
                         }

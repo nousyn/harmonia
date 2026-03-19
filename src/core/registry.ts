@@ -10,20 +10,19 @@
  * Structure:
  *   <data_dir>/
  *   ├── registry.json        # { projects: { "my-app": { dir: "/path/to/src", ... } } }
- *   ├── overrides.json       # global overrides (optional)
  *   ├── my-app/
  *   │   ├── overrides.json   # project-level overrides (optional)
  *   │   ├── issues.json      # project-level issue tracking (optional)
  *   │   ├── iter-1/
  *   │   │   ├── state.json
- *   │   │   ├── docs/
+ *   │   │   ├── artifacts/
  *   │   │   ├── reviews.json
  *   │   │   └── ...
  *   │   ├── iter-2/
  *   │   │   └── ...
  *   │   ├── patch-1/
  *   │   │   ├── state.json   # type: "patch", clarify/design skipped
- *   │   │   ├── docs/
+ *   │   │   ├── artifacts/
  *   │   │   └── ...
  *   └── another-project/
  *       └── ...
@@ -198,9 +197,9 @@ export async function startIteration(projectName: string): Promise<number> {
     entry.totalIterations = newIteration;
     entry.activeContext = `iter-${newIteration}`;
 
-    // Create iteration directory with docs subdirectory
+    // Create iteration directory with artifacts subdirectory
     const iterDir = getIterationDir(projectName, newIteration);
-    await mkdir(join(iterDir, 'docs'), { recursive: true });
+    await mkdir(join(iterDir, 'artifacts'), { recursive: true });
 
     await writeRegistry(registry);
     return newIteration;
@@ -216,7 +215,7 @@ export function getPatchDir(projectName: string, patch: number): string {
 
 /**
  * Start a new patch for a project.
- * Creates the patch directory (with docs/ subdirectory) and updates the registry.
+ * Creates the patch directory (with artifacts/ subdirectory) and updates the registry.
  *
  * @returns The new patch number
  */
@@ -233,9 +232,9 @@ export async function startPatch(projectName: string): Promise<number> {
     entry.totalPatches = newPatch;
     entry.activeContext = `patch-${newPatch}`;
 
-    // Create patch directory with docs subdirectory
+    // Create patch directory with artifacts subdirectory
     const patchDir = getPatchDir(projectName, newPatch);
-    await mkdir(join(patchDir, 'docs'), { recursive: true });
+    await mkdir(join(patchDir, 'artifacts'), { recursive: true });
 
     await writeRegistry(registry);
     return newPatch;

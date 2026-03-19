@@ -16,7 +16,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getProject, startIteration, getIterationDir, resolveContextDir } from '../core/registry.js';
-import { loadWorkflow } from '../core/workflow.js';
+import { loadWorkflow } from '../core/plugin.js';
 import { initWorkflowState, readState } from '../core/state.js';
 import { startWorkflow } from '../core/workflow-engine.js';
 import { persistState } from '../core/state.js';
@@ -54,7 +54,6 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                             ? resolveContextDir(project_name, `iter-${entry.currentIteration}`)?.dir
                             : undefined;
                         const currentState = await readState(project_name, entry.currentIteration, currentIterDir);
-                        const rootState = currentState.nodes[Object.keys(currentState.nodes)[0]];
                         // Check if any node is still active or pending (workflow not done)
                         const incompleteNodes = Object.values(currentState.nodes).filter(
                             (n) => n.status === 'active' || n.status === 'pending',
@@ -65,9 +64,7 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                                 .map((n) => `${n.id} (${n.status})`)
                                 .join(', ');
                             const moreText =
-                                incompleteNodes.length > 5
-                                    ? ` ...及其他 ${incompleteNodes.length - 5} 个节点`
-                                    : '';
+                                incompleteNodes.length > 5 ? ` ...及其他 ${incompleteNodes.length - 5} 个节点` : '';
                             return {
                                 content: [
                                     {

@@ -1,16 +1,17 @@
 /**
- * Override configuration — three-layer merge system.
+ * Override configuration — two-layer system: project overrides > workflow defaults.
  *
- * Priority: project-level > global-level > workflow defaults
+ * Project-level overrides are stored in:
+ *   <data_dir>/<project_name>/overrides.json
  *
- * Files:
- *   <data_dir>/overrides.json                    (global)
- *   <data_dir>/<project_name>/overrides.json     (project)
+ * Workflow defaults come from the workflow definition (artifactDefinitions, roles).
+ * The override system lets users customize per-project settings without modifying
+ * the workflow definition itself.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getGlobalDir, getProjectDataDir } from './registry.js';
+import { getProjectDataDir } from './registry.js';
 import type { CapabilityOverride, ArtifactDefinition, OverrideConfig, RoleOverride } from './types.js';
 
 const OVERRIDES_FILE = 'overrides.json';
@@ -25,13 +26,6 @@ async function readOverrideFile(filePath: string): Promise<OverrideConfig> {
     } catch {
         return {};
     }
-}
-
-/**
- * Read global overrides (<data_dir>/overrides.json).
- */
-export async function readGlobalOverrides(): Promise<OverrideConfig> {
-    return readOverrideFile(join(getGlobalDir(), OVERRIDES_FILE));
 }
 
 /**
@@ -50,13 +44,6 @@ async function writeOverrideFile(filePath: string, config: OverrideConfig): Prom
 }
 
 /**
- * Write global overrides.
- */
-export async function writeGlobalOverrides(config: OverrideConfig): Promise<void> {
-    await writeOverrideFile(join(getGlobalDir(), OVERRIDES_FILE), config);
-}
-
-/**
  * Write project-level overrides.
  */
 export async function writeProjectOverrides(projectName: string, config: OverrideConfig): Promise<void> {
@@ -64,69 +51,29 @@ export async function writeProjectOverrides(projectName: string, config: Overrid
 }
 
 /**
- * Merge two override configs. `higher` takes priority over `lower`.
- */
-function mergeConfigs(lower: OverrideConfig, higher: OverrideConfig): OverrideConfig {
-    const merged: OverrideConfig = {};
-
-    // Merge review: higher wins entirely if present
-    if (higher.review !== undefined) {
-        merged.review = higher.review;
-    } else if (lower.review !== undefined) {
-        merged.review = lower.review;
-    }
-
-    // Merge roles: deep merge per role (agent, model, capabilities)
-    const lowerRoles = lower.roles ?? {};
-    const higherRoles = higher.roles ?? {};
-    const allRoleIds = new Set([...Object.keys(lowerRoles), ...Object.keys(higherRoles)]);
-
-    if (allRoleIds.size > 0) {
-        merged.roles = {};
-        for (const roleId of allRoleIds) {
-            const lo = lowerRoles[roleId] ?? {};
-            const hi = higherRoles[roleId] ?? {};
-            merged.roles[roleId] = {
-                ...lo,
-                ...hi,
-                // Deep merge capabilities
-                capabilities: {
-                    ...(lo.capabilities ?? {}),
-                    ...(hi.capabilities ?? {}),
-                },
-            };
-            // Clean up empty capabilities
-            if (Object.keys(merged.roles[roleId].capabilities!).length === 0) {
-                delete merged.roles[roleId].capabilities;
-            }
-        }
-    }
-
-    return merged;
-}
-
-/**
- * Get the fully merged override config for a project.
- * Priority: project > global
+ * Get the override config for a project.
+ * Returns the project-level overrides directly — no global merge.
  */
 export async function getMergedOverrides(projectName: string): Promise<OverrideConfig> {
-    const global = await readGlobalOverrides();
-    const project = await readProjectOverrides(projectName);
-    return mergeConfigs(global, project);
+    return readProjectOverrides(projectName);
 }
 
 /**
- * Resolve whether a specific doc requires review.
+ * Resolve whether a specific artifact requires review.
  *
- * Priority: project override > global override > workflow default
+ * Priority: project override > workflow default
  */
-export function resolveDocReview(docId: string, docDef: ArtifactDefinition, overrides: OverrideConfig): boolean {
+export function resolveArtifactReview(
+    artifactId: string,
+    artifactDef: ArtifactDefinition,
+    overrides: OverrideConfig,
+): boolean {
     const review = overrides.review;
 
-    // Override is a per-doc record
+    // Override is a per-artifact record
     if (typeof review === 'object' && review !== null) {
-        if (docId in review) {
-            return review[docId];
+        if (artifactId in review) {
+            return review[artifactId];
         }
         // Not mentioned in override, fall through to workflow default
     }
@@ -137,7 +84,7 @@ export function resolveDocReview(docId: string, docDef: ArtifactDefinition, over
     }
 
     // No override — use workflow default
-    return docDef.review ?? false;
+    return artifactDef.review ?? false;
 }
 
 /**
@@ -153,16 +100,15 @@ export function resolveCapabilityOverride(
 }
 
 /**
- * Set a single role capability override at project or global level.
+ * Set a single role capability override at project level.
  */
 export async function setCapabilityOverride(
-    scope: 'global' | 'project',
-    projectName: string | null,
+    projectName: string,
     roleId: string,
     capabilityId: string,
     override: CapabilityOverride,
 ): Promise<void> {
-    const config = scope === 'global' ? await readGlobalOverrides() : await readProjectOverrides(projectName!);
+    const config = await readProjectOverrides(projectName);
 
     if (!config.roles) {
         config.roles = {};
@@ -175,40 +121,27 @@ export async function setCapabilityOverride(
     }
     config.roles[roleId].capabilities![capabilityId] = override;
 
-    if (scope === 'global') {
-        await writeGlobalOverrides(config);
-    } else {
-        await writeProjectOverrides(projectName!, config);
-    }
+    await writeProjectOverrides(projectName, config);
 }
 
 /**
- * Set review override for a specific doc at project or global level.
+ * Set review override for a specific artifact at project level.
  */
-export async function setReviewOverride(
-    scope: 'global' | 'project',
-    projectName: string | null,
-    docId: string,
-    enabled: boolean,
-): Promise<void> {
-    const config = scope === 'global' ? await readGlobalOverrides() : await readProjectOverrides(projectName!);
+export async function setReviewOverride(projectName: string, artifactId: string, enabled: boolean): Promise<void> {
+    const config = await readProjectOverrides(projectName);
 
-    // Ensure review is a per-doc record
+    // Ensure review is a per-artifact record
     if (typeof config.review !== 'object' || config.review === null) {
         config.review = {};
     }
-    config.review[docId] = enabled;
+    config.review[artifactId] = enabled;
 
-    if (scope === 'global') {
-        await writeGlobalOverrides(config);
-    } else {
-        await writeProjectOverrides(projectName!, config);
-    }
+    await writeProjectOverrides(projectName, config);
 }
 
 /**
  * Resolve the agent/model configuration for a role.
- * Returns { agent, model } from the merged overrides, or undefined fields if not set.
+ * Returns { agent, model } from the overrides, or undefined fields if not set.
  */
 export function resolveRoleConfig(roleId: string, overrides: OverrideConfig): { agent?: string; model?: string } {
     const role = overrides.roles?.[roleId];
@@ -220,16 +153,15 @@ export function resolveRoleConfig(roleId: string, overrides: OverrideConfig): { 
 }
 
 /**
- * Set agent/model config for a role at project or global level.
+ * Set agent/model config for a role at project level.
  */
 export async function setRoleAgentConfig(
-    scope: 'global' | 'project',
-    projectName: string | null,
+    projectName: string,
     roleId: string,
     agent?: string,
     model?: string,
 ): Promise<void> {
-    const config = scope === 'global' ? await readGlobalOverrides() : await readProjectOverrides(projectName!);
+    const config = await readProjectOverrides(projectName);
 
     if (!config.roles) {
         config.roles = {};
@@ -240,9 +172,5 @@ export async function setRoleAgentConfig(
     if (agent) config.roles[roleId].agent = agent as RoleOverride['agent'];
     if (model) config.roles[roleId].model = model;
 
-    if (scope === 'global') {
-        await writeGlobalOverrides(config);
-    } else {
-        await writeProjectOverrides(projectName!, config);
-    }
+    await writeProjectOverrides(projectName, config);
 }

@@ -36,7 +36,7 @@ describe('artifact_schema tool', () => {
         noCustomDir = join(tempDir, 'no-custom-workflows');
 
         // Setup iteration data dir
-        await mkdir(join(iterDir, 'docs'), { recursive: true });
+        await mkdir(join(iterDir, 'artifacts'), { recursive: true });
         vi.spyOn(registry, 'getIterationDir').mockReturnValue(iterDir);
         vi.spyOn(registry, 'getProjectDataDir').mockReturnValue(projectDir);
         vi.spyOn(registry, 'getGlobalDir').mockReturnValue(tempDir);

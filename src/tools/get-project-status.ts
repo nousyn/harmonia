@@ -9,17 +9,17 @@
  * When called without project_name, returns a summary list of all projects.
  */
 
-import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { readState } from "../core/state.js";
-import { loadWorkflow } from "../core/workflow.js";
-import { listDocs } from "../core/docs.js";
-import { readReviews } from "../core/reviews.js";
-import { readDispatches, readSessions } from "../core/dispatch.js";
-import { readSteps, getCompletedStepIds } from "../core/steps.js";
-import { listProjects, getProject, resolveContextDir } from "../core/registry.js";
-import { readIssues } from "../core/issues.js";
-import { processWorkflowEvent, formatNextAction } from "./engine-helpers.js";
+import { z } from 'zod';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { readState } from '../core/state.js';
+import { loadWorkflow } from '../core/plugin.js';
+import { listArtifacts } from '../core/artifacts.js';
+import { readReviews } from '../core/reviews.js';
+import { readDispatches, readSessions } from '../core/dispatch.js';
+import { readSteps, getCompletedStepIds } from '../core/steps.js';
+import { listProjects, getProject, resolveContextDir } from '../core/registry.js';
+import { readIssues } from '../core/issues.js';
+import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
 import type {
     DispatchRecord,
     SessionRecord,
@@ -28,9 +28,9 @@ import type {
     NodeState,
     ArtifactDefinition,
     WorkflowPlugin,
-} from "../core/types.js";
-import type { ArtifactStepState } from "../core/types.js";
-import type { ResolvedContext } from "./utils.js";
+} from '../core/types.js';
+import type { ArtifactStepState } from '../core/types.js';
+import type { ResolvedContext } from './utils.js';
 
 // --- Formatting Helpers ---
 
@@ -39,18 +39,18 @@ import type { ResolvedContext } from "./utils.js";
  */
 function statusIcon(status: string): string {
     switch (status) {
-        case "completed":
-            return "✓";
-        case "active":
-            return "●";
-        case "failed":
-            return "✗";
-        case "cancelled":
-            return "—";
-        case "skipped":
-            return "⊘";
+        case 'completed':
+            return '✓';
+        case 'active':
+            return '●';
+        case 'failed':
+            return '✗';
+        case 'cancelled':
+            return '—';
+        case 'skipped':
+            return '⊘';
         default:
-            return "○";
+            return '○';
     }
 }
 
@@ -59,11 +59,11 @@ function statusIcon(status: string): string {
  */
 function getNodeDispatchInfo(nodeId: string, dispatches: DispatchRecord[]): string {
     const nodeDispatches = dispatches.filter(
-        (d) => d.nodeId === nodeId && (d.status === "dispatched" || d.status === "running"),
+        (d) => d.nodeId === nodeId && (d.status === 'dispatched' || d.status === 'running'),
     );
-    if (nodeDispatches.length === 0) return "";
-    const info = nodeDispatches.map((d) => d.id + ":" + d.status).join(", ");
-    return " [" + info + "]";
+    if (nodeDispatches.length === 0) return '';
+    const info = nodeDispatches.map((d) => d.id + ':' + d.status).join(', ');
+    return ' [' + info + ']';
 }
 
 /**
@@ -75,39 +75,39 @@ function formatNodeTree(
     dispatches: DispatchRecord[],
     depth: number = 0,
 ): string[] {
-    const indent = "  ".repeat(depth);
+    const indent = '  '.repeat(depth);
     const lines: string[] = [];
     const state = nodes[node.id];
-    const status = state?.status ?? "pending";
+    const status = state?.status ?? 'pending';
     const icon = statusIcon(status);
 
     switch (node.type) {
-        case "task": {
+        case 'task': {
             const dispatchInfo = getNodeDispatchInfo(node.id, dispatches);
-            lines.push(indent + icon + " " + node.id + " (task, " + node.role + ") — " + status + dispatchInfo);
+            lines.push(indent + icon + ' ' + node.id + ' (task, ' + node.role + ') — ' + status + dispatchInfo);
             break;
         }
-        case "sequence":
-            lines.push(indent + icon + " " + node.id + " (sequence) — " + status);
+        case 'sequence':
+            lines.push(indent + icon + ' ' + node.id + ' (sequence) — ' + status);
             for (const child of node.children) {
                 lines.push(...formatNodeTree(child, nodes, dispatches, depth + 1));
             }
             break;
-        case "parallel":
-            lines.push(indent + icon + " " + node.id + " (parallel, " + node.failStrategy + ") — " + status);
+        case 'parallel':
+            lines.push(indent + icon + ' ' + node.id + ' (parallel, ' + node.failStrategy + ') — ' + status);
             for (const child of node.children) {
                 lines.push(...formatNodeTree(child, nodes, dispatches, depth + 1));
             }
             break;
-        case "gate": {
-            const gateStatus = status === "completed" ? "passed" : status === "failed" ? "failed" : status;
-            lines.push(indent + icon + " " + node.id + " (gate) — " + gateStatus);
+        case 'gate': {
+            const gateStatus = status === 'completed' ? 'passed' : status === 'failed' ? 'failed' : status;
+            lines.push(indent + icon + ' ' + node.id + ' (gate) — ' + gateStatus);
             lines.push(...formatNodeTree(node.pass, nodes, dispatches, depth + 1));
-            if ("type" in node.fail) {
+            if ('type' in node.fail) {
                 lines.push(...formatNodeTree(node.fail as WorkflowNode, nodes, dispatches, depth + 1));
             } else {
                 const failTarget = node.fail as { goto: string };
-                lines.push(indent + "  ↩ fail → goto " + failTarget.goto);
+                lines.push(indent + '  ↩ fail → goto ' + failTarget.goto);
             }
             break;
         }
@@ -116,45 +116,53 @@ function formatNodeTree(
     return lines;
 }
 
-
 /**
  * Format a dispatch record for display.
  */
 function formatDispatch(d: DispatchRecord, sessions: SessionRecord[]): string {
-    const icon = statusIcon(
-        d.status === "dispatched" ? "pending" : d.status === "running" ? "active" : d.status,
-    );
+    const icon = statusIcon(d.status === 'dispatched' ? 'pending' : d.status === 'running' ? 'active' : d.status);
     const session = sessions.find((s) => s.id === d.sessionId);
-    const sessionInfo = session?.agentSessionId ? " session:" + session.agentSessionId : "";
-    const note = d.note ? " (" + d.note + ")" : "";
-    const nodeInfo = d.nodeId ? " node:" + d.nodeId : "";
-    const brief = d.taskBrief.length > 60 ? d.taskBrief.slice(0, 57) + "..." : d.taskBrief;
-    return "  " + icon + " " + d.id + "  " + d.role.padEnd(12) + " [" + d.status + "]  " + brief + nodeInfo + sessionInfo + note;
+    const sessionInfo = session?.agentSessionId ? ' session:' + session.agentSessionId : '';
+    const note = d.note ? ' (' + d.note + ')' : '';
+    const nodeInfo = d.nodeId ? ' node:' + d.nodeId : '';
+    const brief = d.taskBrief.length > 60 ? d.taskBrief.slice(0, 57) + '...' : d.taskBrief;
+    return (
+        '  ' +
+        icon +
+        ' ' +
+        d.id +
+        '  ' +
+        d.role.padEnd(12) +
+        ' [' +
+        d.status +
+        ']  ' +
+        brief +
+        nodeInfo +
+        sessionInfo +
+        note
+    );
 }
 
 /**
  * Format a session record for display.
  */
 function formatSession(s: SessionRecord): string {
-    const agentInfo = s.agentSessionId ? "agent:" + s.agentSessionId : "no agent ID";
-    const label = s.label ? " (" + s.label + ")" : "";
-    const agentType = s.agentType ? " via " + s.agentType : "";
-    return "  " + s.id + "  " + s.role.padEnd(12) + " [" + s.status + "]  " + agentInfo + agentType + label;
+    const agentInfo = s.agentSessionId ? 'agent:' + s.agentSessionId : 'no agent ID';
+    const label = s.label ? ' (' + s.label + ')' : '';
+    const agentType = s.agentType ? ' via ' + s.agentType : '';
+    return '  ' + s.id + '  ' + s.role.padEnd(12) + ' [' + s.status + ']  ' + agentInfo + agentType + label;
 }
 
 /**
  * Format step progress for a sequential artifact.
  */
-function formatStepProgress(
-    artifactDef: ArtifactDefinition,
-    stepState: ArtifactStepState | undefined,
-): string {
+function formatStepProgress(artifactDef: ArtifactDefinition, stepState: ArtifactStepState | undefined): string {
     const steps = artifactDef.steps!;
     const completedIds = stepState ? getCompletedStepIds(stepState) : new Set<string>();
     const finalized = stepState?.finalized ?? false;
 
     if (finalized) {
-        return "  Steps: all completed ✓ (finalized)";
+        return '  Steps: all completed ✓ (finalized)';
     }
 
     let firstIncomplete = steps.length;
@@ -166,50 +174,50 @@ function formatStepProgress(
     }
 
     const parts = steps.map((s, i) => {
-        if (completedIds.has(s.id)) return "[✓] " + s.name;
-        if (i === firstIncomplete) return "[→] " + s.name;
-        return "[ ] " + s.name;
+        if (completedIds.has(s.id)) return '[✓] ' + s.name;
+        if (i === firstIncomplete) return '[→] ' + s.name;
+        return '[ ] ' + s.name;
     });
 
-    return "  Steps: " + parts.join(" → ");
+    return '  Steps: ' + parts.join(' → ');
 }
 
 /**
  * Format artifacts summary.
  */
 function formatArtifacts(
-    existingDocs: string[],
+    existingArtifacts: string[],
     artifactDefs: Record<string, ArtifactDefinition>,
     reviews: Record<string, { status: string; submittedAt: string }>,
     stepsData: Record<string, ArtifactStepState>,
 ): string {
-    if (existingDocs.length === 0) return "(none yet)";
+    if (existingArtifacts.length === 0) return '(none yet)';
 
-    return existingDocs
+    return existingArtifacts
         .map((id) => {
             const review = reviews[id];
-            const reviewTag = review ? " [" + review.status + "]" : "";
+            const reviewTag = review ? ' [' + review.status + ']' : '';
             const def = artifactDefs[id];
             const hasSteps = def?.steps && def.steps.length > 0;
-            let line = "- " + id + reviewTag;
+            let line = '- ' + id + reviewTag;
             if (hasSteps) {
-                line += "\n" + formatStepProgress(def, stepsData[id]);
+                line += '\n' + formatStepProgress(def, stepsData[id]);
             }
             return line;
         })
-        .join("\n");
+        .join('\n');
 }
 
 /**
  * Format in-progress artifacts (steps started but artifact not yet finalized).
  */
 function formatInProgressArtifacts(
-    existingDocs: string[],
+    existingArtifacts: string[],
     artifactDefs: Record<string, ArtifactDefinition>,
     stepsData: Record<string, ArtifactStepState>,
 ): string {
     const inProgress = Object.keys(stepsData)
-        .filter((id) => !existingDocs.includes(id))
+        .filter((id) => !existingArtifacts.includes(id))
         .map((id) => {
             const def = artifactDefs[id];
             if (!def?.steps?.length) return null;
@@ -217,15 +225,20 @@ function formatInProgressArtifacts(
             const completedCount = stepState?.completedSteps.length ?? 0;
             if (completedCount === 0) return null;
             return (
-                "- " + id + " (in progress, " + completedCount + "/" + def.steps.length + " steps)\n" +
+                '- ' +
+                id +
+                ' (in progress, ' +
+                completedCount +
+                '/' +
+                def.steps.length +
+                ' steps)\n' +
                 formatStepProgress(def, stepState)
             );
         })
         .filter(Boolean);
 
-    return inProgress.length > 0 ? inProgress.join("\n") : "";
+    return inProgress.length > 0 ? inProgress.join('\n') : '';
 }
-
 
 /**
  * Build the project list summary (when project_name is not provided).
@@ -347,7 +360,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                 const contextNumber = resolved.number;
                 const state = await readState(project_name, contextNumber, contextDir);
                 const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
-                const docs = await listDocs(project_name, contextNumber, contextDir);
+                const artifactIds = await listArtifacts(project_name, contextNumber, contextDir);
                 const reviews = await readReviews(project_name, contextNumber, contextDir);
                 const dispatches = await readDispatches(project_name, contextNumber, contextDir);
                 const sessions = await readSessions(project_name, contextNumber, contextDir);
@@ -371,13 +384,11 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
 
                 // Artifacts
                 const artifactDefs = wf.artifactDefinitions;
-                const artifactsSection = formatArtifacts(docs, artifactDefs, reviews, stepsData);
-                const inProgressSection = formatInProgressArtifacts(docs, artifactDefs, stepsData);
+                const artifactsSection = formatArtifacts(artifactIds, artifactDefs, reviews, stepsData);
+                const inProgressSection = formatInProgressArtifacts(artifactIds, artifactDefs, stepsData);
 
                 // Pending reviews
-                const pendingReviews = Object.values(reviews).filter(
-                    (r) => r.status === 'pending',
-                );
+                const pendingReviews = Object.values(reviews).filter((r) => r.status === 'pending');
                 const pendingSection =
                     pendingReviews.length > 0
                         ? pendingReviews
@@ -391,15 +402,11 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                 // Sessions
                 const activeSessions = sessions.filter((s) => s.status !== 'closed');
                 const sessionsSection =
-                    activeSessions.length > 0
-                        ? activeSessions.map((s) => formatSession(s)).join('\n')
-                        : '(none)';
+                    activeSessions.length > 0 ? activeSessions.map((s) => formatSession(s)).join('\n') : '(none)';
 
                 // Dispatches
                 const dispatchesSection =
-                    dispatches.length > 0
-                        ? dispatches.map((d) => formatDispatch(d, sessions)).join('\n')
-                        : '(none)';
+                    dispatches.length > 0 ? dispatches.map((d) => formatDispatch(d, sessions)).join('\n') : '(none)';
 
                 // Issues
                 const openIssues = issues.filter((i) => i.status === 'open');
@@ -427,13 +434,9 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                         type: resolved.type as 'iteration' | 'patch',
                         activeContext: entry.activeContext!,
                     };
-                    const engineResult = await processWorkflowEvent(
-                        builtinDir,
-                        customDir,
-                        project_name,
-                        ctx,
-                        { type: 'query_status' },
-                    );
+                    const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                        type: 'query_status',
+                    });
                     nextActionText = formatNextAction(engineResult.nextAction);
                 } catch {
                     nextActionText = '\n[Next Action] (could not compute \u2014 engine error)';
@@ -469,9 +472,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                     ``,
                     `## Artifacts`,
                     artifactsSection,
-                    ...(inProgressSection
-                        ? [``, `## In-Progress Artifacts`, inProgressSection]
-                        : []),
+                    ...(inProgressSection ? [``, `## In-Progress Artifacts`, inProgressSection] : []),
                     ``,
                     `## Next Action`,
                     nextActionText || '(none)',

@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { loadArtifactSchema, formatSchemaGuidance, isRequired } from '../core/schema.js';
+import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
 import type { StepSchemaEntry } from '../core/schema.js';
 import { loadWorkflowForContext } from './engine-helpers.js';
 import { resolveActive, isError } from './utils.js';
@@ -70,7 +70,12 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                         };
                     }
 
-                    const stepSchema = await loadArtifactSchema(builtinDir, customDir, state.workflow, `${artifact_id}.${step}`);
+                    const stepSchema = await loadArtifactSchema(
+                        builtinDir,
+                        customDir,
+                        state.workflow,
+                        `${artifact_id}.${step}`,
+                    );
                     const stepDefFound = artifactDef.steps.find((s) => s.id === step)!;
 
                     const lines: string[] = [];
@@ -87,7 +92,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                             lines.push(`最小长度: ${stepSchema.minLength} 字符`);
                         }
                         if (stepSchema.jsonFields) {
-                            const reqFields = stepSchema.jsonFields.filter((f) => isRequired(f.required));
+                            const reqFields = stepSchema.jsonFields.filter((f) => f.required);
                             if (reqFields.length > 0) {
                                 lines.push('');
                                 lines.push('### 必需 JSON 字段');
@@ -100,7 +105,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                             }
                         }
                         if (stepSchema.sections) {
-                            const reqSections = stepSchema.sections.filter((s) => isRequired(s.required));
+                            const reqSections = stepSchema.sections.filter((s) => s.required);
                             if (reqSections.length > 0) {
                                 lines.push('');
                                 lines.push('### 必需章节');

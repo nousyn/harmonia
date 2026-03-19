@@ -121,7 +121,7 @@ export const HARMONIA_TOOLS = [
 export const DISPATCH_TIMEOUT_MINUTES = 30;
 
 /** Workflow idle timeout — warn after this many minutes with no tool calls */
-export const PHASE_IDLE_TIMEOUT_MINUTES = 15;
+export const WORKFLOW_IDLE_TIMEOUT_MINUTES = 15;
 
 /** Review pending timeout — warn after this many minutes */
 export const REVIEW_PENDING_TIMEOUT_MINUTES = 10;

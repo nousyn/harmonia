@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-    initNodeStates,
-    startWorkflow,
-    computeNextAction,
-    evaluateGate,
-} from '../src/core/workflow-engine.js';
+import { initNodeStates, startWorkflow, computeNextAction, evaluateGate } from '../src/core/workflow-engine.js';
 import type { EngineContext, GateContext } from '../src/core/workflow-engine.js';
 import type {
     WorkflowDefinition,
@@ -94,11 +89,7 @@ describe('workflow-engine', () => {
     describe('initNodeStates', () => {
         it('should create states for all nodes in a simple sequence', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    makeTask('t1'),
-                    makeTask('t2'),
-                    makeTask('t3'),
-                ]),
+                root: makeSequence('main', [makeTask('t1'), makeTask('t2'), makeTask('t3')]),
             });
             const states = initNodeStates(def);
             expect(Object.keys(states)).toHaveLength(4); // main + t1 + t2 + t3
@@ -191,11 +182,7 @@ describe('workflow-engine', () => {
     describe('sequence execution', () => {
         it('should advance through sequence tasks one by one', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    makeTask('t1'),
-                    makeTask('t2'),
-                    makeTask('t3'),
-                ]),
+                root: makeSequence('main', [makeTask('t1'), makeTask('t2'), makeTask('t3')]),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -205,26 +192,41 @@ describe('workflow-engine', () => {
             expect(result.nextAction.nodeId).toBe('t1');
 
             // Complete t1 → should activate t2
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't1',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('t2');
             expect(result.nextAction.type).toBe('dispatch');
             expect(result.state.nodes['t1'].status).toBe('completed');
 
             // Complete t2 → should activate t3
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't2',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('t3');
 
             // Complete t3 → workflow complete
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't3',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't3',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('completed');
             expect(result.state.nodes['main'].status).toBe('completed');
         });
@@ -235,13 +237,7 @@ describe('workflow-engine', () => {
     describe('parallel execution', () => {
         it('should activate all children simultaneously', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    makeParallel('p1', [
-                        makeTask('t1'),
-                        makeTask('t2'),
-                        makeTask('t3'),
-                    ]),
-                ]),
+                root: makeSequence('main', [makeParallel('p1', [makeTask('t1'), makeTask('t2'), makeTask('t3')])]),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -257,9 +253,7 @@ describe('workflow-engine', () => {
 
         it('should wait until all children complete', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    makeParallel('p1', [makeTask('t1'), makeTask('t2')]),
-                ]),
+                root: makeSequence('main', [makeParallel('p1', [makeTask('t1'), makeTask('t2')])]),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -267,28 +261,34 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // Complete t1 — t2 still active
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't1',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('wait');
 
             // Complete t2 — parallel should complete
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't2',
+                },
+                ctx,
+            );
             expect(result.state.nodes['p1'].status).toBe('completed');
             expect(result.nextAction.type).toBe('completed'); // root completes too
         });
 
         it('should handle fail-fast strategy', () => {
             const def = makeDefinition({
-                root: makeParallel('p1', [
-                    makeTask('t1'),
-                    makeTask('t2'),
-                    makeTask('t3'),
-                ], 'fail-fast'),
+                root: makeParallel('p1', [makeTask('t1'), makeTask('t2'), makeTask('t3')], 'fail-fast'),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -296,11 +296,16 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t1 fails — should cancel remaining active children
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'test error',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'test error',
+                },
+                ctx,
+            );
 
             expect(result.state.nodes['t1'].status).toBe('failed');
             // t2 and t3 should be cancelled
@@ -312,10 +317,7 @@ describe('workflow-engine', () => {
 
         it('should handle wait-all strategy', () => {
             const def = makeDefinition({
-                root: makeParallel('p1', [
-                    makeTask('t1'),
-                    makeTask('t2'),
-                ], 'wait-all'),
+                root: makeParallel('p1', [makeTask('t1'), makeTask('t2')], 'wait-all'),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -323,43 +325,60 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t1 fails — should still wait for t2
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'test error',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'test error',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('wait');
 
             // t2 completes — now parallel should fail (has failures)
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't2',
+                },
+                ctx,
+            );
             expect(result.state.nodes['p1'].status).toBe('failed');
         });
 
         it('should complete parallel when all children succeed under wait-all', () => {
             const def = makeDefinition({
-                root: makeParallel('p1', [
-                    makeTask('t1'),
-                    makeTask('t2'),
-                ], 'wait-all'),
+                root: makeParallel('p1', [makeTask('t1'), makeTask('t2')], 'wait-all'),
             });
             const state = makeState(def);
             const ctx = makeContext();
 
             let result = startWorkflow(def, state, ctx);
 
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't1',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('wait');
 
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't2',
+                },
+                ctx,
+            );
             expect(result.state.nodes['p1'].status).toBe('completed');
             expect(result.nextAction.type).toBe('completed');
         });
@@ -369,15 +388,10 @@ describe('workflow-engine', () => {
 
     describe('gate evaluation', () => {
         it('should pass when all conditions are met', () => {
-            const gate = makeGate(
-                'g1',
-                makeTask('pass-task'),
-                { goto: 'prev' },
-                [
-                    { type: 'artifact_exists', artifact: 'prd' },
-                    { type: 'artifact_approved', artifact: 'prd' },
-                ],
-            );
+            const gate = makeGate('g1', makeTask('pass-task'), { goto: 'prev' }, [
+                { type: 'artifact_exists', artifact: 'prd' },
+                { type: 'artifact_approved', artifact: 'prd' },
+            ]);
             const gateCtx = makeGateContext({
                 artifactExists: (id) => id === 'prd',
                 artifactApproved: (id) => id === 'prd',
@@ -390,15 +404,10 @@ describe('workflow-engine', () => {
         });
 
         it('should fail when any condition is not met', () => {
-            const gate = makeGate(
-                'g1',
-                makeTask('pass-task'),
-                { goto: 'prev' },
-                [
-                    { type: 'artifact_exists', artifact: 'prd' },
-                    { type: 'artifact_approved', artifact: 'prd' },
-                ],
-            );
+            const gate = makeGate('g1', makeTask('pass-task'), { goto: 'prev' }, [
+                { type: 'artifact_exists', artifact: 'prd' },
+                { type: 'artifact_approved', artifact: 'prd' },
+            ]);
             const gateCtx = makeGateContext({
                 artifactExists: () => true,
                 artifactApproved: () => false, // not approved
@@ -411,20 +420,15 @@ describe('workflow-engine', () => {
         });
 
         it('should evaluate artifact_field with eq operator', () => {
-            const gate = makeGate(
-                'g1',
-                makeTask('pass-task'),
-                { goto: 'prev' },
-                [
-                    {
-                        type: 'artifact_field',
-                        artifact: 'test-report',
-                        field: 'result',
-                        operator: 'eq',
-                        value: 'pass',
-                    },
-                ],
-            );
+            const gate = makeGate('g1', makeTask('pass-task'), { goto: 'prev' }, [
+                {
+                    type: 'artifact_field',
+                    artifact: 'test-report',
+                    field: 'result',
+                    operator: 'eq',
+                    value: 'pass',
+                },
+            ]);
             const gateCtx = makeGateContext({
                 artifactField: (artifactId, field) => {
                     if (artifactId === 'test-report' && field === 'result') return 'pass';
@@ -438,12 +442,9 @@ describe('workflow-engine', () => {
         });
 
         it('should evaluate artifact_field with neq operator', () => {
-            const gate = makeGate(
-                'g1',
-                makeTask('pass-task'),
-                { goto: 'prev' },
-                [{ type: 'artifact_field', artifact: 'a', field: 'status', operator: 'neq', value: 'blocked' }],
-            );
+            const gate = makeGate('g1', makeTask('pass-task'), { goto: 'prev' }, [
+                { type: 'artifact_field', artifact: 'a', field: 'status', operator: 'neq', value: 'blocked' },
+            ]);
             const gateCtx = makeGateContext({
                 artifactField: () => 'active',
             });
@@ -506,12 +507,9 @@ describe('workflow-engine', () => {
         it('should activate pass branch when gate passes', () => {
             const def = makeDefinition({
                 root: makeSequence('main', [
-                    makeGate(
-                        'g1',
-                        makeTask('pass-task', 'developer'),
-                        { goto: 'pass-task' },
-                        [{ type: 'artifact_exists', artifact: 'prd' }],
-                    ),
+                    makeGate('g1', makeTask('pass-task', 'developer'), { goto: 'pass-task' }, [
+                        { type: 'artifact_exists', artifact: 'prd' },
+                    ]),
                 ]),
             });
             const state = makeState(def);
@@ -533,12 +531,9 @@ describe('workflow-engine', () => {
             const def = makeDefinition({
                 root: makeSequence('main', [
                     makeTask('clarify', 'coordinator'),
-                    makeGate(
-                        'prd-gate',
-                        makeTask('design', 'architect'),
-                        { goto: 'clarify', maxRetries: 3 },
-                        [{ type: 'artifact_exists', artifact: 'prd' }],
-                    ),
+                    makeGate('prd-gate', makeTask('design', 'architect'), { goto: 'clarify', maxRetries: 3 }, [
+                        { type: 'artifact_exists', artifact: 'prd' },
+                    ]),
                 ]),
             });
             const state = makeState(def);
@@ -553,10 +548,15 @@ describe('workflow-engine', () => {
             expect(result.nextAction.nodeId).toBe('clarify');
 
             // Complete clarify → gate evaluates → fails → goto clarify
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
 
             // clarify should be reset to active (via goto)
             expect(result.state.nodes['clarify'].status).toBe('active');
@@ -593,12 +593,9 @@ describe('workflow-engine', () => {
             const def = makeDefinition({
                 root: makeSequence('main', [
                     makeTask('clarify', 'coordinator'),
-                    makeGate(
-                        'g1',
-                        makeTask('design', 'architect'),
-                        { goto: 'clarify', maxRetries: 5 },
-                        [{ type: 'artifact_exists', artifact: 'prd' }],
-                    ),
+                    makeGate('g1', makeTask('design', 'architect'), { goto: 'clarify', maxRetries: 5 }, [
+                        { type: 'artifact_exists', artifact: 'prd' },
+                    ]),
                 ]),
             });
             const state = makeState(def);
@@ -608,17 +605,27 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // Complete clarify → gate fails → goto clarify (retry 1)
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.state.nodes['clarify'].retryCount).toBe(1);
 
             // Complete clarify again → gate fails → goto clarify (retry 2)
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.state.nodes['clarify'].retryCount).toBe(2);
         });
 
@@ -642,24 +649,39 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // First attempt → fail → goto (retry 1)
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.state.nodes['clarify'].retryCount).toBe(1);
 
             // Second attempt → fail → goto (retry 2)
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.state.nodes['clarify'].retryCount).toBe(2);
 
             // Third attempt → fail → retries exhausted (2 >= maxRetries:2) → escalate
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('escalate');
             expect(result.state.nodes['escalate'].status).toBe('active');
         });
@@ -679,16 +701,26 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // Complete t1 → t2
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't1',
+                },
+                ctx,
+            );
 
             // Complete t2 → t3
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't2',
+                },
+                ctx,
+            );
 
             // Now manually trigger a failure with onFailed goto to t1
             // We need a definition with onFailed for this
@@ -707,11 +739,16 @@ describe('workflow-engine', () => {
             r2 = computeNextAction(defWithOnFailed, r2.state, { type: 'node_completed', nodeId: 't2' }, ctx);
 
             // t3 fails → onFailed goto t1
-            r2 = computeNextAction(defWithOnFailed, r2.state, {
-                type: 'node_failed',
-                nodeId: 't3',
-                error: 'test failure',
-            }, ctx);
+            r2 = computeNextAction(
+                defWithOnFailed,
+                r2.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't3',
+                    error: 'test failure',
+                },
+                ctx,
+            );
 
             // t1 should be active again, t2 and t3 should be pending
             expect(r2.state.nodes['t1'].status).toBe('active');
@@ -728,10 +765,7 @@ describe('workflow-engine', () => {
     describe('failure handling', () => {
         it('should bubble failure up to parent when no onFailed', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    makeTask('t1'),
-                    makeTask('t2'),
-                ]),
+                root: makeSequence('main', [makeTask('t1'), makeTask('t2')]),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -739,24 +773,27 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t1 fails — no onFailed — bubbles to sequence → root
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'task error',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'task error',
+                },
+                ctx,
+            );
 
             expect(result.state.nodes['t1'].status).toBe('failed');
             expect(result.state.nodes['t1'].error).toBe('task error');
             expect(result.state.nodes['main'].status).toBe('failed');
-            expect(result.nextAction.type).toBe('completed');
+            expect(result.nextAction.type).toBe('failed');
             expect(result.nextAction.instructions).toContain('failed');
         });
 
         it('should use onFailed goto for retry', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    { ...makeTask('t1'), onFailed: { goto: 't1', maxRetries: 2 } },
-                ]),
+                root: makeSequence('main', [{ ...makeTask('t1'), onFailed: { goto: 't1', maxRetries: 2 } }]),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -764,11 +801,16 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t1 fails → onFailed goto t1 (self-retry)
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'first failure',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'first failure',
+                },
+                ctx,
+            );
 
             expect(result.state.nodes['t1'].status).toBe('active');
             expect(result.state.nodes['t1'].retryCount).toBe(1);
@@ -791,20 +833,30 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // First failure → retry (retryCount becomes 1)
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'fail 1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'fail 1',
+                },
+                ctx,
+            );
             expect(result.state.nodes['t1'].retryCount).toBe(1);
             expect(result.nextAction.type).toBe('dispatch');
 
             // Second failure → retries exhausted (1 >= maxRetries:1) → escalate
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'fail 2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'fail 2',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('escalate');
             expect(result.state.nodes['escalate'].status).toBe('active');
         });
@@ -824,18 +876,28 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // First failure → retry
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'fail 1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'fail 1',
+                },
+                ctx,
+            );
 
             // Second failure → exhausted, no onExhausted → bubble
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'fail 2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'fail 2',
+                },
+                ctx,
+            );
 
             expect(result.state.nodes['main'].status).toBe('failed');
         });
@@ -855,11 +917,16 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t1 fails → parallel fail-fast → parallel onFailed goto p1
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'task failed',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'task failed',
+                },
+                ctx,
+            );
 
             // p1 should be retried
             expect(result.state.nodes['p1'].status).toBe('active');
@@ -876,12 +943,9 @@ describe('workflow-engine', () => {
         it('should re-evaluate active gates on artifact_written', () => {
             const def = makeDefinition({
                 root: makeSequence('main', [
-                    makeGate(
-                        'g1',
-                        makeTask('next-task', 'developer'),
-                        makeTask('wait-task', 'coordinator'),
-                        [{ type: 'artifact_exists', artifact: 'prd' }],
-                    ),
+                    makeGate('g1', makeTask('next-task', 'developer'), makeTask('wait-task', 'coordinator'), [
+                        { type: 'artifact_exists', artifact: 'prd' },
+                    ]),
                 ]),
             });
             const state = makeState(def);
@@ -915,10 +979,15 @@ describe('workflow-engine', () => {
             expect(result.nextAction.nodeId).toBe('write-task');
 
             // Complete write-task → gate evaluates → fails (not approved)
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'write-task',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'write-task',
+                },
+                ctx,
+            );
 
             // Gate completed with inline fail path
             expect(result.state.nodes['approval-gate'].status).toBe('completed');
@@ -935,10 +1004,15 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // Send artifact_written event — no active gates
-            result = computeNextAction(def, result.state, {
-                type: 'artifact_written',
-                artifactId: 'some-artifact',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'artifact_written',
+                    artifactId: 'some-artifact',
+                },
+                ctx,
+            );
 
             expect(result.nextAction.type).toBe('wait');
         });
@@ -958,10 +1032,15 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // Request dispatch for active task
-            result = computeNextAction(def, result.state, {
-                type: 'dispatch_requested',
-                nodeId: 't1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'dispatch_requested',
+                    nodeId: 't1',
+                },
+                ctx,
+            );
 
             expect(result.nextAction.type).toBe('dispatch');
             expect(result.nextAction.nodeId).toBe('t1');
@@ -978,20 +1057,23 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t2 is pending, not active
-            result = computeNextAction(def, result.state, {
-                type: 'dispatch_requested',
-                nodeId: 't2',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'dispatch_requested',
+                    nodeId: 't2',
+                },
+                ctx,
+            );
 
             expect(result.nextAction.type).toBe('wait');
-            expect(result.nextAction.instructions).toContain('not in \'active\' state');
+            expect(result.nextAction.instructions).toContain("not in 'active' state");
         });
 
         it('should reject dispatch for non-task node', () => {
             const def = makeDefinition({
-                root: makeSequence('main', [
-                    makeParallel('p1', [makeTask('t1'), makeTask('t2')]),
-                ]),
+                root: makeSequence('main', [makeParallel('p1', [makeTask('t1'), makeTask('t2')])]),
             });
             const state = makeState(def);
             const ctx = makeContext();
@@ -999,10 +1081,15 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // p1 is active but is a parallel node, not a task
-            result = computeNextAction(def, result.state, {
-                type: 'dispatch_requested',
-                nodeId: 'p1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'dispatch_requested',
+                    nodeId: 'p1',
+                },
+                ctx,
+            );
 
             expect(result.nextAction.type).toBe('wait');
             expect(result.nextAction.instructions).toContain('not a task');
@@ -1022,15 +1109,25 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // Complete t1
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 't1',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 't1',
+                },
+                ctx,
+            );
 
             // Query status
-            result = computeNextAction(def, result.state, {
-                type: 'query_status',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'query_status',
+                },
+                ctx,
+            );
 
             expect(result.nextAction.type).toBe('completed');
         });
@@ -1044,9 +1141,14 @@ describe('workflow-engine', () => {
 
             let result = startWorkflow(def, state, ctx);
 
-            result = computeNextAction(def, result.state, {
-                type: 'query_status',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'query_status',
+                },
+                ctx,
+            );
 
             expect(result.nextAction.type).toBe('dispatch');
             expect(result.nextAction.nodeId).toBe('t1');
@@ -1063,18 +1165,28 @@ describe('workflow-engine', () => {
             let result = startWorkflow(def, state, ctx);
 
             // t1 fails → main fails
-            result = computeNextAction(def, result.state, {
-                type: 'node_failed',
-                nodeId: 't1',
-                error: 'crash',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_failed',
+                    nodeId: 't1',
+                    error: 'crash',
+                },
+                ctx,
+            );
 
             // Query status
-            result = computeNextAction(def, result.state, {
-                type: 'query_status',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'query_status',
+                },
+                ctx,
+            );
 
-            expect(result.nextAction.type).toBe('completed');
+            expect(result.nextAction.type).toBe('failed');
             expect(result.nextAction.instructions).toContain('failed');
         });
     });
@@ -1096,19 +1208,19 @@ describe('workflow-engine', () => {
                             { type: 'artifact_approved', artifact: 'prd' },
                         ],
                     ),
-                    makeGate(
-                        'design-gate',
-                        makeTask('develop', 'developer'),
-                        { goto: 'design', maxRetries: 2 },
-                        [{ type: 'artifact_exists', artifact: 'tech-design' }],
-                    ),
+                    makeGate('design-gate', makeTask('develop', 'developer'), { goto: 'design', maxRetries: 2 }, [
+                        { type: 'artifact_exists', artifact: 'tech-design' },
+                    ]),
                     makeTask('test', 'tester'),
-                    makeGate(
-                        'test-gate',
-                        makeTask('deliver', 'coordinator'),
-                        { goto: 'develop', maxRetries: 2 },
-                        [{ type: 'artifact_field', artifact: 'test-report', field: 'result', operator: 'eq', value: 'pass' }],
-                    ),
+                    makeGate('test-gate', makeTask('deliver', 'coordinator'), { goto: 'develop', maxRetries: 2 }, [
+                        {
+                            type: 'artifact_field',
+                            artifact: 'test-report',
+                            field: 'result',
+                            operator: 'eq',
+                            value: 'pass',
+                        },
+                    ]),
                 ]),
                 floatingNodes: [makeTask('escalate', 'coordinator')],
             });
@@ -1143,10 +1255,15 @@ describe('workflow-engine', () => {
             expect(result.nextAction.nodeId).toBe('clarify');
 
             // 2. Complete clarify → prd-gate fails (prd doesn't exist) → goto clarify
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.state.nodes['clarify'].retryCount).toBe(1);
 
             // 3. Simulate: prd is now written and approved
@@ -1154,64 +1271,104 @@ describe('workflow-engine', () => {
             prdApproved = true;
 
             // Complete clarify again → prd-gate passes → design
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'clarify',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'clarify',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('design');
 
             // 4. Complete design → design-gate fails (tech-design doesn't exist) → goto design
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'design',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'design',
+                },
+                ctx,
+            );
             expect(result.state.nodes['design'].retryCount).toBe(1);
 
             // 5. Simulate: tech-design is now written
             techDesignExists = true;
 
             // Complete design again → design-gate passes → develop
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'design',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'design',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('develop');
 
             // 6. Complete develop → test
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'develop',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'develop',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('test');
 
             // 7. Complete test → test-gate fails (no test result) → goto develop
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'test',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'test',
+                },
+                ctx,
+            );
             expect(result.state.nodes['develop'].retryCount).toBe(1);
 
             // 8. Simulate: test report passes
             testResult = 'pass';
 
             // Complete develop → test
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'develop',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'develop',
+                },
+                ctx,
+            );
 
             // Complete test → test-gate passes → deliver
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'test',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'test',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('deliver');
 
             // 9. Complete deliver → workflow complete
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'deliver',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'deliver',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('completed');
         });
 
@@ -1219,11 +1376,15 @@ describe('workflow-engine', () => {
             const def = makeDefinition({
                 root: makeSequence('main', [
                     makeTask('init', 'coordinator'),
-                    makeParallel('parallel-work', [
-                        makeTask('frontend', 'developer'),
-                        makeTask('backend', 'developer'),
-                        makeTask('docs', 'developer'),
-                    ], 'wait-all'),
+                    makeParallel(
+                        'parallel-work',
+                        [
+                            makeTask('frontend', 'developer'),
+                            makeTask('backend', 'developer'),
+                            makeTask('docs', 'developer'),
+                        ],
+                        'wait-all',
+                    ),
                     makeTask('integrate', 'developer'),
                 ]),
             });
@@ -1235,41 +1396,66 @@ describe('workflow-engine', () => {
             expect(result.nextAction.nodeId).toBe('init');
 
             // Complete init → parallel activates all children
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'init',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'init',
+                },
+                ctx,
+            );
             expect(result.state.nodes['frontend'].status).toBe('active');
             expect(result.state.nodes['backend'].status).toBe('active');
             expect(result.state.nodes['docs'].status).toBe('active');
 
             // Complete frontend → wait
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'frontend',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'frontend',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('wait');
 
             // Complete backend → wait
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'backend',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'backend',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('wait');
 
             // Complete docs → parallel completes → integrate
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'docs',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'docs',
+                },
+                ctx,
+            );
             expect(result.state.nodes['parallel-work'].status).toBe('completed');
             expect(result.nextAction.nodeId).toBe('integrate');
 
             // Complete integrate → workflow complete
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'integrate',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'integrate',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('completed');
         });
 
@@ -1295,17 +1481,27 @@ describe('workflow-engine', () => {
             expect(result.nextAction.nodeId).toBe('passed-task');
 
             // Complete passed-task → gate completes → final-task
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'passed-task',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'passed-task',
+                },
+                ctx,
+            );
             expect(result.nextAction.nodeId).toBe('final-task');
 
             // Complete final-task → workflow complete
-            result = computeNextAction(def, result.state, {
-                type: 'node_completed',
-                nodeId: 'final-task',
-            }, ctx);
+            result = computeNextAction(
+                def,
+                result.state,
+                {
+                    type: 'node_completed',
+                    nodeId: 'final-task',
+                },
+                ctx,
+            );
             expect(result.nextAction.type).toBe('completed');
         });
     });

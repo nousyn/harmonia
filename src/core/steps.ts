@@ -1,7 +1,7 @@
 /**
  * Step state management — manages <context_dir>/steps.json
  *
- * Tracks which sequential steps have been completed for each document,
+ * Tracks which sequential steps have been completed for each artifact,
  * supporting the P3 Sequential mode feature.
  * All public functions accept an optional contextDir parameter.
  */
@@ -14,7 +14,7 @@ import type { ArtifactStepState, ArtifactStepRecord } from './types.js';
 const STEPS_FILE = 'steps.json';
 
 interface StepsData {
-    docs: Record<string, ArtifactStepState>;
+    artifacts: Record<string, ArtifactStepState>;
 }
 
 function stepsPath(projectName: string, iteration: number, contextDir?: string): string {
@@ -33,7 +33,7 @@ export async function readSteps(
     try {
         const content = await readFile(stepsPath(projectName, iteration, contextDir), 'utf-8');
         const data = JSON.parse(content) as StepsData;
-        return data.docs ?? {};
+        return data.artifacts ?? {};
     } catch {
         return {};
     }
@@ -45,30 +45,30 @@ export async function readSteps(
 async function writeSteps(
     projectName: string,
     iteration: number,
-    docs: Record<string, ArtifactStepState>,
+    artifacts: Record<string, ArtifactStepState>,
     contextDir?: string,
 ): Promise<void> {
     const filePath = stepsPath(projectName, iteration, contextDir);
     await mkdir(dirname(filePath), { recursive: true });
-    const data: StepsData = { docs };
+    const data: StepsData = { artifacts };
     await writeFile(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
 /**
- * Get the step state for a specific document.
+ * Get the step state for a specific artifact.
  */
 export async function getArtifactStepState(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     contextDir?: string,
 ): Promise<ArtifactStepState | null> {
-    const docs = await readSteps(projectName, iteration, contextDir);
-    return docs[docId] ?? null;
+    const artifacts = await readSteps(projectName, iteration, contextDir);
+    return artifacts[artifactId] ?? null;
 }
 
 /**
- * Get the set of completed step IDs for a document.
+ * Get the set of completed step IDs for an artifact.
  */
 export function getCompletedStepIds(state: ArtifactStepState | null): Set<string> {
     if (!state) return new Set();
@@ -84,18 +84,18 @@ export function getCompletedStepIds(state: ArtifactStepState | null): Set<string
 export async function recordStepCompletion(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     stepId: string,
     artifactPath: string,
     allStepIds: string[],
     contextDir?: string,
 ): Promise<ArtifactStepState> {
-    const docs = await readSteps(projectName, iteration, contextDir);
-    let state = docs[docId];
+    const artifacts = await readSteps(projectName, iteration, contextDir);
+    let state = artifacts[artifactId];
 
     if (!state) {
         state = {
-            artifactId: docId,
+            artifactId,
             completedSteps: [],
             finalized: false,
         };
@@ -125,43 +125,43 @@ export async function recordStepCompletion(
     };
     state.completedSteps.push(record);
 
-    docs[docId] = state;
-    await writeSteps(projectName, iteration, docs, contextDir);
+    artifacts[artifactId] = state;
+    await writeSteps(projectName, iteration, artifacts, contextDir);
     return state;
 }
 
 /**
- * Mark a document as finalized (all steps completed + final doc written).
+ * Mark an artifact as finalized (all steps completed + final artifact written).
  */
 export async function markFinalized(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     contextDir?: string,
 ): Promise<ArtifactStepState> {
-    const docs = await readSteps(projectName, iteration, contextDir);
-    const state = docs[docId];
+    const artifacts = await readSteps(projectName, iteration, contextDir);
+    const state = artifacts[artifactId];
 
     if (!state) {
-        throw new Error(`No step state found for document "${docId}"`);
+        throw new Error(`No step state found for artifact "${artifactId}"`);
     }
 
     state.finalized = true;
     state.finalizedAt = new Date().toISOString();
 
-    await writeSteps(projectName, iteration, docs, contextDir);
+    await writeSteps(projectName, iteration, artifacts, contextDir);
     return state;
 }
 
 /**
- * Check if a document's sequential process is finalized.
+ * Check if an artifact's sequential process is finalized.
  */
-export async function isDocFinalized(
+export async function isArtifactFinalized(
     projectName: string,
     iteration: number,
-    docId: string,
+    artifactId: string,
     contextDir?: string,
 ): Promise<boolean> {
-    const state = await getArtifactStepState(projectName, iteration, docId, contextDir);
+    const state = await getArtifactStepState(projectName, iteration, artifactId, contextDir);
     return state?.finalized ?? false;
 }

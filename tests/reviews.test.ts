@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { submitForReview, resolveReview, getDocReview, getPendingReviews } from '../src/core/reviews.js';
+import { submitForReview, resolveReview, getArtifactReview, getPendingReviews } from '../src/core/reviews.js';
 
 const TEST_PROJECT = 'test-project';
 const ITER = 1;
 
-describe('document review system', () => {
+describe('artifact review system', () => {
     let harmoniaHome: string;
 
     beforeEach(async () => {
@@ -22,7 +22,7 @@ describe('document review system', () => {
         await rm(harmoniaHome, { recursive: true, force: true });
     });
 
-    it('should submit a document for review', async () => {
+    it('should submit an artifact for review', async () => {
         const review = await submitForReview(TEST_PROJECT, ITER, 'prd');
         expect(review.artifactId).toBe('prd');
         expect(review.status).toBe('pending');
@@ -59,15 +59,15 @@ describe('document review system', () => {
         await expect(resolveReview(TEST_PROJECT, ITER, 'prd', 'approved')).rejects.toThrow('already approved');
     });
 
-    it('should get a specific doc review', async () => {
+    it('should get a specific artifact review', async () => {
         await submitForReview(TEST_PROJECT, ITER, 'prd');
-        const review = await getDocReview(TEST_PROJECT, ITER, 'prd');
+        const review = await getArtifactReview(TEST_PROJECT, ITER, 'prd');
         expect(review).not.toBeNull();
         expect(review!.artifactId).toBe('prd');
     });
 
-    it('should return null for non-existent doc review', async () => {
-        const review = await getDocReview(TEST_PROJECT, ITER, 'nonexistent');
+    it('should return null for non-existent artifact review', async () => {
+        const review = await getArtifactReview(TEST_PROJECT, ITER, 'nonexistent');
         expect(review).toBeNull();
     });
 
@@ -86,7 +86,7 @@ describe('document review system', () => {
         expect(pending).toHaveLength(0);
     });
 
-    it('should allow re-submitting a previously resolved doc', async () => {
+    it('should allow re-submitting a previously resolved artifact', async () => {
         await submitForReview(TEST_PROJECT, ITER, 'prd');
         await resolveReview(TEST_PROJECT, ITER, 'prd', 'rejected', 'Needs work');
 

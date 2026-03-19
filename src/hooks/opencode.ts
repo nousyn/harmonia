@@ -26,7 +26,7 @@ import {
     BLOCKED_COMMANDS,
     CODE_EXTENSIONS,
     DISPATCH_TIMEOUT_MINUTES,
-    PHASE_IDLE_TIMEOUT_MINUTES,
+    WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
 } from './content.js';
 
@@ -53,7 +53,7 @@ const DATA_DIR = ${JSON.stringify(params.dataDir)};
 const CODE_EXTENSIONS: readonly string[] = ${codeExtsJson};
 const BLOCKED_COMMANDS: readonly string[] = ${blockedCmdsJson};
 const DISPATCH_TIMEOUT_MINUTES = ${DISPATCH_TIMEOUT_MINUTES};
-const PHASE_IDLE_TIMEOUT_MINUTES = ${PHASE_IDLE_TIMEOUT_MINUTES};
+const WORKFLOW_IDLE_TIMEOUT_MINUTES = ${WORKFLOW_IDLE_TIMEOUT_MINUTES};
 const REVIEW_PENDING_TIMEOUT_MINUTES = ${REVIEW_PENDING_TIMEOUT_MINUTES};
 
 // ── Helpers ──
@@ -193,7 +193,7 @@ export default {
                 const state = readJsonSafe(resolve(proj.path, 'state.json'));
                 if (state && state.updatedAt) {
                     const idle = minutesSince(state.updatedAt);
-                    if (idle >= PHASE_IDLE_TIMEOUT_MINUTES) {
+                    if (idle >= WORKFLOW_IDLE_TIMEOUT_MINUTES) {
                         reminders.push(
                             \`- [\${proj.name}] 工作流已空闲 \${idle} 分钟，建议调用 project_status 检查项目状态\`,
                         );

@@ -316,6 +316,7 @@ export type NextActionType =
     | 'approve_artifact'
     | 'wait'
     | 'completed'
+    | 'failed'
     | 'evaluate_gate'
     | 'none';
 
@@ -335,6 +336,8 @@ export interface NextAction {
     inputArtifacts?: string[];
     /** Gate evaluation results (if coming from a gate fail/goto) */
     gateResults?: GateEvaluationResult;
+    /** Parallel dispatch targets (when dispatching multiple tasks simultaneously) */
+    parallelDispatch?: Array<{ nodeId: string; role: string }>;
 }
 
 /** Events that trigger engine state transitions */

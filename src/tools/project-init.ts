@@ -14,7 +14,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createKit, defineHooks, type HookSet, type HookInstallResult } from '@s_s/agent-kit';
-import { loadWorkflow, listWorkflows } from '../core/workflow.js';
+import { loadWorkflow, listWorkflows } from '../core/plugin.js';
 import { registerProject, getProject, getGlobalDir } from '../core/registry.js';
 import { detectHostAgent } from '../setup/inject.js';
 import type { HookCreatorContext } from '../core/types.js';

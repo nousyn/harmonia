@@ -7,12 +7,19 @@
  */
 
 import { readState, persistState } from '../core/state.js';
-import { loadWorkflow } from '../core/workflow.js';
-import { listDocs, readDoc } from '../core/docs.js';
+import { loadWorkflow } from '../core/plugin.js';
+import { listArtifacts, readArtifact } from '../core/artifacts.js';
 import { readReviews } from '../core/reviews.js';
 import { computeNextAction, startWorkflow } from '../core/workflow-engine.js';
 import type { EngineContext, GateContext } from '../core/workflow-engine.js';
-import type { WorkflowState, WorkflowEvent, NextAction, WorkflowPlugin } from '../core/types.js';
+import type {
+    WorkflowState,
+    WorkflowEvent,
+    NextAction,
+    WorkflowPlugin,
+    WorkflowNode,
+    TaskNode,
+} from '../core/types.js';
 import type { ResolvedContext } from './utils.js';
 
 /** Result of processing a workflow event through the engine */
@@ -52,12 +59,12 @@ function buildGateContext(
     projectName: string,
     iteration: number,
     contextDir: string,
-    existingDocs: Set<string>,
+    existingArtifacts: Set<string>,
     reviews: Record<string, { status: string }>,
     artifactCache: Map<string, unknown>,
 ): GateContext {
     return {
-        artifactExists: (artifactId: string) => existingDocs.has(artifactId),
+        artifactExists: (artifactId: string) => existingArtifacts.has(artifactId),
         artifactApproved: (artifactId: string) => reviews[artifactId]?.status === 'approved',
         artifactField: (artifactId: string, field: string) => {
             const content = artifactCache.get(artifactId);
@@ -77,28 +84,28 @@ async function buildEngineContext(
     contextDir: string,
     wf: WorkflowPlugin,
 ): Promise<EngineContext> {
-    // Load current docs and reviews for gate evaluation
-    const docList = await listDocs(projectName, iteration, contextDir);
-    const existingDocs = new Set(docList);
+    // Load current artifacts and reviews for gate evaluation
+    const artifactList = await listArtifacts(projectName, iteration, contextDir);
+    const existingArtifacts = new Set(artifactList);
     const reviews = await readReviews(projectName, iteration, contextDir);
 
     // Pre-load artifact content for field access (JSON artifacts only)
     const artifactCache = new Map<string, unknown>();
-    for (const docId of docList) {
+    for (const artifactId of artifactList) {
         try {
-            const content = await readDoc(projectName, iteration, docId, contextDir);
+            const content = await readArtifact(projectName, iteration, artifactId, contextDir);
             // Try to parse as JSON; if it fails, store raw string
             try {
-                artifactCache.set(docId, JSON.parse(content));
+                artifactCache.set(artifactId, JSON.parse(content));
             } catch {
-                artifactCache.set(docId, content);
+                artifactCache.set(artifactId, content);
             }
         } catch {
             // Artifact listed but unreadable — skip
         }
     }
 
-    const gateCtx = buildGateContext(projectName, iteration, contextDir, existingDocs, reviews, artifactCache);
+    const gateCtx = buildGateContext(projectName, iteration, contextDir, existingArtifacts, reviews, artifactCache);
 
     return {
         gate: gateCtx,
@@ -106,12 +113,60 @@ async function buildEngineContext(
             const roleDef = wf.roles[role];
             return roleDef?.prompt ?? `Role "${role}" prompt not found`;
         },
-        getInputArtifacts: (_nodeId: string) => {
-            // Input artifacts will be determined by the workflow plugin in Phase 4.
-            // For now return an empty array.
-            return [];
+        getInputArtifacts: (nodeId: string) => {
+            // Find the task node to get its role
+            const taskNode = findTaskNode(wf, nodeId);
+            if (!taskNode) return [];
+
+            // Get role capabilities and find associated artifact IDs
+            const roleDef = wf.roles[taskNode.role];
+            if (!roleDef?.frontmatter?.capabilities) return [];
+
+            const artifactIds = roleDef.frontmatter.capabilities
+                .filter((cap) => cap.artifact)
+                .map((cap) => cap.artifact!);
+            if (artifactIds.length === 0) return [];
+
+            // Return only artifacts that already exist
+            return artifactIds.filter((id) => existingArtifacts.has(id));
         },
     };
+}
+
+/**
+ * Collect all task nodes from a workflow tree (recursive).
+ */
+export function collectTaskNodes(node: WorkflowNode): TaskNode[] {
+    const tasks: TaskNode[] = [];
+    switch (node.type) {
+        case 'task':
+            tasks.push(node);
+            break;
+        case 'sequence':
+        case 'parallel':
+            for (const child of node.children) {
+                tasks.push(...collectTaskNodes(child));
+            }
+            break;
+        case 'gate':
+            tasks.push(...collectTaskNodes(node.pass));
+            if ('type' in node.fail) {
+                tasks.push(...collectTaskNodes(node.fail as WorkflowNode));
+            }
+            break;
+    }
+    return tasks;
+}
+
+/**
+ * Find a task node by ID in the workflow definition (including floating nodes).
+ */
+export function findTaskNode(wf: WorkflowPlugin, nodeId: string): TaskNode | undefined {
+    const allTasks = collectTaskNodes(wf.definition.root);
+    const found = allTasks.find((t) => t.id === nodeId);
+    if (found) return found;
+    // Check floating nodes
+    return wf.definition.floatingNodes?.find((fn) => fn.id === nodeId);
 }
 
 /**
@@ -169,7 +224,14 @@ export function formatNextAction(nextAction: NextAction): string {
 
     switch (nextAction.type) {
         case 'dispatch':
-            lines.push(`\n[Next Action] Dispatch role "${nextAction.role}" for node "${nextAction.nodeId}"`);
+            if (nextAction.parallelDispatch && nextAction.parallelDispatch.length > 1) {
+                lines.push(`\n[Next Action] Parallel dispatch: ${nextAction.parallelDispatch.length} tasks`);
+                for (const d of nextAction.parallelDispatch) {
+                    lines.push(`  - role "${d.role}" for node "${d.nodeId}"`);
+                }
+            } else {
+                lines.push(`\n[Next Action] Dispatch role "${nextAction.role}" for node "${nextAction.nodeId}"`);
+            }
             if (nextAction.instructions) lines.push(nextAction.instructions);
             break;
         case 'write_artifact':
@@ -185,6 +247,9 @@ export function formatNextAction(nextAction: NextAction): string {
             break;
         case 'completed':
             lines.push(`\n[Next Action] Workflow completed!`);
+            break;
+        case 'failed':
+            lines.push(`\n[Workflow Failed] ${nextAction.instructions}`);
             break;
         case 'evaluate_gate':
             lines.push(`\n[Next Action] Evaluate gate "${nextAction.nodeId}"`);

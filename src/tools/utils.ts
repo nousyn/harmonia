@@ -6,6 +6,7 @@
 
 import { getProject, resolveContextDir } from '../core/registry.js';
 import type { ProjectEntry } from '../core/registry.js';
+import type { CapabilityOverride, OverrideConfig } from '../core/types.js';
 
 export interface ResolvedContext {
     entry: ProjectEntry;
@@ -82,4 +83,49 @@ export async function resolveActive(projectName: string): Promise<ResolvedContex
  */
 export function isError(result: ResolvedContext | ToolResult): result is ToolResult {
     return 'content' in result && !('entry' in result);
+}
+
+/**
+ * Build override instructions to inject into a role prompt.
+ * Shared by dispatch-role and get-role-prompt.
+ */
+export function buildOverrideSection(roleId: string, overrides: OverrideConfig): string {
+    const roleOverrides = overrides.roles?.[roleId]?.capabilities;
+    if (!roleOverrides || Object.keys(roleOverrides).length === 0) {
+        return '';
+    }
+
+    const lines: string[] = [
+        '',
+        '## Enhanced Capabilities',
+        '',
+        'The following capabilities have been configured to use external tools.',
+        'Use the specified tool instead of built-in behavior for these actions.',
+        '',
+    ];
+
+    for (const [capId, override] of Object.entries(roleOverrides)) {
+        const o = override as CapabilityOverride;
+        const toolRef =
+            o.type === 'mcp' && o.server
+                ? `\`${o.server}\` MCP server's \`${o.tool}\` tool`
+                : `\`${o.tool}\` skill tool`;
+
+        let instruction = `- **${capId}**: Use ${toolRef}`;
+
+        if (o.params && Object.keys(o.params).length > 0) {
+            const paramStr = Object.entries(o.params)
+                .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+                .join(', ');
+            instruction += ` with fixed parameters: ${paramStr}`;
+        }
+
+        if (o.notes) {
+            instruction += `. Note: ${o.notes}`;
+        }
+
+        lines.push(instruction);
+    }
+
+    return lines.join('\n');
 }

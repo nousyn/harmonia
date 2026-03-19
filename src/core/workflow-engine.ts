@@ -238,16 +238,12 @@ function activateParallel(
     }
 
     // Activate all children simultaneously
-    // Return the first child's nextAction; the coordinator will handle
-    // dispatching remaining children via subsequent dispatch_requested events
-    let lastAction: NextAction | undefined;
     for (const child of node.children) {
         const result = activateNode(child, definition, state, context);
         state = result.state;
-        lastAction = result.nextAction;
     }
 
-    // For parallel, return a special multi-dispatch instruction
+    // Build parallel dispatch list with each child's nodeId and role
     const dispatchActions = node.children
         .filter((c) => c.type === 'task')
         .map((c) => ({
@@ -260,8 +256,9 @@ function activateParallel(
         nextAction: {
             type: 'dispatch',
             nodeId: node.id,
-            instructions: `Parallel execution: dispatch ${node.children.length} tasks simultaneously`,
+            instructions: `Parallel execution: dispatch ${dispatchActions.length} tasks simultaneously: ${dispatchActions.map((d) => `${d.role}(${d.nodeId})`).join(', ')}`,
             role: dispatchActions[0]?.role,
+            parallelDispatch: dispatchActions,
         },
     };
 }
@@ -569,7 +566,7 @@ function bubbleFailure(
         return {
             state,
             nextAction: {
-                type: 'completed',
+                type: 'failed',
                 instructions: `Workflow failed: ${error}`,
             },
         };
@@ -675,11 +672,11 @@ function handleGoto(
                 `Goto target "${targetId}" exhausted retries (${currentRetries}/${gotoTarget.maxRetries})`,
             );
         }
-        // No onExhausted — report as completed with failure info
+        // No onExhausted — report as failed
         return {
             state,
             nextAction: {
-                type: 'completed',
+                type: 'failed',
                 instructions: `Goto target "${targetId}" exhausted retries (${currentRetries}/${gotoTarget.maxRetries}). No onExhausted handler configured.`,
             },
         };
@@ -1052,7 +1049,7 @@ function computeStatusAction(state: WorkflowState, definition: WorkflowDefinitio
 
     if (rootState?.status === 'failed') {
         return {
-            type: 'completed',
+            type: 'failed',
             instructions: `Workflow failed. Failed nodes: ${failedNodes.join(', ')}`,
         };
     }

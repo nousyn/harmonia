@@ -403,19 +403,6 @@ function validateFailureHandler(
  * Any node that can reach itself through exit-less gotos forms a problematic cycle.
  */
 function detectCycles(edges: GotoEdge[], errors: ValidationError[]): void {
-    // Build adjacency list from edges that have no exit
-    const adj = new Map<string, string[]>();
-    for (const edge of edges) {
-        if (!edge.hasExit) {
-            if (!adj.has(edge.from)) {
-                adj.set(edge.from, []);
-            }
-            adj.get(edge.from)!.push(edge.to);
-        }
-    }
-
-    if (adj.size === 0) return;
-
     // For cycle detection we need to check: can any node reach itself?
     // Since goto edges go from a later node back to an earlier node,
     // a cycle requires a "forward path" in the workflow tree from

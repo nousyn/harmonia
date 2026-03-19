@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadWorkflow, listWorkflows } from '../src/core/workflow.js';
+import { loadWorkflow, listWorkflows } from '../src/core/plugin.js';
 import { resolve, join } from 'node:path';
 
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));

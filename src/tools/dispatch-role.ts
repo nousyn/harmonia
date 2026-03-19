@@ -5,9 +5,8 @@
  * Returns: role prompt (with overrides injected), frontmatter config,
  * input artifacts, task brief, and dispatch tracking info.
  *
- * Node-based architecture: validates against workflow node states instead
- * of phase definitions. Accepts an optional node_id parameter to target
- * a specific task node.
+ * Node-based architecture: validates against workflow node states.
+ * Accepts an optional node_id parameter to target a specific task node.
  *
  * Automatically:
  * - Creates a dispatch record for tracking
@@ -21,15 +20,20 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { readDoc, listDocs } from '../core/docs.js';
+import { readArtifact, listArtifacts } from '../core/artifacts.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession } from '../core/dispatch.js';
 import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
 import type { StepSchemaEntry } from '../core/schema.js';
-import { resolveActive, isError } from './utils.js';
-import { loadWorkflowForContext, processWorkflowEvent, formatNextAction } from './engine-helpers.js';
+import { resolveActive, isError, buildOverrideSection } from './utils.js';
+import {
+    loadWorkflowForContext,
+    processWorkflowEvent,
+    formatNextAction,
+    collectTaskNodes,
+    findTaskNode,
+} from './engine-helpers.js';
 import type {
-    CapabilityOverride,
     OverrideConfig,
     WorkflowNode,
     TaskNode,
@@ -38,86 +42,6 @@ import type {
     WorkflowState,
     ActionContext,
 } from '../core/types.js';
-
-/**
- * Build override instructions to inject into the role prompt.
- */
-function buildOverrideSection(roleId: string, overrides: OverrideConfig): string {
-    const roleOverrides = overrides.roles?.[roleId]?.capabilities;
-    if (!roleOverrides || Object.keys(roleOverrides).length === 0) {
-        return '';
-    }
-
-    const lines: string[] = [
-        '',
-        '## Enhanced Capabilities',
-        '',
-        'The following capabilities have been configured to use external tools.',
-        'Use the specified tool instead of built-in behavior for these actions.',
-        '',
-    ];
-
-    for (const [capId, override] of Object.entries(roleOverrides)) {
-        const o = override as CapabilityOverride;
-        const toolRef =
-            o.type === 'mcp' && o.server
-                ? `\`${o.server}\` MCP server's \`${o.tool}\` tool`
-                : `\`${o.tool}\` skill tool`;
-
-        let instruction = `- **${capId}**: Use ${toolRef}`;
-
-        if (o.params && Object.keys(o.params).length > 0) {
-            const paramStr = Object.entries(o.params)
-                .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-                .join(', ');
-            instruction += ` with fixed parameters: ${paramStr}`;
-        }
-
-        if (o.notes) {
-            instruction += `. Note: ${o.notes}`;
-        }
-
-        lines.push(instruction);
-    }
-
-    return lines.join('\n');
-}
-
-/**
- * Find all task nodes in the workflow tree (recursive).
- */
-function collectTaskNodes(node: WorkflowNode): TaskNode[] {
-    const tasks: TaskNode[] = [];
-    switch (node.type) {
-        case 'task':
-            tasks.push(node);
-            break;
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                tasks.push(...collectTaskNodes(child));
-            }
-            break;
-        case 'gate':
-            tasks.push(...collectTaskNodes(node.pass));
-            if ('type' in node.fail) {
-                tasks.push(...collectTaskNodes(node.fail as WorkflowNode));
-            }
-            break;
-    }
-    return tasks;
-}
-
-/**
- * Find a task node by ID in the workflow definition (including floating nodes).
- */
-function findTaskNode(wf: WorkflowPlugin, nodeId: string): TaskNode | undefined {
-    const allTasks = collectTaskNodes(wf.definition.root);
-    const found = allTasks.find((t) => t.id === nodeId);
-    if (found) return found;
-    // Check floating nodes
-    return wf.definition.floatingNodes?.find((fn) => fn.id === nodeId);
-}
 
 /**
  * Find task nodes for a given role that are active or pending.
@@ -174,22 +98,35 @@ function buildSessionGuidance(
 
 /**
  * Build Artifact Requirements section for the dispatch data package.
- * Loads schemas for each artifact defined in the workflow and formats them as writing guidance.
- * No scale filtering — all required artifacts are included.
+ * Only includes schemas for artifacts associated with the dispatched role
+ * (via the role's capabilities).
  */
 async function buildArtifactRequirements(
     wf: WorkflowPlugin,
     builtinDir: string,
     customDir: string,
     workflowName: string,
+    role: string,
 ): Promise<string> {
     const artifactDefs = wf.artifactDefinitions;
-    const artifactIds = Object.keys(artifactDefs);
-    if (artifactIds.length === 0) return '';
+
+    // Extract artifact IDs from role capabilities
+    const roleDef = wf.roles[role];
+    const roleArtifactIds = new Set<string>();
+    if (roleDef?.frontmatter.capabilities) {
+        for (const cap of roleDef.frontmatter.capabilities) {
+            if (cap.artifact) {
+                roleArtifactIds.add(cap.artifact);
+            }
+        }
+    }
+
+    // If role has no artifact capabilities, skip
+    if (roleArtifactIds.size === 0) return '';
 
     const sections: string[] = [];
 
-    for (const artifactId of artifactIds) {
+    for (const artifactId of roleArtifactIds) {
         const artifactDef = artifactDefs[artifactId];
         if (!artifactDef || artifactDef.external) continue;
 
@@ -357,8 +294,9 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                             pluginConfig: wf.config,
                             workflowState: state,
                             artifacts: {
-                                read: (artifactId: string) => readDoc(project_name, ctx.number, artifactId, ctx.dir),
-                                list: () => listDocs(project_name, ctx.number, ctx.dir),
+                                read: (artifactId: string) =>
+                                    readArtifact(project_name, ctx.number, artifactId, ctx.dir),
+                                list: () => listArtifacts(project_name, ctx.number, ctx.dir),
                             },
                         };
                         for (const actionName of targetNode.beforeDispatch.actions) {
@@ -392,7 +330,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                     const artifactDef = wf.artifactDefinitions[artifactId];
                     if (artifactDef?.external) continue; // external not stored
                     try {
-                        inputArtifacts[artifactId] = await readDoc(project_name, ctx.number, artifactId, ctx.dir);
+                        inputArtifacts[artifactId] = await readArtifact(project_name, ctx.number, artifactId, ctx.dir);
                     } catch {
                         missingArtifacts.push(artifactId);
                     }
@@ -410,7 +348,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                     ctx.number,
                     role,
                     task_brief,
-                    [], // expectedOutputs — determined dynamically, not from phase
+                    [], // expectedOutputs — determined dynamically by workflow engine
                     idleSession?.id,
                     ctx.dir,
                     targetNodeId,
@@ -436,7 +374,13 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
 
                 // Build artifact requirements for expected outputs
-                const artifactRequirements = await buildArtifactRequirements(wf, builtinDir, customDir, state.workflow);
+                const artifactRequirements = await buildArtifactRequirements(
+                    wf,
+                    builtinDir,
+                    customDir,
+                    state.workflow,
+                    role,
+                );
 
                 const summary = [
                     `# Dispatch: ${role}`,
