@@ -174,7 +174,7 @@ if [ -d "$DATA_DIR" ]; then
       done <<< "$PENDING"
       
       if [ "$PENDING_COUNT" -gt 0 ]; then
-        add_reminder "- [$PROJECT_NAME] $PENDING_COUNT 份制品待审核超过 ${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟:$PENDING_ARTIFACTS — 请尽快处理（artifact_approve）"
+        add_reminder "- [$PROJECT_NAME] $PENDING_COUNT 份产出待审核超过 ${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟:$PENDING_ARTIFACTS — 请尽快处理（artifact_approve）"
       fi
     fi
 

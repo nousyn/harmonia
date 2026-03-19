@@ -167,7 +167,7 @@ function handleMessageReceived(): any {
             }
             if (pendingArtifacts.length > 0) {
                 reminders.push(
-                    \`- [\${proj.name}] \${pendingArtifacts.length} 份制品待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingArtifacts.join(', ')} — 请尽快处理（artifact_approve）\`,
+                    \`- [\${proj.name}] \${pendingArtifacts.length} 份产出待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingArtifacts.join(', ')} — 请尽快处理（artifact_approve）\`,
                 );
             }
         }

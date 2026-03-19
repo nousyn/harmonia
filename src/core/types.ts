@@ -450,7 +450,7 @@ export interface ReviewState {
     comment?: string;
 }
 
-// ─── Session & Dispatch Tracking (unchanged) ───
+// ─── Session & Dispatch Tracking ───
 
 export type SessionStatus = 'active' | 'idle' | 'closed' | 'lost';
 
@@ -538,7 +538,7 @@ export interface OverrideConfig {
     roles?: Record<string, RoleOverride>;
 }
 
-// ─── Sequential Step State (unchanged, renamed terminology) ───
+// ─── Sequential Step State ───
 
 /** Step completion record */
 export interface ArtifactStepRecord {
@@ -562,7 +562,7 @@ export interface ArtifactStepState {
     finalizedAt?: string;
 }
 
-// ─── Issue Tracking (unchanged) ───
+// ─── Issue Tracking ───
 
 export type IssueStatus = 'open' | 'closed';
 export type IssueSource = 'test' | 'user-feedback';
