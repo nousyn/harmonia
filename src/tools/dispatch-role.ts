@@ -103,8 +103,7 @@ function buildSessionGuidance(
  */
 async function buildArtifactRequirements(
     wf: WorkflowPlugin,
-    builtinDir: string,
-    customDir: string,
+    workflowsDir: string,
     workflowName: string,
     role: string,
 ): Promise<string> {
@@ -131,19 +130,14 @@ async function buildArtifactRequirements(
         if (!artifactDef || artifactDef.external) continue;
 
         // Load main schema
-        const schema = await loadArtifactSchema(builtinDir, customDir, workflowName, artifactId);
+        const schema = await loadArtifactSchema(workflowsDir, workflowName, artifactId);
 
         // Load step schemas if artifact has steps
         let stepSchemas: StepSchemaEntry[] | undefined;
         if (artifactDef.steps && artifactDef.steps.length > 0) {
             stepSchemas = [];
             for (const step of artifactDef.steps) {
-                const stepSchema = await loadArtifactSchema(
-                    builtinDir,
-                    customDir,
-                    workflowName,
-                    `${artifactId}.${step.id}`,
-                );
+                const stepSchema = await loadArtifactSchema(workflowsDir, workflowName, `${artifactId}.${step.id}`);
                 stepSchemas.push({ step, schema: stepSchema });
             }
         }
@@ -159,7 +153,7 @@ async function buildArtifactRequirements(
     return ['## Artifact Requirements', '', ...sections].join('\n');
 }
 
-export function registerDispatchRole(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerDispatchRole(server: McpServer, workflowsDir: string): void {
     server.tool(
         'role_dispatch',
         "Prepare all data needed to dispatch a task to a team member. Returns the role's prompt (with capability overrides), configuration, input artifacts, task brief, and a dispatch tracking ID. Automatically searches for reusable sessions and provides guidance. Does NOT launch agents — you (coordinator) decide how to pass this to the team member. After launching, call dispatch_report to register the session.",
@@ -190,7 +184,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 if (isError(ctx)) return ctx;
 
                 // Load project state and workflow plugin
-                const { wf, state } = await loadWorkflowForContext(builtinDir, customDir, project_name, ctx);
+                const { wf, state } = await loadWorkflowForContext(workflowsDir, project_name, ctx);
 
                 // Validate role exists
                 const roleDef = wf.roles[role];
@@ -355,7 +349,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 );
 
                 // Trigger engine event: dispatch_requested
-                const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                     type: 'dispatch_requested',
                     nodeId: targetNodeId,
                 });
@@ -374,13 +368,7 @@ export function registerDispatchRole(server: McpServer, builtinDir: string, cust
                 const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
 
                 // Build artifact requirements for expected outputs
-                const artifactRequirements = await buildArtifactRequirements(
-                    wf,
-                    builtinDir,
-                    customDir,
-                    state.workflow,
-                    role,
-                );
+                const artifactRequirements = await buildArtifactRequirements(wf, workflowsDir, state.workflow, role);
 
                 const summary = [
                     `# Dispatch: ${role}`,

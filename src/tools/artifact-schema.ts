@@ -16,7 +16,7 @@ import type { StepSchemaEntry } from '../core/schema.js';
 import { loadWorkflowForContext } from './engine-helpers.js';
 import { resolveActive, isError } from './utils.js';
 
-export function registerArtifactSchema(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerArtifactSchema(server: McpServer, workflowsDir: string): void {
     server.tool(
         'artifact_schema',
         'Query artifact structure requirements and writing guidance. Call this before writing an artifact to understand required sections, content boundaries, and format constraints.',
@@ -37,7 +37,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                 const ctx = await resolveActive(project_name);
                 if (isError(ctx)) return ctx;
 
-                const { wf, state } = await loadWorkflowForContext(builtinDir, customDir, project_name, ctx);
+                const { wf, state } = await loadWorkflowForContext(workflowsDir, project_name, ctx);
 
                 // Validate artifact_id exists in workflow
                 const artifactDef = wf.artifactDefinitions[artifact_id];
@@ -70,12 +70,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                         };
                     }
 
-                    const stepSchema = await loadArtifactSchema(
-                        builtinDir,
-                        customDir,
-                        state.workflow,
-                        `${artifact_id}.${step}`,
-                    );
+                    const stepSchema = await loadArtifactSchema(workflowsDir, state.workflow, `${artifact_id}.${step}`);
                     const stepDefFound = artifactDef.steps.find((s) => s.id === step)!;
 
                     const lines: string[] = [];
@@ -126,7 +121,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                 }
 
                 // Full artifact schema
-                const schema = await loadArtifactSchema(builtinDir, customDir, state.workflow, artifact_id);
+                const schema = await loadArtifactSchema(workflowsDir, state.workflow, artifact_id);
 
                 // Load step schemas if artifact has steps
                 let stepSchemas: StepSchemaEntry[] | undefined;
@@ -134,8 +129,7 @@ export function registerArtifactSchema(server: McpServer, builtinDir: string, cu
                     stepSchemas = [];
                     for (const s of artifactDef.steps) {
                         const stepSchema = await loadArtifactSchema(
-                            builtinDir,
-                            customDir,
+                            workflowsDir,
                             state.workflow,
                             `${artifact_id}.${s.id}`,
                         );

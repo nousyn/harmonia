@@ -17,7 +17,6 @@ import { registerPatchStart } from '../src/tools/patch-start.js';
 
 const PROJECT = 'test-project';
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
-const NO_CUSTOM_DIR = join(WORKFLOWS_DIR, '..', '.workflows-nonexistent');
 
 describe('patch_start tool', () => {
     let harmoniaHome: string;
@@ -36,7 +35,7 @@ describe('patch_start tool', () => {
 
         // Setup MCP server + client
         server = new McpServer({ name: 'test', version: '0.0.1' });
-        registerPatchStart(server, WORKFLOWS_DIR, NO_CUSTOM_DIR);
+        registerPatchStart(server, WORKFLOWS_DIR);
         client = new Client({ name: 'test-client', version: '0.0.1' });
         const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
         await server.connect(serverTransport);

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { loadPlugin, discoverPlugins, loadPluginByName, PluginLoadError, PluginValidationError } from '../src/core/plugin.js';
+import { loadPlugin, discoverPlugins, PluginLoadError, PluginValidationError } from '../src/core/plugin.js';
 
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
 
@@ -21,9 +21,7 @@ async function createMinimalPlugin(dir: string, overrides: Record<string, unknow
         root: {
             type: 'sequence',
             id: 'main',
-            children: [
-                { type: 'task', id: 'task-1', role: 'coordinator' },
-            ],
+            children: [{ type: 'task', id: 'task-1', role: 'coordinator' }],
         },
         artifacts: {
             report: { name: 'Test Report' },
@@ -174,10 +172,7 @@ describe('plugin system', () => {
             const pluginDir = await createMinimalPlugin(tempDir);
 
             // Add a role without frontmatter
-            await writeFile(
-                join(pluginDir, 'roles', 'simple-role.md'),
-                'You are a simple role with no frontmatter.',
-            );
+            await writeFile(join(pluginDir, 'roles', 'simple-role.md'), 'You are a simple role with no frontmatter.');
 
             const plugin = await loadPlugin(pluginDir);
             expect(plugin.roles['simple-role']).toBeDefined();
@@ -264,44 +259,6 @@ describe('plugin system', () => {
 
             const entries = await discoverPlugins(configPath);
             expect(entries).toEqual([]);
-        });
-    });
-
-    // ─── loadPluginByName ───
-
-    describe('loadPluginByName', () => {
-        it('should load from config when entry exists', async () => {
-            const pluginDir = await createMinimalPlugin(tempDir);
-            const configPath = join(tempDir, 'config.json');
-            await writeFile(
-                configPath,
-                JSON.stringify({
-                    workflows: {
-                        test: { path: pluginDir },
-                    },
-                }),
-            );
-
-            const plugin = await loadPluginByName(configPath, WORKFLOWS_DIR, 'test');
-            expect(plugin.name).toBe('test');
-        });
-
-        it('should fall back to built-in directory', async () => {
-            const configPath = join(tempDir, 'config.json');
-            await writeFile(configPath, JSON.stringify({ workflows: {} }));
-
-            // skipValidation=true because dev workflow is not fully migrated yet (Phase 4)
-            const plugin = await loadPluginByName(configPath, WORKFLOWS_DIR, 'dev', true);
-            expect(plugin.name).toBe('dev');
-        });
-
-        it('should throw when plugin not found anywhere', async () => {
-            const configPath = join(tempDir, 'config.json');
-            await writeFile(configPath, JSON.stringify({ workflows: {} }));
-
-            await expect(
-                loadPluginByName(configPath, WORKFLOWS_DIR, 'nonexistent'),
-            ).rejects.toThrow(PluginLoadError);
         });
     });
 });

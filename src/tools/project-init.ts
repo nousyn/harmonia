@@ -22,7 +22,7 @@ import type { HookCreatorContext } from '../core/types.js';
 /** Shared kit instance for hook installation */
 const kit = createKit('harmonia');
 
-export function registerProjectInit(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerProjectInit(server: McpServer, workflowsDir: string): void {
     server.tool(
         'project_init',
         'Register a new Harmonia project. Creates the project entry in the global registry and the project source directory. Does NOT start an iteration — call iteration_start after registration to begin the first iteration.',
@@ -77,7 +77,7 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
             }
 
             // Resolve workflow name
-            const available = await listWorkflows(builtinDir, customDir);
+            const available = await listWorkflows(workflowsDir);
 
             if (available.length === 0) {
                 return {
@@ -116,7 +116,7 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
                 const descriptions: string[] = [];
                 for (const name of available) {
                     try {
-                        const wf = await loadWorkflow(builtinDir, customDir, name);
+                        const wf = await loadWorkflow(workflowsDir, name);
                         descriptions.push(`- ${name}: ${wf.definition.description}`);
                     } catch {
                         descriptions.push(`- ${name}: (无法加载描述)`);
@@ -141,7 +141,7 @@ export function registerProjectInit(server: McpServer, builtinDir: string, custo
             }
 
             // Load workflow definition (validate it loads correctly)
-            const wf = await loadWorkflow(builtinDir, customDir, workflowName);
+            const wf = await loadWorkflow(workflowsDir, workflowName);
 
             // Register project (creates global data dir + project source dir)
             await registerProject(project_name, project_dir, workflowName);

@@ -293,7 +293,7 @@ async function buildProjectList(): Promise<string> {
     ].join('\n');
 }
 
-export function registerGetProjectStatus(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerGetProjectStatus(server: McpServer, workflowsDir: string): void {
     server.tool(
         'project_status',
         'View project status. Without project_name: returns summary of all projects. With project_name: returns detailed status including workflow tree, artifacts, dispatches, sessions, and next action.',
@@ -359,7 +359,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                 const contextDir = resolved.dir;
                 const contextNumber = resolved.number;
                 const state = await readState(project_name, contextNumber, contextDir);
-                const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
+                const wf = await loadWorkflow(workflowsDir, state.workflow);
                 const artifactIds = await listArtifacts(project_name, contextNumber, contextDir);
                 const reviews = await readReviews(project_name, contextNumber, contextDir);
                 const dispatches = await readDispatches(project_name, contextNumber, contextDir);
@@ -431,7 +431,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                         type: resolved.type as 'iteration' | 'patch',
                         activeContext: entry.activeContext!,
                     };
-                    const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                    const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                         type: 'query_status',
                     });
                     nextActionText = formatNextAction(engineResult.nextAction);

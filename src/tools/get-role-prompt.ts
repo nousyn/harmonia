@@ -10,7 +10,7 @@ import { loadWorkflow } from '../core/plugin.js';
 import { getMergedOverrides } from '../core/overrides.js';
 import { buildOverrideSection } from './utils.js';
 
-export function registerGetRolePrompt(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerGetRolePrompt(server: McpServer, workflowsDir: string): void {
     server.tool(
         'role_prompt',
         "Get the system prompt and configuration for a specific role in the workflow. Includes any capability overrides configured at project level. Use this to understand what a role does or to set up an agent with the role's prompt.",
@@ -23,7 +23,7 @@ export function registerGetRolePrompt(server: McpServer, builtinDir: string, cus
                 .describe('Project name — if provided, includes project-specific capability overrides in the prompt'),
         },
         async ({ workflow: workflowName, role, project_name }) => {
-            const wf = await loadWorkflow(builtinDir, customDir, workflowName);
+            const wf = await loadWorkflow(workflowsDir, workflowName);
             const roleDef = wf.roles[role];
 
             if (!roleDef) {

@@ -37,7 +37,7 @@ function isSequentialActive(artifactDef: ArtifactDefinition): boolean {
     return !!artifactDef.steps?.length;
 }
 
-export function registerArtifactTools(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerArtifactTools(server: McpServer, workflowsDir: string): void {
     server.tool(
         'artifact_write',
         'Write or update a project artifact. For artifacts with sequential steps (PRD, tech-design, task-breakdown), you MUST specify the step parameter. Automatically checks review configuration — if review is required, the artifact is submitted for user approval.',
@@ -61,7 +61,7 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             if (isError(ctx)) return ctx;
 
             // Load workflow to get artifact definition (format, review defaults)
-            const { wf, state } = await loadWorkflowForContext(builtinDir, customDir, project_name, ctx);
+            const { wf, state } = await loadWorkflowForContext(workflowsDir, project_name, ctx);
             const artifactDef = wf.artifactDefinitions[artifact_id];
             const isHtml = artifactDef?.format === 'html';
 
@@ -110,8 +110,7 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             // ─── Sequential Mode ───
             if (isSequentialActive(artifactDef)) {
                 return handleSequentialWrite(
-                    builtinDir,
-                    customDir,
+                    workflowsDir,
                     state.workflow,
                     project_name,
                     ctx,
@@ -125,7 +124,7 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             // ─── Normal Mode (no steps) ───
 
             // Schema validation — reject write if content doesn't meet requirements
-            const schema = await loadArtifactSchema(builtinDir, customDir, state.workflow, artifact_id);
+            const schema = await loadArtifactSchema(workflowsDir, state.workflow, artifact_id);
             if (schema) {
                 const result = validateArtifact(content, schema, isHtml);
                 if (!result.valid) {
@@ -145,7 +144,7 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
             const filePath = await writeArtifact(project_name, ctx.number, artifact_id, content, artifactDef, ctx.dir);
 
             // Trigger engine event: artifact_written
-            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+            const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                 type: 'artifact_written',
                 artifactId: artifact_id,
             });
@@ -326,8 +325,7 @@ type ToolResult = {
 };
 
 async function handleSequentialWrite(
-    builtinDir: string,
-    customDir: string,
+    workflowsDir: string,
     workflowName: string,
     projectName: string,
     ctx: import('./utils.js').ResolvedContext,
@@ -396,7 +394,7 @@ async function handleSequentialWrite(
     // Step schema validation
     const isJson = stepDef.format === 'json';
     const stepSchemaId = `${artifactId}.${step}`;
-    const stepSchema = await loadArtifactSchema(builtinDir, customDir, workflowName, stepSchemaId);
+    const stepSchema = await loadArtifactSchema(workflowsDir, workflowName, stepSchemaId);
     if (stepSchema) {
         const result = validateArtifact(content, stepSchema, false, isJson);
         if (!result.valid) {
@@ -430,17 +428,7 @@ async function handleSequentialWrite(
 
     if (isLastStep) {
         // Auto-merge: validate against final artifact schema, write formal artifact, trigger review
-        return handleFinalStep(
-            builtinDir,
-            customDir,
-            workflowName,
-            projectName,
-            ctx,
-            artifactId,
-            content,
-            artifactDef,
-            stepDef,
-        );
+        return handleFinalStep(workflowsDir, workflowName, projectName, ctx, artifactId, content, artifactDef, stepDef);
     }
 
     // Not the last step — return progress info
@@ -461,8 +449,7 @@ async function handleSequentialWrite(
 }
 
 async function handleFinalStep(
-    builtinDir: string,
-    customDir: string,
+    workflowsDir: string,
     workflowName: string,
     projectName: string,
     ctx: import('./utils.js').ResolvedContext,
@@ -474,7 +461,7 @@ async function handleFinalStep(
     const isHtml = artifactDef.format === 'html';
 
     // Validate against the final artifact schema (e.g. prd.json)
-    const finalSchema = await loadArtifactSchema(builtinDir, customDir, workflowName, artifactId);
+    const finalSchema = await loadArtifactSchema(workflowsDir, workflowName, artifactId);
     if (finalSchema) {
         const isJson = artifactDef.format === 'json';
         const result = validateArtifact(content, finalSchema, isHtml, isJson);
@@ -503,7 +490,7 @@ async function handleFinalStep(
     await markFinalized(projectName, ctx.number, artifactId, ctx.dir);
 
     // Trigger engine event: artifact_written
-    const engineResult = await processWorkflowEvent(builtinDir, customDir, projectName, ctx, {
+    const engineResult = await processWorkflowEvent(workflowsDir, projectName, ctx, {
         type: 'artifact_written',
         artifactId,
     });

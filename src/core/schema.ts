@@ -19,12 +19,11 @@ import { resolveWorkflowDir } from './plugin.js';
  * For step schemas, pass a composite id like "prd.requirements".
  */
 export async function loadArtifactSchema(
-    builtinDir: string,
-    customDir: string,
+    workflowsDir: string,
     workflowName: string,
     artifactId: string,
 ): Promise<ArtifactSchema | undefined> {
-    const workflowDir = await resolveWorkflowDir(builtinDir, customDir, workflowName);
+    const workflowDir = await resolveWorkflowDir(workflowsDir, workflowName);
     const schemaPath = join(workflowDir, 'schemas', `${artifactId}.json`);
     try {
         const raw = await readFile(schemaPath, 'utf-8');

@@ -11,7 +11,7 @@ import { resolveReview, getPendingReviews } from '../core/reviews.js';
 import { resolveActive, isError } from './utils.js';
 import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
 
-export function registerApproveArtifact(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerApproveArtifact(server: McpServer, workflowsDir: string): void {
     server.tool(
         'artifact_approve',
         'Approve or reject an artifact pending review. Call this after the user has reviewed the artifact and confirmed (or requested changes).',
@@ -31,7 +31,7 @@ export function registerApproveArtifact(server: McpServer, builtinDir: string, c
 
                 if (approved) {
                     // Trigger engine event: artifact_approved
-                    const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                    const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                         type: 'artifact_approved',
                         artifactId: artifact_id,
                     });

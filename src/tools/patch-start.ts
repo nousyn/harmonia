@@ -22,7 +22,7 @@ import { startWorkflow } from '../core/workflow-engine.js';
 import { formatNextAction } from './engine-helpers.js';
 import type { EngineContext, GateContext } from '../core/workflow-engine.js';
 
-export function registerPatchStart(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerPatchStart(server: McpServer, workflowsDir: string): void {
     server.tool(
         'patch_start',
         'Start a new patch for a registered project. Patches are lightweight fix cycles for bug fixes and small improvements. Use this for resolving issues found during testing or from user feedback.',
@@ -67,7 +67,7 @@ export function registerPatchStart(server: McpServer, builtinDir: string, custom
                 const newPatch = await startPatch(project_name);
 
                 // Load workflow and initialize state in patch mode
-                const wf = await loadWorkflow(builtinDir, customDir, entry.workflow);
+                const wf = await loadWorkflow(workflowsDir, entry.workflow);
                 const patchDir = getPatchDir(project_name, newPatch);
                 const state = await initWorkflowState(project_name, entry.dir, wf, newPatch, 'patch', patchDir);
 

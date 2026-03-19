@@ -33,7 +33,7 @@ import { readArtifact, listArtifacts } from '../core/artifacts.js';
 import { readState } from '../core/state.js';
 import type { AgentType, DispatchRecord, SessionRecord, ActionContext, TaskNode } from '../core/types.js';
 
-export function registerReportDispatch(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerReportDispatch(server: McpServer, workflowsDir: string): void {
     server.tool(
         'dispatch_report',
         'Report dispatch status after launching or completing a team member agent. Call with agent_session_id after launching to register the session. Call with status="completed" or "failed" when the agent finishes. Returns nextAction indicating what the coordinator should do next.',
@@ -144,7 +144,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                     // Trigger engine events for completed/failed/cancelled
                     if (dispatch.nodeId) {
                         if (effectiveStatus === 'completed') {
-                            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                            const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                                 type: 'node_completed',
                                 nodeId: dispatch.nodeId,
                             });
@@ -153,8 +153,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                             // Execute afterComplete hooks
                             try {
                                 const { wf, state: currentState } = await loadWorkflowForContext(
-                                    builtinDir,
-                                    customDir,
+                                    workflowsDir,
                                     project_name,
                                     ctx,
                                 );
@@ -204,7 +203,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                                 console.warn('[harmonia] afterComplete hook processing failed:', err);
                             }
                         } else if (effectiveStatus === 'failed') {
-                            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                            const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                                 type: 'node_failed',
                                 nodeId: dispatch.nodeId,
                                 error: note ?? 'Unknown failure',
@@ -213,7 +212,7 @@ export function registerReportDispatch(server: McpServer, builtinDir: string, cu
                         } else if (effectiveStatus === 'cancelled') {
                             // Cancelled dispatches should also update node state via engine
                             // so the node doesn't stay stuck in 'active' forever
-                            const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                            const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
                                 type: 'node_failed',
                                 nodeId: dispatch.nodeId,
                                 error: note ?? 'Dispatch cancelled',

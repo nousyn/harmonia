@@ -23,7 +23,7 @@ import { persistState } from '../core/state.js';
 import { formatNextAction } from './engine-helpers.js';
 import type { EngineContext, GateContext } from '../core/workflow-engine.js';
 
-export function registerIterationStart(server: McpServer, builtinDir: string, customDir: string): void {
+export function registerIterationStart(server: McpServer, workflowsDir: string): void {
     server.tool(
         'iteration_start',
         'Start a new iteration for a registered project. Creates iteration directory, initializes state, and updates registry. Call this after project_init to begin the first iteration, or after completing the workflow to start a new iteration.',
@@ -89,7 +89,7 @@ export function registerIterationStart(server: McpServer, builtinDir: string, cu
                 const newIteration = await startIteration(project_name);
 
                 // Load workflow and initialize state
-                const wf = await loadWorkflow(builtinDir, customDir, entry.workflow);
+                const wf = await loadWorkflow(workflowsDir, entry.workflow);
                 const newIterDir = getIterationDir(project_name, newIteration);
                 const state = await initWorkflowState(
                     project_name,

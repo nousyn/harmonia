@@ -17,9 +17,6 @@ import { dirname, join, resolve } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Built-in workflows directory (package root, sibling to build/)
-const BUILTIN_WORKFLOWS_DIR = resolve(join(__dirname, '..', 'workflows'));
-
 const subcommand = process.argv[2];
 
 if (subcommand === 'setup') {
@@ -97,8 +94,8 @@ Setup options:
     const { registerIssueTools } = await import('./tools/issue-tools.js');
     const { registerArtifactSchema } = await import('./tools/artifact-schema.js');
 
-    // Custom workflows directory: <data_dir>/.workflows
-    const CUSTOM_WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
+    // Workflows directory: <data_dir>/harmonia/.workflows
+    const WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
 
     const server = new McpServer({
         name: 'harmonia',
@@ -106,17 +103,17 @@ Setup options:
     });
 
     // Register all tools
-    registerProjectInit(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerIterationStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerGetRolePrompt(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerArtifactTools(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerGetProjectStatus(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerApproveArtifact(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerDispatchRole(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerReportDispatch(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
-    registerPatchStart(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerProjectInit(server, WORKFLOWS_DIR);
+    registerIterationStart(server, WORKFLOWS_DIR);
+    registerGetRolePrompt(server, WORKFLOWS_DIR);
+    registerArtifactTools(server, WORKFLOWS_DIR);
+    registerGetProjectStatus(server, WORKFLOWS_DIR);
+    registerApproveArtifact(server, WORKFLOWS_DIR);
+    registerDispatchRole(server, WORKFLOWS_DIR);
+    registerReportDispatch(server, WORKFLOWS_DIR);
+    registerPatchStart(server, WORKFLOWS_DIR);
     registerIssueTools(server);
-    registerArtifactSchema(server, BUILTIN_WORKFLOWS_DIR, CUSTOM_WORKFLOWS_DIR);
+    registerArtifactSchema(server, WORKFLOWS_DIR);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

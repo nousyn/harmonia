@@ -179,14 +179,13 @@ export function findTaskNode(wf: WorkflowPlugin, nodeId: string): TaskNode | und
  * 5. Returns the nextAction
  */
 export async function processWorkflowEvent(
-    builtinDir: string,
-    customDir: string,
+    workflowsDir: string,
     projectName: string,
     ctx: ResolvedContext,
     event: WorkflowEvent,
 ): Promise<EngineResult> {
     const state = await readState(projectName, ctx.number, ctx.dir);
-    const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
+    const wf = await loadWorkflow(workflowsDir, state.workflow);
     const engineCtx = await buildEngineContext(projectName, ctx.number, ctx.dir, wf);
 
     const result = computeNextAction(wf.definition, state, event, engineCtx);
@@ -206,13 +205,12 @@ export async function processWorkflowEvent(
  * Load the workflow plugin for a resolved context.
  */
 export async function loadWorkflowForContext(
-    builtinDir: string,
-    customDir: string,
+    workflowsDir: string,
     projectName: string,
     ctx: ResolvedContext,
 ): Promise<{ wf: WorkflowPlugin; state: WorkflowState }> {
     const state = await readState(projectName, ctx.number, ctx.dir);
-    const wf = await loadWorkflow(builtinDir, customDir, state.workflow);
+    const wf = await loadWorkflow(workflowsDir, state.workflow);
     return { wf, state };
 }
 
