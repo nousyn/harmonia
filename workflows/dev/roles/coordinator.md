@@ -1,5 +1,5 @@
 ---
-model: medium
+model: claude-sonnet-4
 session: none
 parallel: false
 capabilities:

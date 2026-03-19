@@ -85,7 +85,7 @@ function parseRoleFile(id: string, content: string): RoleDefinition {
     if (!match) {
         return {
             id,
-            frontmatter: { model: 'medium', session: 'none', parallel: false },
+            frontmatter: { session: 'none', parallel: false },
             prompt: content.trim(),
         };
     }
@@ -99,9 +99,10 @@ function parseRoleFile(id: string, content: string): RoleDefinition {
     const capabilities = Array.isArray(fm.capabilities) ? (fm.capabilities as RoleCapability[]) : undefined;
 
     const frontmatter: RoleFrontmatter = {
-        model: (fm.model as string) ?? 'medium',
         session: (fm.session as RoleFrontmatter['session']) ?? 'none',
         parallel: (fm.parallel as boolean) ?? false,
+        ...(fm.model ? { model: fm.model as string } : {}),
+        ...(fm.agent ? { agent: fm.agent as string } : {}),
         ...(capabilities ? { capabilities } : {}),
     };
 

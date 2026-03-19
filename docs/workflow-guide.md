@@ -84,7 +84,7 @@ workflows/my-flow/
 
 ```markdown
 ---
-model: claude-sonnet-4-20250514
+model: claude-sonnet-4
 session: none
 parallel: false
 ---
@@ -455,7 +455,7 @@ task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
 
 ```markdown
 ---
-model: claude-sonnet-4-20250514
+model: claude-sonnet-4
 session: none
 parallel: false
 capabilities:
@@ -484,14 +484,15 @@ capabilities:
 
 ### Frontmatter 字段
 
-> **定位说明：** `model`、`session`、`parallel` 是描述性元数据。Harmonia Core 不会根据这些值自动选择模型或管理会话——它们通过 `role_dispatch` 的 dispatch 数据包传递给 Coordinator，作为调度决策的参考。实际效果取决于 Coordinator agent 对这些信息的理解和执行。
+> **定位说明：** `model`、`session`、`parallel`、`agent` 由 Harmonia Core 在 `role_dispatch` 中强制执行。Core 根据这些值决定是否查找可复用 session、是否强制新会话、以及在 Session Guidance 中给出何种指示。Coordinator 收到的 dispatch 数据包中已包含基于这些字段计算出的操作指引。
 
-| 字段           | 类型                                   | 必需 | 默认值                       | 说明                                                                                                                                                                                                                       |
-| -------------- | -------------------------------------- | ---- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`        | `string`                               | 否   | `"claude-sonnet-4-20250514"` | 拉起该角色 agent 时使用的模型。应填写具体模型名称（如 `claude-sonnet-4-20250514`、`claude-opus-4-20250514`），可被 `overrides.json` 中的 `roles.<role>.model` 覆盖                                                         |
-| `session`      | `"none" \| "persistent" \| "optional"` | 否   | `"none"`                     | 会话复用模式。`none`：每次 dispatch 启动全新会话；`persistent`：优先复用该角色已有的空闲会话；`optional`：由 Coordinator 自行判断是否复用。搭配 Harmonia 的 session 机制使用——dispatch 时会查找空闲 session 并生成复用建议 |
-| `parallel`     | `boolean`                              | 否   | `false`                      | 是否支持并行调度。`false`：同一时间该角色只处理一个任务（适用于有副作用的角色，如写文件）；`true`：可同时派发多个任务给该角色                                                                                              |
-| `capabilities` | `RoleCapability[]`                     | 否   | —                            | 角色能力列表                                                                                                                                                                                                               |
+| 字段           | 类型                                   | 必需 | 默认值   | 说明                                                                                                                                                                                                                                             |
+| -------------- | -------------------------------------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `model`        | `string`                               | 否   | —        | 拉起该角色 agent 时使用的模型。应填写具体模型名称（如 `claude-sonnet-4`、`claude-opus-4`）。未指定时不输出模型建议，由宿主工具使用其默认模型。可被 `overrides.json` 中的 `roles.<role>.model` 覆盖                                               |
+| `agent`        | `string`                               | 否   | —        | 推荐使用的 agent 类型（如 `opencode`、`claude-code`、`openclaw`、`codex`）。未指定时不输出 agent 建议。可被 `overrides.json` 中的 `roles.<role>.agent` 覆盖                                                                                      |
+| `session`      | `"none" \| "persistent" \| "optional"` | 否   | `"none"` | 会话复用模式，Core 强制执行：`none` — 不查找空闲 session，始终指示启动新会话；`persistent` — 查找空闲 session，找到则指示 Coordinator 复用（含 `--resume` 命令）；`optional` — 查找空闲 session，找到则以建议性语气呈现，由 Coordinator 自行决定 |
+| `parallel`     | `boolean`                              | 否   | `false`  | 是否支持并行调度，Core 强制执行：`true` 且同角色已有运行中的 dispatch 时，跳过空闲 session 查找，强制启动新会话；`true` 但无运行中的 dispatch 时，按 `session` 字段正常处理；`false` 时无特殊处理                                                |
+| `capabilities` | `RoleCapability[]`                     | 否   | —        | 角色能力列表                                                                                                                                                                                                                                     |
 
 **Capability 字段：**
 
@@ -501,7 +502,7 @@ capabilities:
 | `description` | `string` | 是   | 能力描述                              |
 | `artifact`    | `string` | 否   | 关联的产出 ID（该能力负责产出此文档） |
 
-> 如果 `.md` 文件没有 frontmatter（即省略 `---` 块），加载器会使用默认值（model: claude-sonnet-4-20250514, session: none, parallel: false），整个文件内容作为 prompt。
+> 如果 `.md` 文件没有 frontmatter（即省略 `---` 块），加载器会使用默认值（session: none, parallel: false），整个文件内容作为 prompt。`model` 和 `agent` 无默认值——未指定时 dispatch 数据包中不会包含模型/agent 建议。
 
 ### 动态内容注入
 
@@ -804,7 +805,7 @@ Action 按声明顺序依次执行，每个 Action 返回的 `inject` 追加到�
   "roles": {
     "architect": {
       "agent": "claude-code",
-      "model": "strong",
+      "model": "claude-opus-4",
       "capabilities": {
         "analyze-codebase": {
           "type": "mcp",
@@ -914,12 +915,12 @@ sequence(main)
 
 ### 角色
 
-| 角色        | model  | session    | parallel | 说明                         |
-| ----------- | ------ | ---------- | -------- | ---------------------------- |
-| coordinator | medium | none       | false    | 需求澄清、任务分派、验收交付 |
-| architect   | strong | persistent | false    | 代码分析、技术方案、任务拆解 |
-| developer   | medium | persistent | true     | 编码实现、单元测试、代码质量 |
-| tester      | medium | optional   | false    | 测试计划、测试执行、测试报告 |
+| 角色        | model           | session    | parallel | 说明                         |
+| ----------- | --------------- | ---------- | -------- | ---------------------------- |
+| coordinator | claude-sonnet-4 | none       | false    | 需求澄清、任务分派、验收交付 |
+| architect   | claude-opus-4   | persistent | false    | 代码分析、技术方案、任务拆解 |
+| developer   | claude-sonnet-4 | persistent | true     | 编码实现、单元测试、代码质量 |
+| tester      | claude-sonnet-4 | optional   | false    | 测试计划、测试执行、测试报告 |
 
 ### 产出
 

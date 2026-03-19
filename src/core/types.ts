@@ -228,9 +228,10 @@ export interface RoleCapability {
 }
 
 export interface RoleFrontmatter {
-    model: string;
+    model?: string;
     session: 'none' | 'persistent' | 'optional';
     parallel: boolean;
+    agent?: string;
     /** Capabilities this role provides (used by override system) */
     capabilities?: RoleCapability[];
 }

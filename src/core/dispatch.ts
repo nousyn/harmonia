@@ -274,3 +274,17 @@ export function isValidTransition(from: DispatchStatus, to: DispatchStatus): boo
 export function isTerminalStatus(status: DispatchStatus): boolean {
     return DISPATCH_TRANSITIONS[status].length === 0;
 }
+
+/**
+ * Check if a role has any running dispatches (status: 'dispatched' or 'running').
+ * Used by parallel dispatch logic to decide whether to force a new session.
+ */
+export async function hasRunningDispatch(
+    projectName: string,
+    iteration: number,
+    role: string,
+    contextDir?: string,
+): Promise<boolean> {
+    const dispatches = await readDispatches(projectName, iteration, contextDir);
+    return dispatches.some((d) => d.role === role && (d.status === 'dispatched' || d.status === 'running'));
+}

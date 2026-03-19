@@ -177,7 +177,7 @@ describe('plugin system', () => {
             const plugin = await loadPlugin(pluginDir);
             expect(plugin.roles['simple-role']).toBeDefined();
             expect(plugin.roles['simple-role'].prompt).toBe('You are a simple role with no frontmatter.');
-            expect(plugin.roles['simple-role'].frontmatter.model).toBe('medium');
+            expect(plugin.roles['simple-role'].frontmatter.model).toBeUndefined();
         });
 
         it('should handle empty actions and hooks when files do not exist', async () => {

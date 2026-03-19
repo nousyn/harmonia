@@ -2,15 +2,21 @@
  * MCP Tool: role_dispatch
  *
  * Prepare all data needed to hand off a task to a team member role.
- * Returns: role prompt (with overrides injected), frontmatter config,
+ * Returns: role prompt (with overrides injected), session guidance,
  * input artifacts, task brief, and dispatch tracking info.
  *
  * Node-based architecture: validates against workflow node states.
  * Accepts an optional node_id parameter to target a specific task node.
  *
+ * Session/parallel behavior is enforced by Core:
+ * - session: none → never searches for idle sessions
+ * - session: persistent → searches for idle sessions, directs reuse
+ * - session: optional → searches for idle sessions, suggests reuse
+ * - parallel: true + running dispatch → forces new session
+ *
  * Automatically:
  * - Creates a dispatch record for tracking
- * - Searches for reusable idle sessions and provides guidance
+ * - Enforces session/parallel strategy from role frontmatter
  * - Triggers a dispatch_requested engine event
  * - Returns nextAction from the workflow engine
  *
@@ -22,7 +28,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readArtifact, listArtifacts } from '../core/artifacts.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
-import { createDispatch, findIdleSession } from '../core/dispatch.js';
+import { createDispatch, findIdleSession, hasRunningDispatch } from '../core/dispatch.js';
 import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
 import type { StepSchemaEntry } from '../core/schema.js';
 import { resolveActive, isError, buildOverrideSection } from './utils.js';
@@ -33,15 +39,7 @@ import {
     collectTaskNodes,
     findTaskNode,
 } from './engine-helpers.js';
-import type {
-    OverrideConfig,
-    WorkflowNode,
-    TaskNode,
-    ArtifactDefinition,
-    WorkflowPlugin,
-    WorkflowState,
-    ActionContext,
-} from '../core/types.js';
+import type { TaskNode, WorkflowPlugin, WorkflowState, ActionContext } from '../core/types.js';
 
 /**
  * Find task nodes for a given role that are active or pending.
@@ -60,40 +58,78 @@ function findDispatchableNodes(wf: WorkflowPlugin, state: WorkflowState, role: s
 }
 
 /**
- * Build session guidance text based on whether an idle session exists.
+ * Build session guidance text.
+ *
+ * Incorporates session type behavior, parallel status, model, and agent info.
+ * This replaces the former separate "## Configuration" section — all dispatch
+ * configuration info is now part of Session Guidance.
  */
-function buildSessionGuidance(
-    idleSession: Awaited<ReturnType<typeof findIdleSession>>,
-    sessionType: string,
-    agentOverride?: string,
-): string {
-    if (idleSession) {
+function buildSessionGuidance(params: {
+    idleSession: Awaited<ReturnType<typeof findIdleSession>>;
+    sessionType: 'none' | 'persistent' | 'optional';
+    model?: string;
+    agent?: string;
+    parallelForced: boolean;
+}): string {
+    const { idleSession, sessionType, model, agent, parallelForced } = params;
+    const lines: string[] = [];
+
+    // Model guidance — only if specified
+    if (model) {
+        const agentLine = agent ? ` (agent: ${agent})` : '';
+        lines.push(`**Model**: 用 \`${model}\` 拉起这个角色${agentLine}`);
+    } else if (agent) {
+        lines.push(`**Agent**: ${agent}`);
+    }
+    if (lines.length > 0) lines.push('');
+
+    // Session guidance based on type and findings
+    if (parallelForced) {
+        // parallel=true and same role already has a running dispatch → force new session
+        lines.push(`**Session**: 该角色已有运行中的 dispatch，强制启动新会话（parallel 模式）`);
+        lines.push('');
+        lines.push(`**Action**: Launch a new agent for this role.`);
+    } else if (idleSession) {
         const agentId = idleSession.agentSessionId
             ? `Agent session ID: \`${idleSession.agentSessionId}\``
             : 'Agent session ID: not recorded';
         const label = idleSession.label ? ` (${idleSession.label})` : '';
-        return [
-            `**Reusable session found**: ${idleSession.id}${label}`,
-            `- ${agentId}`,
-            `- Agent type: ${idleSession.agentType ?? 'unknown'}`,
-            `- Last active: ${idleSession.lastActiveAt}`,
-            ``,
-            `**Action**: Resume this session instead of launching a new agent.`,
-            idleSession.agentSessionId
-                ? `Use \`--resume ${idleSession.agentSessionId}\` or \`--session ${idleSession.agentSessionId}\` to restore the conversation.`
-                : `Note: No agent session ID was recorded for this session. You may need to launch a new agent.`,
-        ].join('\n');
+
+        lines.push(`**Reusable session found**: ${idleSession.id}${label}`);
+        lines.push(`- ${agentId}`);
+        lines.push(`- Agent type: ${idleSession.agentType ?? 'unknown'}`);
+        lines.push(`- Last active: ${idleSession.lastActiveAt}`);
+        lines.push('');
+
+        if (sessionType === 'persistent') {
+            lines.push(`**Action**: Resume this session instead of launching a new agent.`);
+            lines.push(
+                idleSession.agentSessionId
+                    ? `Use \`--resume ${idleSession.agentSessionId}\` or \`--session ${idleSession.agentSessionId}\` to restore the conversation.`
+                    : `Note: No agent session ID was recorded for this session. You may need to launch a new agent.`,
+            );
+        } else {
+            // optional — suggestion, not directive
+            lines.push(`**Suggestion**: An idle session exists. You may resume it or launch a new one — your call.`);
+            if (idleSession.agentSessionId) {
+                lines.push(
+                    `To resume: \`--resume ${idleSession.agentSessionId}\` or \`--session ${idleSession.agentSessionId}\``,
+                );
+            }
+        }
+    } else {
+        // No idle session found (or session type is 'none')
+        if (sessionType === 'none') {
+            lines.push(`**Session**: 每次 dispatch 启动全新会话（session: none）`);
+        } else {
+            lines.push(`**No reusable session found** for this role.`);
+            lines.push(`Session type: ${sessionType}`);
+        }
+        lines.push('');
+        lines.push(`**Action**: Launch a new agent for this role.`);
     }
 
-    return [
-        `**No reusable session found** for this role.`,
-        `Session type: ${sessionType}`,
-        ``,
-        `**Action**: Launch a new agent for this role.`,
-        agentOverride ? `Configured agent type: ${agentOverride}` : '',
-    ]
-        .filter(Boolean)
-        .join('\n');
+    return lines.join('\n');
 }
 
 /**
@@ -330,11 +366,34 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     }
                 }
 
-                // Resolve agent/model overrides
+                // Resolve agent/model: override takes precedence over frontmatter
                 const roleConfig = resolveRoleConfig(role, overrides);
+                const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
+                const agentDisplay = roleConfig.agent ?? roleDef.frontmatter.agent;
+                const sessionType = roleDef.frontmatter.session;
 
-                // Check for reusable idle session
-                const idleSession = await findIdleSession(project_name, ctx.number, role, ctx.dir);
+                // Determine session strategy based on session type + parallel field
+                let idleSession: Awaited<ReturnType<typeof findIdleSession>> = null;
+                let parallelForced = false;
+
+                if (sessionType === 'none') {
+                    // session: none → never look for idle sessions
+                    idleSession = null;
+                } else if (roleDef.frontmatter.parallel) {
+                    // parallel=true → check if same role has running dispatches
+                    const hasRunning = await hasRunningDispatch(project_name, ctx.number, role, ctx.dir);
+                    if (hasRunning) {
+                        // Force new session — don't look for idle ones
+                        parallelForced = true;
+                        idleSession = null;
+                    } else {
+                        // No running dispatch → follow normal session behavior
+                        idleSession = await findIdleSession(project_name, ctx.number, role, ctx.dir);
+                    }
+                } else {
+                    // session: persistent or optional → look for idle sessions
+                    idleSession = await findIdleSession(project_name, ctx.number, role, ctx.dir);
+                }
 
                 // Create dispatch record
                 const dispatch = await createDispatch(
@@ -356,16 +415,14 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
 
                 const nextActionText = formatNextAction(engineResult.nextAction);
 
-                // Build session guidance
-                const sessionGuidance = buildSessionGuidance(
+                // Build session guidance (now includes model/agent info — replaces ## Configuration)
+                const sessionGuidance = buildSessionGuidance({
                     idleSession,
-                    roleDef.frontmatter.session,
-                    roleConfig.agent,
-                );
-
-                // Build human-readable summary
-                const agentLine = roleConfig.agent ? `\n- Agent: ${roleConfig.agent}` : '';
-                const modelDisplay = roleConfig.model ?? roleDef.frontmatter.model;
+                    sessionType,
+                    model: modelDisplay,
+                    agent: agentDisplay,
+                    parallelForced,
+                });
 
                 // Build artifact requirements for expected outputs
                 const artifactRequirements = await buildArtifactRequirements(wf, workflowsDir, state.workflow, role);
@@ -383,11 +440,6 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     ``,
                     `## Task Brief`,
                     task_brief,
-                    ``,
-                    `## Configuration`,
-                    `- Model: ${modelDisplay}`,
-                    `- Session: ${roleDef.frontmatter.session}`,
-                    `- Parallel: ${roleDef.frontmatter.parallel}${agentLine}`,
                     ``,
                     `## Project Context`,
                     `- Project: ${project_name}`,

@@ -1,5 +1,5 @@
 ---
-model: strong
+model: claude-opus-4
 session: persistent
 parallel: false
 capabilities:
