@@ -2,24 +2,56 @@
 
 > _众声喧哗之中，和谐不是沉默，而是各得其所。_
 
-Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 的智能体编排服务器。它为 AI 编程助手（Claude Code、OpenCode、OpenClaw、Codex）提供项目管理工具，让多个 AI agent 在预定义的工作流中按角色协作完成软件开发任务。
+Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 的**通用多代理协作框架**。它为 AI 编程助手（Claude Code、OpenCode、OpenClaw、Codex）提供工作流编排工具，让多个 AI agent 在**可插拔的工作流**中按角色协作完成任务。
 
 ## 核心理念
 
-- **角色分离** — PM、架构师、开发者、测试各司其职，通过文档交接而非直接对话
-- **流程驱动** — 预定义的阶段和文档类型确保不跳步骤
-- **数据隔离** — 所有项目数据存储在平台数据目录（非项目源码目录），不污染代码仓库
-- **可插拔工作流** — 工作流定义为 JSON，可扩展自定义
+- **节点树驱动** — 工作流定义为节点树（sequence / parallel / task / gate），支持条件分支、失败重试、并行执行
+- **角色分离** — Coordinator、架构师、开发者、测试各司其职，通过制品（artifact）交接而非直接对话
+- **可插拔工作流** — 工作流以插件形式存在，包含节点树定义、角色提示词、制品 Schema、钩子脚本
+- **数据隔离** — 所有项目数据存储在平台数据目录，不污染代码仓库
+- **被动式引擎** — Core 是决策计算器，通过 `nextAction` 指导 Coordinator 驱动工作流前进
 
 ## 特性
 
-- **工作流编排** — 5 阶段、4 角色、15 种文档类型，按项目规模自动调整
-- **迭代管理** — 同一项目支持多次迭代，每次迭代独立的状态和文档
-- **文档结构校验** — Markdown 标题结构和 JSON 字段/类型自动校验
-- **逐步文档写入** — 大型文档拆分为多步，每步独立校验，支持步骤回滚
-- **覆盖配置** — 三层合并的配置系统，灵活控制审批规则、角色绑定、能力映射
-- **跨 Agent 边界守卫** — hook 脚本拦截越权操作 + 角色提示词注入约束上下文
-- **工具访问控制** — 基于 MCP tool 级别的角色白名单/黑名单
+- **节点树工作流** — 4 种节点类型（task / sequence / parallel / gate），声明式定义复杂工作流
+- **Gate 条件引擎** — 支持 `artifact_exists`、`artifact_approved`、`artifact_field` 三种条件，自动评估
+- **制品系统** — 通用的读写 / 审批机制，Schema 校验，逐步写入支持
+- **迭代管理** — 同一项目支持多次迭代，每次迭代独立的状态和制品
+- **覆盖配置** — 两层合并（项目级 > 工作流默认值），灵活控制审批规则和角色绑定
+- **跨 Agent 边界守卫** — Hook 脚本拦截越权操作 + 角色提示词注入约束上下文
+
+## 架构概览
+
+```
+┌─────────────────────────────────────────────┐
+│  AI 编程助手（Claude Code / OpenCode / ...）    │
+│    └─ Coordinator 角色                        │
+│         ↕ MCP Tool 调用                       │
+├─────────────────────────────────────────────┤
+│  Harmonia Core（MCP Server）                   │
+│  ┌─────────────┐  ┌──────────────┐           │
+│  │ Workflow     │  │ Artifact     │           │
+│  │ Engine       │  │ System       │           │
+│  ├─────────────┤  ├──────────────┤           │
+│  │ Plugin       │  │ State        │           │
+│  │ Loader       │  │ Manager      │           │
+│  └─────────────┘  └──────────────┘           │
+├─────────────────────────────────────────────┤
+│  Workflow Plugin（如 dev）                     │
+│  ┌──────────┐ ┌──────┐ ┌───────┐ ┌───────┐  │
+│  │workflow  │ │roles/│ │schemas│ │hooks  │  │
+│  │.json     │ │*.md  │ │/*.json│ │.js    │  │
+│  └──────────┘ └──────┘ └───────┘ └───────┘  │
+└─────────────────────────────────────────────┘
+```
+
+**核心交互循环：**
+
+1. Coordinator 调用 MCP 工具（dispatch、artifact_write 等）
+2. Core 处理调用，同步评估工作流状态（节点状态、Gate 条件）
+3. Core 返回结果 + `nextAction` 字段——告知 Coordinator 下一步操作
+4. Coordinator 根据 `nextAction` 继续推进
 
 ## 快速开始
 
@@ -123,14 +155,14 @@ harmonia setup --agent openclaw
 
 `harmonia setup` 一键完成：
 
-1. 注入 PM 提示词到 agent 配置文件（AGENTS.md / CLAUDE.md）
+1. 注入 Coordinator 提示词到 agent 配置文件（AGENTS.md / CLAUDE.md）
 2. 安装 agent hook 脚本（边界守卫 + 主动提醒）
 
 之后启动你的 AI 编程助手，用自然语言告诉它你要做什么即可。
 
 ### 使用示例
 
-setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自然语言描述需求，PM 会自动调用 Harmonia 工具驱动整个流程。
+setup 完成后，AI 编程助手已被注入 Coordinator 提示词。你只需要用自然语言描述需求，Coordinator 会自动调用 Harmonia 工具驱动整个流程。
 
 **启动新项目：**
 
@@ -138,15 +170,7 @@ setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自�
 你：我想开发一个命令行待办事项工具，用 TypeScript 写，支持增删改查和优先级排序。
 ```
 
-> PM 会先调用 `project_status()` 检查是否有已注册项目，发现没有后，会和你沟通确认项目名称和目录路径，然后调用 `project_init` 注册项目、`iteration_start` 开始第一次迭代，接着进入需求澄清阶段撰写 PRD。
-
-**为已有代码库添加新功能：**
-
-```
-你：我的项目在 /Users/me/api-server，想给它加上用户认证模块，帮我管理一下。
-```
-
-> 和启动新项目流程相同——PM 会确认项目信息后调用 `project_init` + `iteration_start`。`project_init` 只是将项目注册到 Harmonia，不会修改你的源码目录。
+> Coordinator 会先调用 `project_status()` 检查是否有已注册项目，发现没有后，会和你沟通确认项目名称和目录路径，然后调用 `project_init` 注册项目、`iteration_start` 开始第一次迭代，接着根据 `nextAction` 指引开始执行工作流。
 
 **继续已注册的项目：**
 
@@ -154,7 +178,7 @@ setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自�
 你：继续之前的 todo-cli 项目。
 ```
 
-> PM 调用 `project_status("todo-cli")` 获取当前迭代的阶段、文档、调度记录等状态，根据进度恢复工作。
+> Coordinator 调用 `project_status("todo-cli")` 获取当前节点树状态和进度，根据 `nextAction` 恢复工作。
 
 **开始新一轮迭代：**
 
@@ -162,15 +186,7 @@ setup 完成后，AI 编程助手已被注入 PM 提示词。你只需要用自�
 你：todo-cli 需要加一些新功能，开始新的迭代。
 ```
 
-> PM 调用 `iteration_start("todo-cli")` 创建新迭代（如 iter-2），从需求澄清阶段重新开始。上一轮迭代的文档和状态保留不变。
-
-**查看所有项目：**
-
-```
-你：我有哪些项目？
-```
-
-> PM 调用 `project_status()`（无参数）返回所有已注册项目及其当前迭代状态。
+> Coordinator 调用 `iteration_start("todo-cli")` 创建新迭代（如 iter-2），工作流节点树重置，从头开始。
 
 ### CLI 命令
 
@@ -189,116 +205,160 @@ harmonia --version             显示版本号
 
 ## MCP 工具一览
 
-| 工具                | 说明                                               |
-| ------------------- | -------------------------------------------------- |
-| `project_init`      | 注册项目，创建数据目录，初始化工作流               |
-| `iteration_start`   | 开始新迭代（创建 iter-N 目录，重置阶段状态）       |
-| `project_set_scale` | 设定项目规模（PRD 审批后，不可更改）               |
-| `project_status`    | 查看项目状态（无参数返回项目列表，有参数返回详情） |
-| `phase_update`      | 推进项目阶段                                       |
-| `doc_write`         | 写入文档（自动 schema 校验，支持逐步写入）         |
-| `doc_read`          | 读取文档内容                                       |
-| `doc_list`          | 列出项目所有文档                                   |
-| `doc_approve`       | 审批需要 review 的文档（如 PRD）                   |
-| `review_list`       | 列出待审批的文档                                   |
-| `review_set_rule`   | 设置审批规则覆盖                                   |
-| `role_prompt`       | 获取角色提示词（含约束上下文注入）                 |
-| `role_dispatch`     | 调度角色执行任务                                   |
-| `dispatch_report`   | 角色报告任务完成状态                               |
-| `guard_set`         | 设置角色的 agent/model/能力覆盖                    |
-| `guard_get`         | 查看当前覆盖配置                                   |
+| 工具               | 说明                                               |
+| ------------------ | -------------------------------------------------- |
+| `project_init`     | 注册项目，创建数据目录，加载工作流插件，安装 Hook  |
+| `iteration_start`  | 开始新迭代（创建 iter-N 目录，重置节点状态）       |
+| `project_status`   | 查看项目状态（无参数返回项目列表，有参数返回节点树详情） |
+| `role_dispatch`    | 调度角色执行任务（带 nodeId，触发 beforeDispatch 钩子） |
+| `dispatch_report`  | 角色报告任务完成/失败（触发 afterComplete 钩子，推进节点状态） |
+| `artifact_write`   | 写入制品（自动 Schema 校验，支持逐步写入）         |
+| `artifact_read`    | 读取制品内容                                       |
+| `artifact_list`    | 列出项目所有制品                                   |
+| `artifact_schema`  | 查看制品的 JSON Schema 定义                        |
+| `artifact_approve` | 审批需要 review 的制品                             |
+| `review_list`      | 列出待审批的制品                                   |
+| `role_prompt`      | 获取角色提示词（含约束上下文注入）                 |
+| `patch_start`      | 热修复模式启动（基于已有迭代快速修复）             |
+| `issue_*`          | Issue 管理工具                                     |
 
-## 工作流
+## 工作流系统
 
-### 阶段与角色
+### 节点类型
 
-Harmonia 使用声明式工作流定义。内置的 `dev` 工作流（软件开发流程）包含 5 个阶段和 4 个角色：
+Harmonia 使用节点树定义工作流，支持 4 种节点类型：
+
+| 节点类型     | 语义                                                       |
+| ------------ | ---------------------------------------------------------- |
+| **task**     | 工作单元，分配给某个角色执行                               |
+| **sequence** | 子节点按顺序执行                                           |
+| **parallel** | 子节点并行执行，需指定 `failStrategy`（fail-fast / wait-all） |
+| **gate**     | 条件检查节点，pass/fail 两条路径                           |
+
+### Gate 条件
+
+Gate 节点支持 3 种条件类型：
+
+| 条件类型           | 说明                             | 示例                                                              |
+| ------------------ | -------------------------------- | ----------------------------------------------------------------- |
+| `artifact_exists`  | 制品是否已写入                   | `{ "type": "artifact_exists", "artifact": "prd" }`               |
+| `artifact_approved`| 制品是否已通过审批               | `{ "type": "artifact_approved", "artifact": "prd" }`             |
+| `artifact_field`   | 制品字段值判断（支持多种操作符） | `{ "type": "artifact_field", "artifact": "test-report", "field": "result", "operator": "eq", "value": "pass" }` |
+
+`artifact_field` 支持的操作符：`eq`、`neq`、`gt`、`lt`、`gte`、`lte`、`contains`、`in`
+
+Gate 失败时支持：
+- **goto** — 跳转回上游节点重试（目标节点及后续节点状态重置）
+- **maxRetries** — 可选，限制重试次数
+- **onExhausted** — 重试耗尽后跳转到游离节点（如 escalate）
+
+### 游离节点（Floating Nodes）
+
+不在工作流树上的独立节点，只能被 `onExhausted` 或 `onFailed` 引用。用于异常处理和升级路径。
+
+### 节点钩子
+
+每个 task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
+
+```json
+{
+  "type": "task",
+  "id": "design",
+  "role": "architect",
+  "beforeDispatch": {
+    "inject": ["请基于 prd 和 user-stories 进行技术设计。"]
+  },
+  "afterComplete": {
+    "inject": ["设计阶段完成。请确认制品已写入。"]
+  }
+}
+```
+
+- `inject`：额外提示文本，beforeDispatch 时合入角色提示词，afterComplete 时合入 Coordinator 指引
+- `actions`：插件注册的同步动作，在 Core 处理工具调用时执行
+
+### 内置 dev 工作流
+
+内置的 `dev` 工作流（软件开发流程）定义了一棵节点树和 4 个角色：
 
 ```
-clarify (需求澄清)     → PM 产出 PRD、用户故事
-    ↓
-design (方案设计)       → 架构师产出技术方案、任务拆解
-    ↓
-develop (开发)          → 开发者按任务拆解编码实现
-    ↓
-test (测试)             → 测试编写测试、输出测试报告
-    ↓
-deliver (交付验收)      → PM 验收成果、输出复盘记录
+sequence(main)
+├── task(clarify)          → Coordinator 澄清需求，产出 PRD
+├── gate(prd-gate)         → 检查 PRD 存在 + 审批通过
+│   ├── pass → task(design) → 架构师设计方案
+│   └── fail → goto clarify（最多 5 次）
+├── gate(design-gate)      → 检查 tech-design + task-breakdown 存在
+│   ├── pass → task(develop) → 开发者编码实现
+│   └── fail → goto design（最多 3 次）
+├── task(test)             → 测试编写测试、执行、产出 test-report
+├── gate(test-gate)        → 检查 test-report.result == "pass"
+│   ├── pass → task(deliver) → Coordinator 验收交付
+│   └── fail → goto develop（最多 3 次）
+└── floating: escalate     → 重试耗尽时升级处理
 ```
 
-| 角色   | 说明                                   | 默认模型 | 并行 |
-| ------ | -------------------------------------- | -------- | ---- |
-| PM     | 需求澄清、文档撰写、任务分派、验收交付 | medium   | 否   |
-| 架构师 | 代码分析、技术方案、任务拆解           | strong   | 否   |
-| 开发者 | 编码实现、单元测试、代码质量           | medium   | 是   |
-| 测试   | 测试计划、测试执行、测试报告           | medium   | 否   |
+| 角色        | 说明                                   |
+| ----------- | -------------------------------------- |
+| Coordinator | 需求澄清、任务分派、验收交付           |
+| Architect   | 代码分析、技术方案、任务拆解           |
+| Developer   | 编码实现、单元测试、代码质量           |
+| Tester      | 测试计划、测试执行、测试报告           |
 
-### 文档类型
+### 制品（Artifacts）
 
-`dev` 工作流定义了 15 种文档类型。每种文档按项目规模（small / medium / large）有不同的要求等级：
+`dev` 工作流定义了 15 种制品类型：
 
-| 文档 ID           | 名称                | 阶段    | 规模行为 (S/M/L)       | 默认审批 |
-| ----------------- | ------------------- | ------- | ---------------------- | -------- |
-| `prd`             | 需求文档            | clarify | full / full / full     | **是**   |
-| `user-stories`    | 用户故事 + 验收标准 | clarify | full / full / full     | 否       |
-| `fsd`             | 功能规格            | clarify | skip / full / full     | 否       |
-| `prototype`       | 高保真原型          | clarify | skip / optional / full | **是**   |
-| `project-plan`    | 项目计划            | clarify | skip / optional / full | 否       |
-| `tech-design`     | 技术方案            | design  | lite / full / full     | 否       |
-| `data-model`      | 数据模型设计        | design  | skip / optional / full | 否       |
-| `api-design`      | API 设计            | design  | skip / optional / full | 否       |
-| `task-breakdown`  | 任务拆解            | design  | full / full / full     | 否       |
-| `risk-assessment` | 技术风险评估        | design  | skip / skip / full     | 否       |
-| `code`            | 代码实现            | develop | full / full / full     | 否       |
-| `test-plan`       | 测试计划            | test    | skip / full / full     | 否       |
-| `test-report`     | 测试报告            | test    | full / full / full     | 否       |
-| `deploy`          | 部署文档            | deliver | skip / skip / optional | 否       |
-| `retrospective`   | 复盘记录            | deliver | full / full / full     | 否       |
+| 制品 ID           | 名称                | 审批 | 逐步写入 |
+| ----------------- | ------------------- | ---- | -------- |
+| `prd`             | 需求文档            | 是   | 4 步     |
+| `user-stories`    | 用户故事 + 验收标准 | 否   | -        |
+| `fsd`             | 功能规格            | 否   | -        |
+| `prototype`       | 高保真原型          | 是   | -        |
+| `project-plan`    | 项目计划            | 否   | -        |
+| `tech-design`     | 技术方案            | 否   | 4 步     |
+| `data-model`      | 数据模型设计        | 否   | -        |
+| `api-design`      | API 设计            | 否   | -        |
+| `task-breakdown`  | 任务拆解            | 否   | 4 步     |
+| `risk-assessment` | 技术风险评估        | 否   | -        |
+| `code`            | 代码实现（外部）    | 否   | -        |
+| `test-plan`       | 测试计划            | 否   | -        |
+| `test-report`     | 测试报告            | 否   | -        |
+| `deploy`          | 部署文档            | 否   | -        |
+| `retrospective`   | 复盘记录            | 否   | -        |
 
-> **规模行为说明**：`full` = 必须产出；`lite` = 简化版；`optional` = 可选产出；`skip` = 跳过
+#### 逐步写入
 
-项目规模在 PRD 审批后由 PM 通过 `project_set_scale` 设定，设定后不可更改。
-
-### 逐步文档写入
-
-大型文档可拆分为多个步骤（steps），每步独立写入并校验：
-
-- 每步有独立的 JSON Schema 校验
-- 重写某步时自动清除后续步骤记录
-- `project_status` 中展示步骤进度
-
-例如 PRD 的写入流程：
+大型制品可拆分为多个步骤（steps），每步独立写入并校验。例如 PRD 的写入流程：
 
 1. `requirements` — 需求结构化（JSON）
 2. `completeness-check` — 完整性校验（JSON）
 3. `draft` — PRD 草稿（Markdown）
 4. `final` — PRD 最终版（Markdown）
 
-### 自定义工作流
+重写某步时自动清除后续步骤记录。
 
-Harmonia 使用两层工作流查找机制：
+## 自定义工作流
 
-1. **自定义目录**（高优先级）：`<data_dir>/harmonia/.workflows/<name>/`
-2. **内置目录**（回退）：`<package>/workflows/<name>/`
+Harmonia 使用**插件机制**加载工作流。工作流以目录形式存在，包含声明式内容和可选的 TS/JS 模块。
 
-自定义工作流会覆盖同名的内置工作流。内置工作流随包版本自动更新，零维护。
-
-在全局数据目录下创建 `.workflows/<name>/` 目录：
+### 目录结构
 
 ```
-<data_dir>/harmonia/.workflows/
-└── my-workflow/
-    ├── workflow.json      # 工作流定义（阶段、角色、文档类型）
-    ├── roles/             # 角色提示词
-    │   ├── pm.md
-    │   └── ...
-    └── schemas/           # 文档 Schema（可选）
-        ├── prd.json
-        ├── prd.requirements.json   # 步骤 Schema
-        └── ...
+workflows/<workflow-name>/
+├── workflow.json          # 工作流定义（节点树 + 游离节点 + 制品定义）
+├── roles/                 # 角色提示词（.md）
+│   ├── coordinator.md
+│   ├── architect.md
+│   └── ...
+├── schemas/               # 制品 Schema（.json，可选）
+│   ├── prd.json
+│   ├── prd.requirements.json   # 步骤 Schema
+│   └── ...
+├── hooks.js               # 可选，导出 createHooks() — agent 平台钩子
+└── tools.ts               # 可选，导出 registerActions() — 节点钩子动作
 ```
 
-`workflow.json` 格式：
+### workflow.json 格式
 
 ```json
 {
@@ -306,119 +366,89 @@ Harmonia 使用两层工作流查找机制：
   "description": "自定义工作流描述",
   "version": "1.0.0",
   "author": "your-name",
-  "phases": [ ... ],
-  "docs": { ... }
+  "coordinator": "coordinator",
+  "root": {
+    "type": "sequence",
+    "id": "main",
+    "children": [
+      { "type": "task", "id": "step-1", "role": "coordinator" },
+      {
+        "type": "gate",
+        "id": "check-1",
+        "conditions": [
+          { "type": "artifact_exists", "artifact": "output-1" }
+        ],
+        "pass": { "type": "task", "id": "step-2", "role": "worker" },
+        "fail": { "goto": "step-1", "maxRetries": 3 }
+      }
+    ]
+  },
+  "floatingNodes": [],
+  "artifacts": {
+    "output-1": { "name": "产出物 1" },
+    "output-2": { "name": "产出物 2", "review": true }
+  }
 }
 ```
 
-可参考内置 `dev` 工作流（`node_modules/@s_s/harmonia/workflows/dev/`）作为模板。
+### 工作流查找优先级
 
-工作流选择规则：
+1. **自定义目录**（高优先级）：`<data_dir>/harmonia/.workflows/<name>/`
+2. **内置目录**（回退）：`<package>/workflows/<name>/`
+
+自定义工作流会覆盖同名的内置工作流。内置工作流随包版本自动更新，零维护。
+
+### 工作流选择
 
 - 只有一个可用工作流时自动选中
 - 多个可用工作流时，需在 `project_init` 中指定 `workflow` 参数
 
 ## 覆盖配置
 
-Harmonia 提供三层合并的配置覆盖系统，让你无需修改工作流定义即可自定义行为。
-
-### 合并优先级
+Harmonia 提供两层合并的配置覆盖系统：
 
 ```
-项目级 overrides.json  >  全局 overrides.json  >  工作流默认值
+项目级 overrides.json  >  工作流默认值
 ```
 
-| 层级         | 文件位置                                       | 作用域                 |
-| ------------ | ---------------------------------------------- | ---------------------- |
-| 工作流默认值 | `workflow.json` 中的定义                       | 所有使用该工作流的项目 |
-| 全局覆盖     | `<data_dir>/harmonia/overrides.json`           | 所有项目               |
-| 项目覆盖     | `<data_dir>/harmonia/<project>/overrides.json` | 仅该项目（跨迭代共享） |
-
-项目级覆盖只需要写你想改的字段，未设置的字段自动回退到全局覆盖，再回退到工作流默认值。
+| 层级         | 文件位置                                       | 作用域     |
+| ------------ | ---------------------------------------------- | ---------- |
+| 工作流默认值 | `workflow.json` 中的定义                       | 该工作流   |
+| 项目覆盖     | `<data_dir>/harmonia/<project>/overrides.json` | 仅该项目   |
 
 ### 完整结构
 
 ```typescript
-// overrides.json 的完整类型定义
 interface OverrideConfig {
   // 审批规则
   review?: boolean | Record<string, boolean>;
 
   // 角色配置
-  roles?: Record<
-    string,
-    {
-      agent?: 'opencode' | 'claude-code' | 'openclaw' | 'codex';
-      model?: string;
-      capabilities?: Record<
-        string,
-        {
-          type: 'skill' | 'mcp';
-          tool: string;
-          server?: string; // type 为 'mcp' 时必填
-          params?: Record<string, unknown>;
-          notes?: string;
-        }
-      >;
-    }
-  >;
-}
-```
-
-完整示例：
-
-```json
-{
-  "review": {
-    "prd": true,
-    "tech-design": true,
-    "prototype": false
-  },
-  "roles": {
-    "architect": {
-      "agent": "claude-code",
-      "model": "claude-sonnet-4-20250514"
-    },
-    "developer": {
-      "agent": "opencode",
-      "model": "claude-sonnet-4-20250514",
-      "capabilities": {
-        "read_file": {
-          "type": "mcp",
-          "tool": "read_file",
-          "server": "filesystem"
-        }
-      }
-    }
-  }
+  roles?: Record<string, {
+    agent?: 'opencode' | 'claude-code' | 'openclaw' | 'codex';
+    model?: string;
+    capabilities?: Record<string, {
+      type: 'skill' | 'mcp';
+      tool: string;
+      server?: string;     // type 为 'mcp' 时必填
+      params?: Record<string, unknown>;
+      notes?: string;
+    }>;
+  }>;
 }
 ```
 
 ### 审批规则（review）
 
-控制哪些文档在 `doc_write` 后需要用户通过 `doc_approve` 审批。
+控制哪些制品在 `artifact_write` 后需要用户通过 `artifact_approve` 审批。
 
-三种配置方式：
+| 写法                                             | 含义                                         |
+| ------------------------------------------------ | -------------------------------------------- |
+| `"review": true`                                 | 全局开启——所有制品都需审批                   |
+| `"review": false`                                | 全局关闭——所有制品无需审批                   |
+| `"review": { "prd": true, "tech-design": true }` | 按制品类型逐一控制                           |
 
-| 写法                                             | 含义                                                                   |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `"review": true`                                 | 全局开启——所有文档写入后都需要审批                                     |
-| `"review": false`                                | 全局关闭——所有文档写入后无需审批                                       |
-| `"review": { "prd": true, "tech-design": true }` | 按文档类型逐一控制——只有指定为 `true` 的需要审批，未列出的回退到下一层 |
-
-`dev` 工作流默认审批的文档：
-
-| 文档        | 默认 review |
-| ----------- | ----------- |
-| `prd`       | `true`      |
-| `prototype` | `true`      |
-| 其余 13 种  | `false`     |
-
-通过 `review_set_rule` 工具设置，或直接编辑 `overrides.json`。
-
-### 角色配置（agent / model）
-
-为角色指定执行的 agent 类型和模型：
+### 角色配置
 
 ```json
 {
@@ -431,91 +461,7 @@ interface OverrideConfig {
 }
 ```
 
-- `agent` — 执行该角色的 AI 编程助手类型
-- `model` — 覆盖角色的默认模型（角色提示词 frontmatter 中定义了默认模型等级：`strong` / `medium`）
-
-通过 `guard_set` 工具设置，或直接编辑 `overrides.json`。
-
-### 能力映射（capabilities）
-
-角色提示词中声明了该角色需要的抽象能力（如"读取文件"、"分析代码库"），能力映射将这些抽象能力绑定到具体的工具实现。
-
-`dev` 工作流各角色的能力：
-
-<details>
-<summary><strong>PM</strong>（10 个能力）</summary>
-
-| 能力 ID                | 描述                       |
-| ---------------------- | -------------------------- |
-| `clarify-requirements` | 与用户沟通，理解和澄清需求 |
-| `assess-scale`         | 评估项目规模               |
-| `write-prd`            | 撰写需求文档               |
-| `write-user-stories`   | 撰写用户故事和验收标准     |
-| `write-fsd`            | 撰写功能规格文档           |
-| `write-prototype`      | 创建高保真 HTML 原型       |
-| `write-project-plan`   | 撰写项目计划               |
-| `dispatch-tasks`       | 将任务分派给开发者         |
-| `track-progress`       | 跟踪项目进度和阶段状态     |
-| `accept-deliver`       | 验收成果并输出复盘记录     |
-
-</details>
-
-<details>
-<summary><strong>架构师</strong>（6 个能力）</summary>
-
-| 能力 ID                 | 描述                 |
-| ----------------------- | -------------------- |
-| `analyze-codebase`      | 阅读理解现有代码结构 |
-| `write-tech-design`     | 撰写技术方案文档     |
-| `write-data-model`      | 设计数据模型         |
-| `write-api-design`      | 设计 API 接口        |
-| `write-task-breakdown`  | 拆解开发任务         |
-| `write-risk-assessment` | 评估技术风险         |
-
-</details>
-
-<details>
-<summary><strong>开发者</strong>（3 个能力）</summary>
-
-| 能力 ID            | 描述                                 |
-| ------------------ | ------------------------------------ |
-| `implement-code`   | 按任务拆解编码实现功能               |
-| `write-unit-tests` | 为关键逻辑编写单元测试               |
-| `ensure-quality`   | 代码质量保障（lint、类型检查、规范） |
-
-</details>
-
-<details>
-<summary><strong>测试</strong>（3 个能力）</summary>
-
-| 能力 ID             | 描述               |
-| ------------------- | ------------------ |
-| `write-test-plan`   | 撰写测试计划       |
-| `execute-tests`     | 编写并执行测试用例 |
-| `write-test-report` | 撰写测试报告       |
-
-</details>
-
-配置示例——将架构师的"分析代码库"能力绑定到 MCP filesystem 工具：
-
-```json
-{
-  "roles": {
-    "architect": {
-      "capabilities": {
-        "analyze-codebase": {
-          "type": "mcp",
-          "tool": "read_file",
-          "server": "filesystem",
-          "notes": "用于读取项目源码文件"
-        }
-      }
-    }
-  }
-}
-```
-
-通过 `guard_set` 工具设置，或直接编辑 `overrides.json`。
+直接编辑 `overrides.json` 即可生效。
 
 ## 数据目录
 
@@ -524,7 +470,6 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 ```
 <data_dir>/harmonia/
 ├── registry.json               # 项目注册表
-├── overrides.json              # 全局覆盖配置
 ├── .workflows/                 # 自定义工作流目录
 │   └── <workflow_name>/
 │       ├── workflow.json
@@ -533,12 +478,12 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 ├── <project_name>/
 │   ├── overrides.json          # 项目级覆盖配置（跨迭代共享）
 │   ├── iter-1/                 # 第 1 次迭代
-│   │   ├── state.json          # 项目状态（当前阶段、规模等）
+│   │   ├── state.json          # 工作流状态（节点树状态）
 │   │   ├── sessions.json       # 会话记录
 │   │   ├── dispatches.json     # 调度记录
 │   │   ├── reviews.json        # 审批记录
-│   │   ├── steps.json          # 文档步骤进度
-│   │   └── docs/               # 文档产出物
+│   │   ├── steps.json          # 制品步骤进度
+│   │   └── artifacts/          # 制品产出物
 │   │       ├── prd.md
 │   │       ├── prd.requirements.json
 │   │       └── ...
@@ -556,36 +501,52 @@ Harmonia 的所有项目数据存储在平台特定的数据目录中（通过 [
 ```
 harmonia/
 ├── src/
-│   ├── index.ts              # 入口，注册所有 MCP 工具
+│   ├── index.ts                 # 入口，MCP 服务器 + CLI 路由
 │   ├── cli/
-│   │   └── setup.ts          # CLI setup 命令
+│   │   └── setup.ts             # CLI setup 命令
 │   ├── core/
-│   │   ├── types.ts          # 核心类型定义
-│   │   ├── state.ts          # 项目状态管理
-│   │   ├── docs.ts           # 文档读写
-│   │   ├── schema.ts         # Schema 校验引擎
-│   │   ├── steps.ts          # 步骤管理
-│   │   ├── dispatch.ts       # 角色调度
-│   │   ├── registry.ts       # 项目注册表
-│   │   ├── workflow.ts       # 工作流加载
-│   │   ├── overrides.ts      # 覆盖配置管理
-│   │   └── reviews.ts        # 文档审批
-│   ├── tools/                # MCP 工具注册
-│   ├── hooks/                # Agent Hook 系统
-│   │   ├── content.ts        # Hook 内容生成
-│   │   ├── install.ts        # Hook 安装逻辑
-│   │   ├── claude-code.ts    # Claude Code hook 适配
-│   │   ├── opencode.ts       # OpenCode hook 适配
-│   │   └── openclaw.ts       # OpenClaw hook 适配
-│   └── setup/                # 项目初始化设置
-│       ├── inject.ts         # 配置注入
-│       └── templates.ts      # 模板管理
+│   │   ├── types.ts             # 核心类型定义
+│   │   ├── workflow-engine.ts   # 工作流状态机引擎
+│   │   ├── workflow-validator.ts # 工作流静态校验
+│   │   ├── plugin.ts            # 工作流插件加载系统
+│   │   ├── action-registry.ts   # 节点钩子动作注册
+│   │   ├── state.ts             # 工作流状态管理
+│   │   ├── workflow.ts          # 工作流加载（thin wrapper）
+│   │   ├── docs.ts              # 制品读写
+│   │   ├── schema.ts            # Schema 校验引擎
+│   │   ├── steps.ts             # 步骤管理
+│   │   ├── dispatch.ts          # 角色调度
+│   │   ├── registry.ts          # 项目注册表
+│   │   ├── overrides.ts         # 覆盖配置管理
+│   │   └── reviews.ts           # 制品审批
+│   ├── tools/                   # MCP 工具注册
+│   │   ├── engine-helpers.ts    # 引擎集成共享层
+│   │   ├── artifact-tools.ts    # artifact_write/read/list
+│   │   ├── artifact-schema.ts   # artifact_schema
+│   │   ├── approve-artifact.ts  # artifact_approve + review_list
+│   │   ├── dispatch-role.ts     # role_dispatch
+│   │   ├── report-dispatch.ts   # dispatch_report
+│   │   └── ...
+│   ├── hooks/                   # Agent Hook 系统
+│   │   ├── content.ts           # Hook 内容生成
+│   │   ├── install.ts           # Hook 安装逻辑
+│   │   ├── claude-code.ts       # Claude Code hook 适配
+│   │   ├── opencode.ts          # OpenCode hook 适配
+│   │   └── openclaw.ts          # OpenClaw hook 适配
+│   └── setup/                   # 项目初始化设置
+│       ├── inject.ts            # 配置注入
+│       └── templates.ts         # Coordinator 提示词模板
 ├── workflows/
-│   └── dev/
-│       ├── workflow.json     # 工作流定义
-│       ├── roles/            # 角色提示词 (pm.md, architect.md, ...)
-│       └── schemas/          # 文档 + 步骤 Schema
-└── tests/                    # 测试
+│   └── dev/                     # 内置 dev 工作流插件
+│       ├── workflow.json        # 节点树定义（v2.0.0）
+│       ├── hooks.js             # Hook 桥接模块
+│       ├── roles/               # 角色提示词
+│       │   ├── coordinator.md
+│       │   ├── architect.md
+│       │   ├── developer.md
+│       │   └── tester.md
+│       └── schemas/             # 制品 + 步骤 Schema（26 个）
+└── tests/                       # 测试（22 个文件，406 个测试）
 ```
 
 ### 开发命令
