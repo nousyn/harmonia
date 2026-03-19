@@ -74,10 +74,13 @@ function buildSessionGuidance(params: {
     const { idleSession, sessionType, model, agent, parallelForced } = params;
     const lines: string[] = [];
 
-    // Model guidance — only if specified
+    // Consistent agent descriptor used across all Action lines
+    const agentDesc = agent ? `拉起 ${agent} 作为子 agent 执行任务` : '拉起子 agent 执行任务';
+
+    // Model/agent header
     if (model) {
-        const agentLine = agent ? ` (agent: ${agent})` : '';
-        lines.push(`**Model**: 用 \`${model}\` 拉起这个角色${agentLine}`);
+        const agentSuffix = agent ? `，使用 ${agent}` : '';
+        lines.push(`**Model**: \`${model}\`${agentSuffix}`);
     } else if (agent) {
         lines.push(`**Agent**: ${agent}`);
     }
@@ -88,7 +91,7 @@ function buildSessionGuidance(params: {
         // parallel=true and same role already has a running dispatch → force new session
         lines.push(`**Session**: 该角色已有运行中的 dispatch，强制启动新会话（parallel 模式）`);
         lines.push('');
-        lines.push(`**Action**: Launch a new agent for this role.`);
+        lines.push(`**Action**: ${agentDesc}。`);
     } else if (idleSession) {
         const agentId = idleSession.agentSessionId
             ? `Agent session ID: \`${idleSession.agentSessionId}\``
@@ -102,18 +105,18 @@ function buildSessionGuidance(params: {
         lines.push('');
 
         if (sessionType === 'persistent') {
-            lines.push(`**Action**: Resume this session instead of launching a new agent.`);
+            lines.push(`**Action**: 复用已有会话，而非启动新 agent。`);
             lines.push(
                 idleSession.agentSessionId
-                    ? `Use \`--resume ${idleSession.agentSessionId}\` or \`--session ${idleSession.agentSessionId}\` to restore the conversation.`
-                    : `Note: No agent session ID was recorded for this session. You may need to launch a new agent.`,
+                    ? `使用 \`--resume ${idleSession.agentSessionId}\` 或 \`--session ${idleSession.agentSessionId}\` 恢复会话。`
+                    : `注意: 该会话未记录 agent session ID，可能需要${agentDesc}。`,
             );
         } else {
             // optional — suggestion, not directive
-            lines.push(`**Suggestion**: An idle session exists. You may resume it or launch a new one — your call.`);
+            lines.push(`**Suggestion**: 存在空闲会话，可复用也可启动新会话，由你决定。`);
             if (idleSession.agentSessionId) {
                 lines.push(
-                    `To resume: \`--resume ${idleSession.agentSessionId}\` or \`--session ${idleSession.agentSessionId}\``,
+                    `如需复用: \`--resume ${idleSession.agentSessionId}\` 或 \`--session ${idleSession.agentSessionId}\``,
                 );
             }
         }
@@ -122,11 +125,11 @@ function buildSessionGuidance(params: {
         if (sessionType === 'none') {
             lines.push(`**Session**: 每次 dispatch 启动全新会话（session: none）`);
         } else {
-            lines.push(`**No reusable session found** for this role.`);
+            lines.push(`**未找到可复用会话**`);
             lines.push(`Session type: ${sessionType}`);
         }
         lines.push('');
-        lines.push(`**Action**: Launch a new agent for this role.`);
+        lines.push(`**Action**: ${agentDesc}。`);
     }
 
     return lines.join('\n');

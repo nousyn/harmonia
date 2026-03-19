@@ -197,6 +197,33 @@ Harmonia 的本质是一套**协作机制**，而非仅仅是工作流引擎。�
 
 ---
 
+# Dispatch 返回可执行命令
+
+> 状态: 已规划（暂不执行）
+> 编号日志: [045-dispatch-launch-command-plan.md](./045-dispatch-launch-command-plan.md)
+> 日期: 2026-03-20
+
+## 目标
+
+将 `role_dispatch` 从返回文本指引改为返回可执行 CLI 命令，让 Coordinator 直接执行而非解读文本。
+
+## 核心设计
+
+- **Agent 适配器层**: 新建 `src/core/agent-adapters.ts`，映射 agent 类型 → CLI 命令模板（opencode / claude-code / codex / openclaw）
+- **Prompt 文件**: Role Prompt 写入 `{contextDir}/.tmp/dispatch-{id}.md`，CLI 命令通过 `-f` 引用
+- **输出变更**: `## Session Guidance` → `## Launch Command`（含完整 shell 命令字符串）
+- **Fallback**: 未指定 agent 时回退到现有文本指引格式
+- **清理**: `dispatch_report` 终态时删除临时 prompt 文件
+
+## 前置条件
+
+当前文本指引模式已经可用。命令式模式作为增强，等以下条件满足再实施：
+
+1. 各 agent CLI 格式稳定（opencode / claude-code 等的非交互模式不再频繁变动）
+2. 有真实多 agent 调度场景验证当前文本指引的痛点
+
+---
+
 # activeContext 并发安全问题
 
 > 状态: 已知问题，待讨论
