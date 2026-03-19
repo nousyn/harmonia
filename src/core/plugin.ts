@@ -204,18 +204,14 @@ async function loadSchemas(pluginPath: string): Promise<Record<string, ArtifactS
  * The tools.js module should export a registerActions function.
  */
 async function loadActions(pluginPath: string): Promise<Record<string, ActionHandler>> {
-    const toolsPath = join(pluginPath, 'tools.ts');
-    const toolsJsPath = join(pluginPath, 'tools.js');
+    const toolsPath = join(pluginPath, 'tools.js');
 
-    // Try .js first (compiled), then .ts
-    const actualPath = (await fileExists(toolsJsPath)) ? toolsJsPath : (await fileExists(toolsPath)) ? toolsPath : null;
-
-    if (!actualPath) {
+    if (!(await fileExists(toolsPath))) {
         return {};
     }
 
     try {
-        const mod = await import(actualPath);
+        const mod = await import(toolsPath);
         if (typeof mod.registerActions === 'function') {
             const actions: Record<string, ActionHandler> = {};
             mod.registerActions({
@@ -226,7 +222,7 @@ async function loadActions(pluginPath: string): Promise<Record<string, ActionHan
             return actions;
         }
     } catch (err) {
-        console.warn(`[harmonia] Warning: failed to load actions from ${actualPath}:`, err);
+        console.warn(`[harmonia] Warning: failed to load actions from ${toolsPath}:`, err);
     }
 
     return {};
@@ -237,22 +233,19 @@ async function loadActions(pluginPath: string): Promise<Record<string, ActionHan
  * The hooks.js module should export a createHooks function.
  */
 async function loadHookCreator(pluginPath: string): Promise<HookCreator | undefined> {
-    const hooksPath = join(pluginPath, 'hooks.ts');
-    const hooksJsPath = join(pluginPath, 'hooks.js');
+    const hooksPath = join(pluginPath, 'hooks.js');
 
-    const actualPath = (await fileExists(hooksJsPath)) ? hooksJsPath : (await fileExists(hooksPath)) ? hooksPath : null;
-
-    if (!actualPath) {
+    if (!(await fileExists(hooksPath))) {
         return undefined;
     }
 
     try {
-        const mod = await import(actualPath);
+        const mod = await import(hooksPath);
         if (typeof mod.createHooks === 'function') {
             return mod.createHooks as HookCreator;
         }
     } catch (err) {
-        console.warn(`[harmonia] Warning: failed to load hooks from ${actualPath}:`, err);
+        console.warn(`[harmonia] Warning: failed to load hooks from ${hooksPath}:`, err);
     }
 
     return undefined;
