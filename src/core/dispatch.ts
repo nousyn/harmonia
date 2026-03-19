@@ -4,7 +4,6 @@
  *   <context_dir>/dispatches.json
  *
  * context_dir is typically iter-<n>/ or patch-<n>/ under the project data dir.
- * All public functions accept an optional contextDir parameter.
  *
  * Sessions represent agent instances (can be reused across dispatches).
  * Dispatches represent individual task assignments to a role.
@@ -13,20 +12,17 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getIterationDir } from './registry.js';
 import type { AgentType, SessionRecord, SessionStatus, DispatchRecord, DispatchStatus } from './types.js';
 
 const SESSIONS_FILE = 'sessions.json';
 const DISPATCHES_FILE = 'dispatches.json';
 
 function sessionsPath(projectName: string, iteration: number, contextDir?: string): string {
-    const base = contextDir ?? getIterationDir(projectName, iteration);
-    return join(base, SESSIONS_FILE);
+    return join(contextDir!, SESSIONS_FILE);
 }
 
 function dispatchesPath(projectName: string, iteration: number, contextDir?: string): string {
-    const base = contextDir ?? getIterationDir(projectName, iteration);
-    return join(base, DISPATCHES_FILE);
+    return join(contextDir!, DISPATCHES_FILE);
 }
 
 // ─── Session CRUD ───

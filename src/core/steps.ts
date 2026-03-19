@@ -3,12 +3,10 @@
  *
  * Tracks which sequential steps have been completed for each artifact,
  * supporting the P3 Sequential mode feature.
- * All public functions accept an optional contextDir parameter.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getIterationDir } from './registry.js';
 import type { ArtifactStepState, ArtifactStepRecord } from './types.js';
 
 const STEPS_FILE = 'steps.json';
@@ -18,8 +16,7 @@ interface StepsData {
 }
 
 function stepsPath(projectName: string, iteration: number, contextDir?: string): string {
-    const base = contextDir ?? getIterationDir(projectName, iteration);
-    return join(base, STEPS_FILE);
+    return join(contextDir!, STEPS_FILE);
 }
 
 /**

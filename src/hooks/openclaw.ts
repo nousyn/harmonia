@@ -31,7 +31,7 @@ import {
  *
  * Handles two events:
  * 1. before_tool_call — boundary guard: block code edits and dev commands
- * 2. message_received — proactive reminders: dispatch timeout, idle phase, pending reviews
+ * 2. message_received — proactive reminders: dispatch timeout, idle timeout, pending reviews
  */
 function generateOpenClawHandler(params: HookParams): string {
     const codeExtsJson = JSON.stringify(CODE_EXTENSIONS);
@@ -153,21 +153,21 @@ function handleMessageReceived(): any {
             }
         }
 
-        // Check 2: Pending document reviews
+        // Check 2: Pending artifact reviews
         const reviews = readJsonSafe(resolve(proj.path, 'reviews.json'));
         if (reviews && typeof reviews === 'object') {
-            const pendingDocs: string[] = [];
-            for (const [docId, review] of Object.entries<any>(reviews)) {
+            const pendingArtifacts: string[] = [];
+            for (const [artifactId, review] of Object.entries<any>(reviews)) {
                 if (review.status === 'pending' && review.submittedAt) {
                     const elapsed = minutesSince(review.submittedAt);
                     if (elapsed >= REVIEW_PENDING_TIMEOUT_MINUTES) {
-                        pendingDocs.push(docId);
+                        pendingArtifacts.push(artifactId);
                     }
                 }
             }
-            if (pendingDocs.length > 0) {
+            if (pendingArtifacts.length > 0) {
                 reminders.push(
-                    \`- [\${proj.name}] \${pendingDocs.length} 份文档待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingDocs.join(', ')} — 请尽快处理（artifact_approve）\`,
+                    \`- [\${proj.name}] \${pendingArtifacts.length} 份制品待审核超过 \${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟: \${pendingArtifacts.join(', ')} — 请尽快处理（artifact_approve）\`,
                 );
             }
         }
@@ -224,6 +224,6 @@ export function createOpenClawHooks(params: HookParams) {
     return defineHooks('openclaw', {
         events: ['message_received', 'before_tool_call'],
         content: generateOpenClawHandler(params),
-        description: 'Harmonia PM 边界守卫与状态提醒',
+        description: 'Harmonia coordinator 边界守卫与状态提醒',
     });
 }

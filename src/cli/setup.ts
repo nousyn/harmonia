@@ -3,7 +3,7 @@
  *
  * Prompt injection only.
  * No project registration, no state init, no hook installation.
- * PM does project registration at runtime via MCP tools (project_init),
+ * Coordinator does project registration at runtime via MCP tools (project_init),
  * which also handles hook installation.
  *
  * Usage:

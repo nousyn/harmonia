@@ -3,26 +3,17 @@
  *
  * Rewritten for the new node-based architecture. State now tracks individual
  * workflow nodes instead of linear phases.
- *
- * All functions accept an optional `contextDir` parameter. When provided, it is used
- * directly as the directory containing state.json. When omitted, the directory is
- * resolved from `getIterationDir(projectName, iteration)` for backward compatibility.
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getIterationDir } from './registry.js';
 import { initNodeStates } from './workflow-engine.js';
 import type { ContextType, WorkflowState, WorkflowPlugin, NodeState } from './types.js';
 
 const STATE_FILE = 'state.json';
 
-function resolveDir(projectName: string, iteration: number, contextDir?: string): string {
-    return contextDir ?? getIterationDir(projectName, iteration);
-}
-
 function statePath(projectName: string, iteration: number, contextDir?: string): string {
-    return join(resolveDir(projectName, iteration, contextDir), STATE_FILE);
+    return join(contextDir!, STATE_FILE);
 }
 
 /**
@@ -31,7 +22,7 @@ function statePath(projectName: string, iteration: number, contextDir?: string):
  * Creates initial NodeState records for all nodes in the workflow definition.
  * All nodes start as 'pending'.
  *
- * @param contextDir - Optional explicit directory. If omitted, uses getIterationDir().
+ * @param contextDir - Directory containing state.json
  */
 export async function initWorkflowState(
     projectName: string,
@@ -63,11 +54,7 @@ export async function initWorkflowState(
 /**
  * Read the current workflow state.
  */
-export async function readState(
-    projectName: string,
-    iteration: number,
-    contextDir?: string,
-): Promise<WorkflowState> {
+export async function readState(projectName: string, iteration: number, contextDir?: string): Promise<WorkflowState> {
     const content = await readFile(statePath(projectName, iteration, contextDir), 'utf-8');
     return JSON.parse(content) as WorkflowState;
 }
@@ -131,11 +118,7 @@ export async function persistState(
 /**
  * Check if a workflow state file exists.
  */
-export async function stateExists(
-    projectName: string,
-    iteration: number,
-    contextDir?: string,
-): Promise<boolean> {
+export async function stateExists(projectName: string, iteration: number, contextDir?: string): Promise<boolean> {
     try {
         await readFile(statePath(projectName, iteration, contextDir), 'utf-8');
         return true;

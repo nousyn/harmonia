@@ -3,8 +3,6 @@
  *
  * Loads schema definitions from the resolved workflow directory's schemas/ subdirectory
  * and validates artifact content against them before writing.
- *
- * Scale concept has been removed — required fields are now simple booleans.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -24,10 +22,10 @@ export async function loadArtifactSchema(
     builtinDir: string,
     customDir: string,
     workflowName: string,
-    docId: string,
+    artifactId: string,
 ): Promise<ArtifactSchema | undefined> {
     const workflowDir = await resolveWorkflowDir(builtinDir, customDir, workflowName);
-    const schemaPath = join(workflowDir, 'schemas', `${docId}.json`);
+    const schemaPath = join(workflowDir, 'schemas', `${artifactId}.json`);
     try {
         const raw = await readFile(schemaPath, 'utf-8');
         return JSON.parse(raw) as ArtifactSchema;

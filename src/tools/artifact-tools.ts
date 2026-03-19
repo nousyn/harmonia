@@ -32,7 +32,6 @@ import type { ArtifactDefinition, ArtifactStepDefinition } from '../core/types.j
 /**
  * Check if sequential mode is active for a given artifact definition.
  * Sequential mode is active whenever the artifact has steps defined.
- * (Scale concept removed — steps always activate sequential mode.)
  */
 function isSequentialActive(artifactDef: ArtifactDefinition): boolean {
     return !!artifactDef.steps?.length;
@@ -303,14 +302,14 @@ export function registerArtifactTools(server: McpServer, builtinDir: string, cus
                 contextLabel = ctx.activeContext;
             }
 
-            const docs = await listArtifacts(project_name, contextNumber, contextDir);
+            const artifacts = await listArtifacts(project_name, contextNumber, contextDir);
             return {
                 content: [
                     {
                         type: 'text' as const,
                         text:
-                            docs.length > 0
-                                ? `Artifacts (${contextLabel}):\n${docs.map((d) => `- ${d}`).join('\n')}`
+                            artifacts.length > 0
+                                ? `Artifacts (${contextLabel}):\n${artifacts.map((d) => `- ${d}`).join('\n')}`
                                 : `No artifacts found for ${contextLabel}.`,
                     },
                 ],

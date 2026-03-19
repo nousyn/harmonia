@@ -59,7 +59,7 @@ Harmonia — Multi-agent orchestration MCP server
 
 Usage:
   harmonia                    Start MCP stdio server
-  harmonia setup              Inject PM prompt + install hooks in current directory
+  harmonia setup              Inject coordinator prompt + install hooks in current directory
   harmonia unregister <name>  Remove project from registry and delete data (default)
   harmonia unregister <name> --keep-data  Remove from registry but keep data files
   harmonia --help             Show this help message

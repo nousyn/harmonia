@@ -361,7 +361,7 @@ export async function discoverPlugins(configPath: string): Promise<PluginEntry[]
  * @param configPath - Path to config.json
  * @param builtinDir - Built-in workflows directory (package-level)
  * @param name - Workflow name to load
- * @param skipValidation - Skip workflow validation (for partially migrated plugins)
+ * @param skipValidation - Skip workflow validation (for testing)
  */
 export async function loadPluginByName(
     configPath: string,

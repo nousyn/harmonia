@@ -7,7 +7,7 @@
  *
  * Hooks:
  * 1. PreToolUse — boundary guard: block code edits and dev commands
- * 2. UserPromptSubmit — proactive reminders: dispatch timeout, idle phase, pending reviews
+ * 2. UserPromptSubmit — proactive reminders: dispatch timeout, idle timeout, pending reviews
  *
  * Project-agnostic: no project name/dir baked in.
  * - Boundary guard uses tool names + code file extensions only
@@ -107,8 +107,8 @@ exit 0
  *
  * Scans all projects under DATA_DIR for:
  * - Running dispatches that exceed timeout
- * - Idle phase warning
- * - Pending document reviews
+ * - Idle timeout warning
+ * - Pending artifact reviews
  */
 function generateUserPromptSubmitScript(params: HookParams): string {
     return `#!/bin/bash
@@ -154,27 +154,27 @@ if [ -d "$DATA_DIR" ]; then
       done <<< "$RUNNING"
     fi
 
-    # ── Check 2: Pending document reviews ──
+    # ── Check 2: Pending artifact reviews ──
     REVIEWS_FILE="$PROJECT_DATA/reviews.json"
     if [ -f "$REVIEWS_FILE" ]; then
       PENDING=$(jq -r 'to_entries[] | select(.value.status == "pending") | "\\(.key)|\\(.value.submittedAt)"' "$REVIEWS_FILE" 2>/dev/null || true)
       PENDING_COUNT=0
-      PENDING_DOCS=""
+      PENDING_ARTIFACTS=""
       
-      while IFS='|' read -r DOC_ID SUBMITTED_AT; do
-        [ -z "$DOC_ID" ] && continue
+      while IFS='|' read -r ARTIFACT_ID SUBMITTED_AT; do
+        [ -z "$ARTIFACT_ID" ] && continue
         SUBMITTED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$(echo "$SUBMITTED_AT" | cut -c1-19)" +%s 2>/dev/null || echo "0")
         if [ "$SUBMITTED_EPOCH" != "0" ]; then
           ELAPSED_MIN=$(( (NOW_EPOCH - SUBMITTED_EPOCH) / 60 ))
           if [ "$ELAPSED_MIN" -ge ${REVIEW_PENDING_TIMEOUT_MINUTES} ]; then
             PENDING_COUNT=$((PENDING_COUNT + 1))
-            PENDING_DOCS="$PENDING_DOCS $DOC_ID"
+            PENDING_ARTIFACTS="$PENDING_ARTIFACTS $ARTIFACT_ID"
           fi
         fi
       done <<< "$PENDING"
       
       if [ "$PENDING_COUNT" -gt 0 ]; then
-        add_reminder "- [$PROJECT_NAME] $PENDING_COUNT 份文档待审核超过 ${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟:$PENDING_DOCS — 请尽快处理（artifact_approve）"
+        add_reminder "- [$PROJECT_NAME] $PENDING_COUNT 份制品待审核超过 ${REVIEW_PENDING_TIMEOUT_MINUTES} 分钟:$PENDING_ARTIFACTS — 请尽快处理（artifact_approve）"
       fi
     fi
 

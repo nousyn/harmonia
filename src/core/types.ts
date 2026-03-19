@@ -8,13 +8,13 @@
  * - Workflow node types (task, sequence, parallel, gate)
  * - Workflow state (node-based, not phase-based)
  * - Engine types (nextAction, events, gate evaluation)
- * - Artifact system (renamed from doc)
+ * - Artifact system
  * - Plugin interface
- * - Session & Dispatch tracking (unchanged)
+ * - Session & Dispatch tracking
  * - Override configuration (simplified to 2-layer)
- * - Sequential step tracking (unchanged)
- * - Issue tracking (unchanged)
- * - Review state (unchanged)
+ * - Sequential step tracking
+ * - Issue tracking
+ * - Review state
  */
 
 /** Agent type for spawning team member agents (re-exported from @s_s/agent-kit) */
@@ -104,9 +104,6 @@ export interface ArtifactApprovedCondition {
 
 export type ArtifactFieldOperator = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'in';
 
-/** @deprecated Use ArtifactFieldOperator */
-export type FieldOperator = ArtifactFieldOperator;
-
 export interface ArtifactFieldCondition {
     type: 'artifact_field';
     /** Artifact ID to check */
@@ -153,7 +150,7 @@ export interface WorkflowDefinition {
     floatingNodes?: TaskNode[];
 }
 
-// ─── Artifact System (renamed from Doc) ───
+// ─── Artifact System ───
 
 /** Step definition within an artifact (for sequential mode) */
 export interface ArtifactStepDefinition {
@@ -445,7 +442,7 @@ export interface GlobalConfig {
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
 
 export interface ReviewState {
-    /** Artifact ID (renamed from docId) */
+    /** Artifact ID */
     artifactId: string;
     status: ReviewStatus;
     submittedAt: string;

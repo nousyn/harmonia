@@ -180,7 +180,7 @@ export function getIterationDir(projectName: string, iteration: number): string 
 
 /**
  * Start a new iteration for a project.
- * Creates the iteration directory (with docs/ subdirectory) and updates the registry.
+ * Creates the iteration directory (with artifacts/ subdirectory) and updates the registry.
  *
  * @returns The new iteration number
  */

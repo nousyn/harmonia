@@ -13,7 +13,7 @@ import { buildOverrideSection } from './utils.js';
 export function registerGetRolePrompt(server: McpServer, builtinDir: string, customDir: string): void {
     server.tool(
         'role_prompt',
-        "Get the system prompt and configuration for a specific role in the workflow. Includes any capability overrides configured at global or project level. Use this to understand what a role does or to set up an agent with the role's prompt.",
+        "Get the system prompt and configuration for a specific role in the workflow. Includes any capability overrides configured at project level. Use this to understand what a role does or to set up an agent with the role's prompt.",
         {
             workflow: z.string().default('dev').describe('Workflow name (default: dev)'),
             role: z.string().describe('Role ID (e.g. coordinator, architect, developer, tester)'),

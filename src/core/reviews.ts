@@ -2,12 +2,10 @@
  * Artifact review state management — <context_dir>/reviews.json
  *
  * Tracks which artifacts are pending review, approved, or rejected.
- * All public functions accept an optional contextDir parameter.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { getIterationDir } from './registry.js';
 import type { ReviewState, ReviewStatus } from './types.js';
 
 const REVIEWS_FILE = 'reviews.json';
@@ -17,8 +15,7 @@ interface ReviewsData {
 }
 
 function reviewsPath(projectName: string, iteration: number, contextDir?: string): string {
-    const base = contextDir ?? getIterationDir(projectName, iteration);
-    return join(base, REVIEWS_FILE);
+    return join(contextDir!, REVIEWS_FILE);
 }
 
 /**

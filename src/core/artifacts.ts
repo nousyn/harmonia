@@ -2,8 +2,6 @@
  * Artifact management — read/write files under <context_dir>/artifacts/
  *
  * context_dir is typically iter-<n>/ or patch-<n>/ under the project data dir.
- * All public functions accept an optional contextDir parameter. When omitted,
- * falls back to getIterationDir(projectName, iteration) for backward compat.
  *
  * Supports both .md and .html files based on artifact format configuration.
  * Also supports step artifact files for sequential mode (e.g. prd.requirements.json).
@@ -11,12 +9,10 @@
 
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { getIterationDir } from './registry.js';
 import type { ArtifactDefinition } from './types.js';
 
-function artifactsDir(projectName: string, iteration: number, contextDir?: string): string {
-    const base = contextDir ?? getIterationDir(projectName, iteration);
-    return join(base, 'artifacts');
+function artifactsDir(contextDir: string): string {
+    return join(contextDir, 'artifacts');
 }
 
 /**
@@ -37,7 +33,7 @@ export async function writeArtifact(
     artifactDef?: ArtifactDefinition,
     contextDir?: string,
 ): Promise<string> {
-    const dir = artifactsDir(projectName, iteration, contextDir);
+    const dir = artifactsDir(contextDir!);
     await mkdir(dir, { recursive: true });
     const ext = getArtifactExtension(artifactDef);
     const filePath = join(dir, `${artifactId}${ext}`);
@@ -55,9 +51,7 @@ export async function readArtifact(
     artifactId: string,
     contextDir?: string,
 ): Promise<string> {
-    const dir = artifactsDir(projectName, iteration, contextDir);
-
-    // Try .md first, then .html, then .json
+    const dir = artifactsDir(contextDir!);
     for (const ext of ['.md', '.html', '.json']) {
         try {
             return await readFile(join(dir, `${artifactId}${ext}`), 'utf-8');
@@ -73,7 +67,7 @@ export async function readArtifact(
  * List all artifacts in <context_dir>/artifacts/
  */
 export async function listArtifacts(projectName: string, iteration: number, contextDir?: string): Promise<string[]> {
-    const dir = artifactsDir(projectName, iteration, contextDir);
+    const dir = artifactsDir(contextDir!);
     try {
         const files = await readdir(dir);
         return files
@@ -101,7 +95,7 @@ export async function writeStepArtifact(
     format: 'json' | 'md',
     contextDir?: string,
 ): Promise<string> {
-    const dir = artifactsDir(projectName, iteration, contextDir);
+    const dir = artifactsDir(contextDir!);
     await mkdir(dir, { recursive: true });
     const ext = format === 'json' ? '.json' : '.md';
     const filePath = join(dir, `${artifactId}.${stepId}${ext}`);
@@ -120,7 +114,7 @@ export async function readStepArtifact(
     stepId: string,
     contextDir?: string,
 ): Promise<string> {
-    const dir = artifactsDir(projectName, iteration, contextDir);
+    const dir = artifactsDir(contextDir!);
 
     for (const ext of ['.json', '.md']) {
         try {

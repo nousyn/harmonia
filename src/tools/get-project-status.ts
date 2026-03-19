@@ -392,10 +392,7 @@ export function registerGetProjectStatus(server: McpServer, builtinDir: string, 
                 const pendingSection =
                     pendingReviews.length > 0
                         ? pendingReviews
-                              .map(
-                                  (r) =>
-                                      `- ${(r as any).artifactId ?? (r as any).docId} (submitted: ${r.submittedAt.split('T')[0]})`,
-                              )
+                              .map((r) => `- ${r.artifactId} (submitted: ${r.submittedAt.split('T')[0]})`)
                               .join('\n')
                         : '(none)';
 

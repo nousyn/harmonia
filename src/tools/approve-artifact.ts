@@ -27,14 +27,14 @@ export function registerApproveArtifact(server: McpServer, builtinDir: string, c
                 if (isError(ctx)) return ctx;
 
                 const status = approved ? 'approved' : 'rejected';
-                await resolveReview(project_name, ctx.number, artifact_id, status, comment);
+                await resolveReview(project_name, ctx.number, artifact_id, status, comment, ctx.dir);
 
                 if (approved) {
                     // Trigger engine event: artifact_approved
-                    const engineResult = await processWorkflowEvent(
-                        builtinDir, customDir, project_name, ctx,
-                        { type: 'artifact_approved', artifactId: artifact_id },
-                    );
+                    const engineResult = await processWorkflowEvent(builtinDir, customDir, project_name, ctx, {
+                        type: 'artifact_approved',
+                        artifactId: artifact_id,
+                    });
 
                     return {
                         content: [
@@ -82,7 +82,7 @@ export function registerApproveArtifact(server: McpServer, builtinDir: string, c
             const ctx = await resolveActive(project_name);
             if (isError(ctx)) return ctx;
 
-            const pending = await getPendingReviews(project_name, ctx.number);
+            const pending = await getPendingReviews(project_name, ctx.number, ctx.dir);
 
             if (pending.length === 0) {
                 return {
