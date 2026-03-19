@@ -1,7 +1,7 @@
 /**
  * Action registry — manages node hook action registration and execution.
  *
- * Actions are registered by workflow plugins (via tools.js) and executed
+ * Actions are registered by workflow plugins (via tools/index.js) and executed
  * synchronously by the Core during tool call processing (in beforeDispatch
  * and afterComplete hooks).
  *

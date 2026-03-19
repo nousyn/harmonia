@@ -1,20 +1,16 @@
 /**
  * Dev workflow plugin — hook creator.
  *
- * Self-contained entry point for hook creation. All hook generation logic
- * lives in sibling files within this directory — no cross-directory imports.
- *
- * This file is intentionally .js (not .ts) because it lives outside
- * the src/ directory and is loaded via dynamic import() by the plugin
- * system at runtime.
+ * Entry point for hook creation. All hook generation logic lives in
+ * sibling files within this directory — no cross-directory imports.
  *
  * The defineHooks function is received from Core via context — this module
  * does NOT directly depend on @s_s/agent-kit.
  */
 
-import { createClaudeCodeHooks } from './hooks-claude.js';
-import { createOpenCodeHooks } from './hooks-opencode.js';
-import { createOpenClawHooks } from './hooks-openclaw.js';
+import { createClaudeCodeHooks } from './claude.js';
+import { createOpenCodeHooks } from './opencode.js';
+import { createOpenClawHooks } from './openclaw.js';
 
 /**
  * Create hook definitions for a specific agent type.

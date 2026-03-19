@@ -111,8 +111,10 @@ workflows/<workflow-name>/
 │   ├── prd.json            #   产出级 Schema
 │   ├── prd.requirements.json  # 步骤级 Schema
 │   └── ...
-├── hooks.js                # [可选] Agent 平台钩子
-└── tools.js                # [可选] 节点钩子动作
+├── hooks/                  # [可选] Agent 平台钩子
+│   └── index.js            #   入口，导出 createHooks()
+└── tools/                  # [可选] 节点钩子动作
+    └── index.js            #   入口，导出 registerActions()
 ```
 
 | 文件             | 必需 | 说明                                   |
@@ -120,8 +122,8 @@ workflows/<workflow-name>/
 | `workflow.json`  | 是   | 节点树 + 产出定义                      |
 | `roles/*.md`     | 是   | 每个角色一个文件，文件名 = 角色 ID     |
 | `schemas/*.json` | 否   | 产出 Schema 校验规则                   |
-| `hooks.js`       | 否   | 导出 `createHooks(agentType, context)` |
-| `tools.js`       | 否   | 导出 `registerActions(api)`            |
+| `hooks/index.js` | 否   | 导出 `createHooks(agentType, context)` |
+| `tools/index.js` | 否   | 导出 `registerActions(api)`            |
 
 ---
 
@@ -617,11 +619,11 @@ Schema 文件位于 `schemas/` 目录，命名规则：
 
 ## Hooks 扩展
 
-Hooks 用于在 Agent 平台级别安装边界守卫和主动提醒。这是**可选功能**——如果你的工作流不需要拦截越权操作或注入提醒，可以不提供 `hooks.js`。
+Hooks 用于在 Agent 平台级别安装边界守卫和主动提醒。这是**可选功能**——如果你的工作流不需要拦截越权操作或注入提醒，可以不提供 `hooks/` 目录。
 
 ### createHooks 接口
 
-在 `hooks.js` 中导出 `createHooks` 函数：
+在 `hooks/index.js` 中导出 `createHooks` 函数：
 
 ```javascript
 /**
@@ -692,11 +694,11 @@ context.defineHooks('openclaw', {
 
 ## Actions 扩展
 
-Actions 是在节点钩子中调用的同步操作，用于在 dispatch 或 complete 时执行自定义逻辑。这是**可选功能**——如果只需要静态的 `inject` 文本，不需要 `tools.js`。
+Actions 是在节点钩子中调用的同步操作，用于在 dispatch 或 complete 时执行自定义逻辑。这是**可选功能**——如果只需要静态的 `inject` 文本，不需要 `tools/` 目录。
 
 ### registerActions 接口
 
-在 `tools.js` 中导出 `registerActions` 函数：
+在 `tools/index.js` 中导出 `registerActions` 函数：
 
 ```typescript
 export function registerActions(api: { register: (name: string, handler: ActionHandler) => void }): void {
@@ -944,12 +946,14 @@ sequence(main)
 ```
 workflows/dev/
 ├── workflow.json            # 节点树定义
-├── hooks.js                 # Hook 入口，导出 createHooks()
-├── hooks-content.js         # Hook 共享常量（被阻止的工具/扩展名/超时阈值）
-├── hooks-claude.js          # Claude Code / Codex hook 生成器
-├── hooks-opencode.js        # OpenCode hook 生成器
-├── hooks-openclaw.js        # OpenClaw hook 生成器
-├── tools.js                 # registerActions()（当前为空实现）
+├── hooks/                   # Hook 模块
+│   ├── index.js             #   入口，导出 createHooks()
+│   ├── content.js           #   共享常量（被阻止的工具/扩展名/超时阈值）
+│   ├── claude.js            #   Claude Code / Codex hook 生成器
+│   ├── opencode.js          #   OpenCode hook 生成器
+│   └── openclaw.js          #   OpenClaw hook 生成器
+├── tools/                   # Action 模块
+│   └── index.js             #   registerActions()（当前为空实现）
 ├── roles/
 │   ├── coordinator.md
 │   ├── architect.md

@@ -411,9 +411,9 @@ export interface WorkflowPlugin {
     artifactSchemas: Record<string, ArtifactSchema>;
     /** Artifact definitions keyed by artifact ID */
     artifactDefinitions: Record<string, ArtifactDefinition>;
-    /** Registered actions (from tools.js) */
+    /** Registered actions (from tools/index.js) */
     actions?: Record<string, ActionHandler>;
-    /** Hook creator (from hooks.js) */
+    /** Hook creator (from hooks/index.js) */
     hooks?: HookCreator;
     /** Plugin-specific configuration (from config.json) */
     config?: unknown;

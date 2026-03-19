@@ -5,16 +5,16 @@
  *   workflow.json  — Node tree definition + artifact definitions
  *   roles/*.md     — Role prompts with YAML frontmatter
  *   schemas/*.json — Artifact schemas for validation
- *   hooks.js       — Optional, exports createHooks()
- *   tools.js       — Optional, exports registerActions()
+ *   hooks/index.js  — Optional, exports createHooks()
+ *   tools/index.js  — Optional, exports registerActions()
  *
  * Loading flow:
  * 1. Read workflow.json → parse node tree + artifact definitions
  * 2. Validate via workflow-validator
  * 3. Scan roles/ → parse role files
  * 4. Scan schemas/ → load artifact schemas
- * 5. If tools.js exists → dynamic import, register actions
- * 6. If hooks.js exists → record hook creator (not executed yet)
+ * 5. If tools/index.js exists → dynamic import, register actions
+ * 6. If hooks/index.js exists → record hook creator (not executed yet)
  */
 
 import { readFile, readdir, access } from 'node:fs/promises';
@@ -200,11 +200,11 @@ async function loadSchemas(pluginPath: string): Promise<Record<string, ArtifactS
 }
 
 /**
- * Try to load actions from tools.js (optional).
- * The tools.js module should export a registerActions function.
+ * Try to load actions from tools/index.js (optional).
+ * The module should export a registerActions function.
  */
 async function loadActions(pluginPath: string): Promise<Record<string, ActionHandler>> {
-    const toolsPath = join(pluginPath, 'tools.js');
+    const toolsPath = join(pluginPath, 'tools', 'index.js');
 
     if (!(await fileExists(toolsPath))) {
         return {};
@@ -229,11 +229,11 @@ async function loadActions(pluginPath: string): Promise<Record<string, ActionHan
 }
 
 /**
- * Try to load hook creator from hooks.js (optional).
- * The hooks.js module should export a createHooks function.
+ * Try to load hook creator from hooks/index.js (optional).
+ * The module should export a createHooks function.
  */
 async function loadHookCreator(pluginPath: string): Promise<HookCreator | undefined> {
-    const hooksPath = join(pluginPath, 'hooks.js');
+    const hooksPath = join(pluginPath, 'hooks', 'index.js');
 
     if (!(await fileExists(hooksPath))) {
         return undefined;
@@ -261,8 +261,8 @@ async function loadHookCreator(pluginPath: string): Promise<HookCreator | undefi
  * 2. Validate the workflow definition (static analysis)
  * 3. Load roles from roles/
  * 4. Load schemas from schemas/
- * 5. Optionally load actions from tools.js
- * 6. Optionally load hook creator from hooks.js
+ * 5. Optionally load actions from tools/index.js
+ * 6. Optionally load hook creator from hooks/index.js
  *
  * @param pluginPath - Absolute path to the plugin directory
  * @param config - Optional plugin configuration

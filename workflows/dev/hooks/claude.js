@@ -20,7 +20,7 @@ import {
     DISPATCH_TIMEOUT_MINUTES,
     WORKFLOW_IDLE_TIMEOUT_MINUTES,
     REVIEW_PENDING_TIMEOUT_MINUTES,
-} from './hooks-content.js';
+} from './content.js';
 
 /**
  * Generate Claude Code PreToolUse hook script.

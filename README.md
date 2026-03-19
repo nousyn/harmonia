@@ -317,12 +317,14 @@ harmonia/
 ├── workflows/
 │   └── dev/                     # 内置 dev 工作流插件
 │       ├── workflow.json        # 节点树定义（v2.0.0）
-│       ├── hooks.js             # Hook 入口，导出 createHooks()
-│       ├── hooks-content.js     # Hook 共享常量与内容
-│       ├── hooks-claude.js      # Claude Code hook 生成器
-│       ├── hooks-opencode.js    # OpenCode hook 生成器
-│       ├── hooks-openclaw.js    # OpenClaw hook 生成器
-│       ├── tools.js             # 导出 registerActions()（节点钩子动作）
+│       ├── hooks/               # Hook 模块
+│       │   ├── index.js         #   入口，导出 createHooks()
+│       │   ├── content.js       #   Hook 共享常量与内容
+│       │   ├── claude.js        #   Claude Code hook 生成器
+│       │   ├── opencode.js      #   OpenCode hook 生成器
+│       │   └── openclaw.js      #   OpenClaw hook 生成器
+│       ├── tools/               # Action 模块
+│       │   └── index.js         #   导出 registerActions()（节点钩子动作）
 │       ├── roles/               # 角色提示词
 │       │   ├── coordinator.md
 │       │   ├── architect.md
