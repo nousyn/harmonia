@@ -52,7 +52,7 @@
 
 ## 快速示例
 
-一个最简工作流只需要 3 个文件：
+一个最简工作流只需要 2 个文件：
 
 ```
 workflows/my-flow/
@@ -84,7 +84,7 @@ workflows/my-flow/
 
 ```markdown
 ---
-model: medium
+model: claude-sonnet-4-20250514
 session: none
 parallel: false
 ---
@@ -94,7 +94,7 @@ parallel: false
 你是项目协调者，负责完成工作并产出结果。
 ```
 
-这就是一个可运行的工作流。下面逐一讲解每个组件。
+这就是一个可运行的工作流。`roles/coordinator.md` 中的 frontmatter 是可选的，省略时使用默认值。下面逐一讲解每个组件。
 
 ---
 
@@ -112,7 +112,7 @@ workflows/<workflow-name>/
 │   ├── prd.requirements.json  # 步骤级 Schema
 │   └── ...
 ├── hooks.js                # [可选] Agent 平台钩子
-└── tools.ts                # [可选] 节点钩子动作
+└── tools.js                # [可选] 节点钩子动作
 ```
 
 | 文件             | 必需 | 说明                                   |
@@ -121,7 +121,7 @@ workflows/<workflow-name>/
 | `roles/*.md`     | 是   | 每个角色一个文件，文件名 = 角色 ID     |
 | `schemas/*.json` | 否   | 产出 Schema 校验规则                   |
 | `hooks.js`       | 否   | 导出 `createHooks(agentType, context)` |
-| `tools.ts`       | 否   | 导出 `registerActions(api)`            |
+| `tools.js`       | 否   | 导出 `registerActions(api)`            |
 
 ---
 
@@ -293,14 +293,14 @@ Gate 支持 3 种条件类型：
 }
 ```
 
-读取 JSON 格式产出的某个字段，与期望值比较。
+读取 JSON 格式产出的某个字段，与期望值比较。仅适用于 JSON 格式的产出。
 
-| 字段       | 类型     | 说明            |
-| ---------- | -------- | --------------- |
-| `artifact` | `string` | 产出 ID         |
-| `field`    | `string` | JSON 顶层字段名 |
-| `operator` | `string` | 比较运算符      |
-| `value`    | `any`    | 期望值          |
+| 字段       | 类型     | 说明                                                                 |
+| ---------- | -------- | -------------------------------------------------------------------- |
+| `artifact` | `string` | 产出 ID                                                              |
+| `field`    | `string` | JSON 字段路径（支持 `.` 分隔的嵌套路径，如 `result`、`stats.total`） |
+| `operator` | `string` | 比较运算符                                                           |
+| `value`    | `any`    | 期望值                                                               |
 
 **支持的运算符：**
 
@@ -453,7 +453,7 @@ task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
 
 ```markdown
 ---
-model: medium
+model: claude-sonnet-4-20250514
 session: none
 parallel: false
 capabilities:
@@ -482,12 +482,14 @@ capabilities:
 
 ### Frontmatter 字段
 
-| 字段           | 类型                                   | 必需 | 默认值     | 说明                                |
-| -------------- | -------------------------------------- | ---- | ---------- | ----------------------------------- |
-| `model`        | `string`                               | 否   | `"medium"` | 模型级别，如 `"medium"`、`"strong"` |
-| `session`      | `"none" \| "persistent" \| "optional"` | 否   | `"none"`   | 会话模式                            |
-| `parallel`     | `boolean`                              | 否   | `false`    | 是否支持并行执行                    |
-| `capabilities` | `RoleCapability[]`                     | 否   | —          | 角色能力列表                        |
+> **定位说明：** `model`、`session`、`parallel` 是描述性元数据。Harmonia Core 不会根据这些值自动选择模型或管理会话——它们通过 `role_dispatch` 的 dispatch 数据包传递给 Coordinator，作为调度决策的参考。实际效果取决于 Coordinator agent 对这些信息的理解和执行。
+
+| 字段           | 类型                                   | 必需 | 默认值                       | 说明                                                                                                                                                                                                                       |
+| -------------- | -------------------------------------- | ---- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`        | `string`                               | 否   | `"claude-sonnet-4-20250514"` | 拉起该角色 agent 时使用的模型。应填写具体模型名称（如 `claude-sonnet-4-20250514`、`claude-opus-4-20250514`），可被 `overrides.json` 中的 `roles.<role>.model` 覆盖                                                         |
+| `session`      | `"none" \| "persistent" \| "optional"` | 否   | `"none"`                     | 会话复用模式。`none`：每次 dispatch 启动全新会话；`persistent`：优先复用该角色已有的空闲会话；`optional`：由 Coordinator 自行判断是否复用。搭配 Harmonia 的 session 机制使用——dispatch 时会查找空闲 session 并生成复用建议 |
+| `parallel`     | `boolean`                              | 否   | `false`                      | 是否支持并行调度。`false`：同一时间该角色只处理一个任务（适用于有副作用的角色，如写文件）；`true`：可同时派发多个任务给该角色                                                                                              |
+| `capabilities` | `RoleCapability[]`                     | 否   | —                            | 角色能力列表                                                                                                                                                                                                               |
 
 **Capability 字段：**
 
@@ -497,7 +499,7 @@ capabilities:
 | `description` | `string` | 是   | 能力描述                              |
 | `artifact`    | `string` | 否   | 关联的产出 ID（该能力负责产出此文档） |
 
-> 如果 `.md` 文件没有 frontmatter，加载器会使用默认值（model: medium, session: none, parallel: false）。
+> 如果 `.md` 文件没有 frontmatter（即省略 `---` 块），加载器会使用默认值（model: claude-sonnet-4-20250514, session: none, parallel: false），整个文件内容作为 prompt。
 
 ### 动态内容注入
 
@@ -568,6 +570,13 @@ Schema 文件位于 `schemas/` 目录，命名规则：
 | `aliases`  | `string[]` | 否   | 可替代的标题文本                                |
 
 校验时会自动处理标题层级和大小写，并检查 `aliases` 中的替代写法。
+
+> **校验语义说明：**
+>
+> - `required: true` — 该章节必须出现，缺少时 `artifact_write` 会拒绝写入并返回 `missing_section` 错误
+> - `required: false` — 该章节可有可无，不会校验其是否存在。定义它的意义在于通过 Schema guidance 提示 Agent 可以包含此章节
+> - Schema **不会限制额外章节** — Agent 可以自由添加 schema 中未定义的章节，校验只检查"必需章节是否缺失"
+> - Schema 内容会通过 `role_dispatch` 以格式化文本注入 dispatch 数据包中（由 `formatSchemaGuidance()` 生成人类可读的写作指引），同时在 `artifact_write` 时执行实际校验
 
 ### JSON Schema
 
@@ -683,11 +692,11 @@ context.defineHooks('openclaw', {
 
 ## Actions 扩展
 
-Actions 是在节点钩子中调用的同步操作，用于在 dispatch 或 complete 时执行自定义逻辑。这是**可选功能**——如果只需要静态的 `inject` 文本，不需要 `tools.ts`。
+Actions 是在节点钩子中调用的同步操作，用于在 dispatch 或 complete 时执行自定义逻辑。这是**可选功能**——如果只需要静态的 `inject` 文本，不需要 `tools.js`。
 
 ### registerActions 接口
 
-在 `tools.ts` 中导出 `registerActions` 函数：
+在 `tools.js` 中导出 `registerActions` 函数：
 
 ```typescript
 export function registerActions(api: { register: (name: string, handler: ActionHandler) => void }): void {
@@ -856,22 +865,13 @@ Workflow validation failed for "/path/to/workflow":
 
 ## 工作流查找与部署
 
-### 查找优先级
+### 查找规则
 
-Harmonia 按以下优先级查找工作流目录：
+Harmonia 从 `<data_dir>/harmonia/.workflows/<name>/workflow.json` 查找工作流。未找到则报错。
 
-1. **自定义目录**（高优先级）：`<data_dir>/harmonia/.workflows/<name>/workflow.json`
-2. **内置目录**（回退）：`<package>/workflows/<name>/workflow.json`
-
-自定义工作流会覆盖同名的内置工作流。
+内置工作流（如 `dev`）在 setup 时自动复制到该目录，无需手动部署。
 
 ### 部署方式
-
-**方式一：放在包的 workflows/ 目录中**
-
-如果你在开发 Harmonia 本身，直接将工作流放在 `workflows/<name>/` 目录下。随包发布，零维护。
-
-**方式二：放在自定义目录中**
 
 将工作流目录复制到 `<data_dir>/harmonia/.workflows/<name>/`。数据目录的位置取决于操作系统：
 
@@ -949,7 +949,7 @@ workflows/dev/
 ├── hooks-claude.js          # Claude Code / Codex hook 生成器
 ├── hooks-opencode.js        # OpenCode hook 生成器
 ├── hooks-openclaw.js        # OpenClaw hook 生成器
-├── tools.ts                 # registerActions()（当前为空实现）
+├── tools.js                 # registerActions()（当前为空实现）
 ├── roles/
 │   ├── coordinator.md
 │   ├── architect.md

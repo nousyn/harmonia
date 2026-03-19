@@ -14,9 +14,7 @@
  * @param api - Registration API provided by the plugin loader
  * @param api.register - Function to register an action by name and handler
  */
-export function registerActions(_api: {
-    register: (name: string, handler: (...args: unknown[]) => unknown) => void;
-}): void {
+export function registerActions(_api) {
     // No custom actions yet.
     // Example:
     //   api.register('check-dependencies', async (ctx) => {

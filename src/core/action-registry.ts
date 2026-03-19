@@ -1,7 +1,7 @@
 /**
  * Action registry — manages node hook action registration and execution.
  *
- * Actions are registered by workflow plugins (via tools.ts) and executed
+ * Actions are registered by workflow plugins (via tools.js) and executed
  * synchronously by the Core during tool call processing (in beforeDispatch
  * and afterComplete hooks).
  *
@@ -32,7 +32,9 @@ export class ActionRegistry {
     async execute(name: string, context: ActionContext): Promise<ActionResult> {
         const handler = this.actions.get(name);
         if (!handler) {
-            throw new Error(`Action "${name}" is not registered. Available actions: ${this.list().join(', ') || 'none'}`);
+            throw new Error(
+                `Action "${name}" is not registered. Available actions: ${this.list().join(', ') || 'none'}`,
+            );
         }
         return handler(context);
     }

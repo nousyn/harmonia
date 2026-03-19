@@ -322,7 +322,7 @@ harmonia/
 │       ├── hooks-claude.js      # Claude Code hook 生成器
 │       ├── hooks-opencode.js    # OpenCode hook 生成器
 │       ├── hooks-openclaw.js    # OpenClaw hook 生成器
-│       ├── tools.ts             # 导出 registerActions()（节点钩子动作）
+│       ├── tools.js             # 导出 registerActions()（节点钩子动作）
 │       ├── roles/               # 角色提示词
 │       │   ├── coordinator.md
 │       │   ├── architect.md
