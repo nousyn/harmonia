@@ -242,7 +242,7 @@
         },
         "code": {
             "name": "代码实现",
-            "external": true
+            "unmanaged": true
         }
     }
 }

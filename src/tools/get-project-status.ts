@@ -360,7 +360,18 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                 const contextNumber = resolved.number;
                 const state = await readState(project_name, contextNumber, contextDir);
                 const wf = await loadWorkflow(workflowsDir, state.workflow);
-                const artifactIds = await listArtifacts(project_name, contextNumber, contextDir);
+                const statusIoCtx = {
+                    contextDir,
+                    projectDir: entry.dir,
+                    contextLabel: entry.activeContext,
+                };
+                const artifactIds = await listArtifacts(
+                    project_name,
+                    contextNumber,
+                    contextDir,
+                    wf.artifactDefinitions,
+                    statusIoCtx,
+                );
                 const reviews = await readReviews(project_name, contextNumber, contextDir);
                 const dispatches = await readDispatches(project_name, contextNumber, contextDir);
                 const sessions = await readSessions(project_name, contextNumber, contextDir);

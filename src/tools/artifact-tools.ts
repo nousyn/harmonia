@@ -17,7 +17,14 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { writeArtifact, readArtifact, listArtifacts, writeStepArtifact } from '../core/artifacts.js';
+import {
+    writeArtifact,
+    readArtifact,
+    listArtifacts,
+    writeStepArtifact,
+    resolveArtifactDir,
+} from '../core/artifacts.js';
+import type { ArtifactIOContext } from '../core/artifacts.js';
 import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/plugin.js';
 import { getMergedOverrides, resolveArtifactReview } from '../core/overrides.js';
@@ -68,7 +75,7 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
             // Guard: artifact_id must be defined in workflow
             if (!artifactDef) {
                 const validIds = Object.keys(wf.artifactDefinitions)
-                    .filter((id) => !wf.artifactDefinitions[id].external)
+                    .filter((id) => !wf.artifactDefinitions[id].unmanaged)
                     .join(', ');
                 return {
                     content: [
@@ -81,13 +88,13 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
                 };
             }
 
-            // Guard: reject external artifact types (should be produced outside artifact_write)
-            if (artifactDef.external) {
+            // Guard: reject unmanaged artifact types (should be produced outside artifact_write)
+            if (artifactDef.unmanaged) {
                 return {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `Artifact "${artifact_id}" 是外部产出类型，不应通过 artifact_write 写入。`,
+                            text: `Artifact "${artifact_id}" 是非托管（unmanaged）产出类型，不应通过 artifact_write 写入。`,
                         },
                     ],
                     isError: true,
@@ -141,7 +148,20 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
             }
 
             // Write the artifact with correct extension
-            const filePath = await writeArtifact(project_name, ctx.number, artifact_id, content, artifactDef, ctx.dir);
+            const writeIoCtx: ArtifactIOContext = {
+                contextDir: ctx.dir,
+                projectDir: ctx.entry.dir,
+                contextLabel: ctx.activeContext,
+            };
+            const filePath = await writeArtifact(
+                project_name,
+                ctx.number,
+                artifact_id,
+                content,
+                artifactDef,
+                ctx.dir,
+                writeIoCtx,
+            );
 
             // Trigger engine event: artifact_written
             const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
@@ -203,6 +223,8 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
             try {
                 let contextNumber: number;
                 let contextDir: string;
+                let contextLabel: string;
+                let projectDir: string;
 
                 if (context) {
                     // Cross-context read: resolve the specified context
@@ -227,15 +249,32 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
                     }
                     contextNumber = resolved.number;
                     contextDir = resolved.dir;
+                    contextLabel = context;
+                    projectDir = entry.dir;
                 } else {
                     // Default: active context
                     const ctx = await resolveActive(project_name);
                     if (isError(ctx)) return ctx;
                     contextNumber = ctx.number;
                     contextDir = ctx.dir;
+                    contextLabel = ctx.activeContext;
+                    projectDir = ctx.entry.dir;
                 }
 
-                const artifactContent = await readArtifact(project_name, contextNumber, artifact_id, contextDir);
+                // Load workflow to get artifact definition for output path resolution
+                const state = await readState(project_name, contextNumber, contextDir);
+                const wf = await loadWorkflow(workflowsDir, state.workflow);
+                const artifactDef = wf.artifactDefinitions[artifact_id];
+                const ioCtx: ArtifactIOContext = { contextDir, projectDir, contextLabel };
+
+                const artifactContent = await readArtifact(
+                    project_name,
+                    contextNumber,
+                    artifact_id,
+                    contextDir,
+                    artifactDef,
+                    ioCtx,
+                );
                 return {
                     content: [
                         {
@@ -272,6 +311,7 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
             let contextNumber: number;
             let contextDir: string;
             let contextLabel: string;
+            let projectDir: string;
 
             if (context) {
                 const entry = await getProject(project_name);
@@ -293,15 +333,28 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
                 contextNumber = resolved.number;
                 contextDir = resolved.dir;
                 contextLabel = context;
+                projectDir = entry.dir;
             } else {
                 const ctx = await resolveActive(project_name);
                 if (isError(ctx)) return ctx;
                 contextNumber = ctx.number;
                 contextDir = ctx.dir;
                 contextLabel = ctx.activeContext;
+                projectDir = ctx.entry.dir;
             }
 
-            const artifacts = await listArtifacts(project_name, contextNumber, contextDir);
+            // Load workflow for artifact definitions and output path resolution
+            const state = await readState(project_name, contextNumber, contextDir);
+            const wf = await loadWorkflow(workflowsDir, state.workflow);
+            const ioCtx: ArtifactIOContext = { contextDir, projectDir, contextLabel };
+
+            const artifacts = await listArtifacts(
+                project_name,
+                contextNumber,
+                contextDir,
+                wf.artifactDefinitions,
+                ioCtx,
+            );
             return {
                 content: [
                     {
@@ -411,6 +464,11 @@ async function handleSequentialWrite(
     }
 
     // Write the step artifact
+    const ioCtx: ArtifactIOContext = {
+        contextDir: ctx.dir,
+        projectDir: ctx.entry.dir,
+        contextLabel: ctx.activeContext,
+    };
     const artifactPath = await writeStepArtifact(
         projectName,
         ctx.number,
@@ -419,6 +477,8 @@ async function handleSequentialWrite(
         content,
         stepDef.format,
         ctx.dir,
+        artifactDef,
+        ioCtx,
     );
 
     // Record step completion (handles rollback if overwriting)
@@ -484,7 +544,12 @@ async function handleFinalStep(
     }
 
     // Write the formal artifact
-    const filePath = await writeArtifact(projectName, ctx.number, artifactId, content, artifactDef, ctx.dir);
+    const ioCtx: ArtifactIOContext = {
+        contextDir: ctx.dir,
+        projectDir: ctx.entry.dir,
+        contextLabel: ctx.activeContext,
+    };
+    const filePath = await writeArtifact(projectName, ctx.number, artifactId, content, artifactDef, ctx.dir, ioCtx);
 
     // Mark as finalized
     await markFinalized(projectName, ctx.number, artifactId, ctx.dir);

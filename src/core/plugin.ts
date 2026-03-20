@@ -283,7 +283,7 @@ export async function loadPlugin(
     // Step 3: Validate (using role IDs for reference checking)
     if (!skipValidation) {
         const roleIds = new Set(Object.keys(roles));
-        const errors = validateWorkflow(definition, roleIds);
+        const errors = validateWorkflow(definition, roleIds, artifactDefinitions);
 
         if (errors.length > 0) {
             throw new PluginValidationError(pluginPath, errors);

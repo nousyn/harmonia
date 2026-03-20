@@ -409,7 +409,7 @@ task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
     },
     "code": {
       "name": "代码实现",
-      "external": true
+      "unmanaged": true
     },
     "test-report": {
       "name": "测试报告",
@@ -421,13 +421,14 @@ task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
 
 #### 产出字段
 
-| 字段       | 类型                       | 必需 | 默认值  | 说明                                           |
-| ---------- | -------------------------- | ---- | ------- | ---------------------------------------------- |
-| `name`     | `string`                   | 是   | —       | 人类可读名称                                   |
-| `format`   | `"md" \| "html" \| "json"` | 否   | `"md"`  | 文件格式                                       |
-| `review`   | `boolean`                  | 否   | `false` | 写入后是否需要用户审批                         |
-| `external` | `boolean`                  | 否   | `false` | 外部产出（如代码），不经 `artifact_write` 管理 |
-| `steps`    | `ArtifactStep[]`           | 否   | —       | 分步写入定义                                   |
+| 字段        | 类型                       | 必需 | 默认值  | 说明                                                           |
+| ----------- | -------------------------- | ---- | ------- | -------------------------------------------------------------- |
+| `name`      | `string`                   | 是   | —       | 人类可读名称                                                   |
+| `format`    | `"md" \| "html" \| "json"` | 否   | `"md"`  | 文件格式                                                       |
+| `review`    | `boolean`                  | 否   | `false` | 写入后是否需要用户审批                                         |
+| `unmanaged` | `boolean`                  | 否   | `false` | 非托管产出（如代码），不经 `artifact_write` 管理               |
+| `output`    | `string`                   | 否   | —       | 输出目录模板，支持 `{global}`、`{project}`、`{context}` 占位符 |
+| `steps`     | `ArtifactStep[]`           | 否   | —       | 分步写入定义                                                   |
 
 #### 步骤字段
 

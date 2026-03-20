@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { writeArtifact, readArtifact, listArtifacts } from '../src/core/artifacts.js';
+import { writeArtifact, readArtifact, listArtifacts, resolveArtifactDir } from '../src/core/artifacts.js';
+import type { ArtifactIOContext } from '../src/core/artifacts.js';
 
 const TEST_PROJECT = 'test-project';
 const ITER = 1;
@@ -90,5 +91,125 @@ describe('artifact management', () => {
 
         const artifacts = await listArtifacts(TEST_PROJECT, ITER, iterDir);
         expect(artifacts.sort()).toEqual(['prd', 'prototype']);
+    });
+});
+
+// ─── resolveArtifactDir Tests ───
+
+describe('resolveArtifactDir', () => {
+    const ioCtx: ArtifactIOContext = {
+        contextDir: '/data/my-project/iter-1',
+        projectDir: '/src/my-project',
+        contextLabel: 'iter-1',
+    };
+
+    it('should return default artifacts dir when output is undefined', () => {
+        const result = resolveArtifactDir(undefined, ioCtx);
+        expect(result).toBe(join('/data/my-project/iter-1', 'artifacts'));
+    });
+
+    it('should resolve {global} to contextDir/artifacts/', () => {
+        const result = resolveArtifactDir('{global}', ioCtx);
+        expect(result).toBe(join('/data/my-project/iter-1', 'artifacts'));
+    });
+
+    it('should resolve {global}/subdir', () => {
+        const result = resolveArtifactDir('{global}/prds', ioCtx);
+        expect(result).toBe(join('/data/my-project/iter-1', 'artifacts') + '/prds');
+    });
+
+    it('should resolve {project} to projectDir/', () => {
+        const result = resolveArtifactDir('{project}', ioCtx);
+        expect(result).toBe('/src/my-project');
+    });
+
+    it('should resolve {project}/subdir', () => {
+        const result = resolveArtifactDir('{project}/docs', ioCtx);
+        expect(result).toBe('/src/my-project/docs');
+    });
+
+    it('should resolve {project}/{context}/subdir', () => {
+        const result = resolveArtifactDir('{project}/{context}/docs', ioCtx);
+        expect(result).toBe('/src/my-project/iter-1/docs');
+    });
+
+    it('should resolve {global}/{context}', () => {
+        const result = resolveArtifactDir('{global}/{context}', ioCtx);
+        expect(result).toBe(join('/data/my-project/iter-1', 'artifacts') + '/iter-1');
+    });
+
+    it('should handle patch context', () => {
+        const patchCtx: ArtifactIOContext = {
+            contextDir: '/data/my-project/patch-2',
+            projectDir: '/src/my-project',
+            contextLabel: 'patch-2',
+        };
+        const result = resolveArtifactDir('{project}/{context}/docs', patchCtx);
+        expect(result).toBe('/src/my-project/patch-2/docs');
+    });
+});
+
+// ─── Output Path Write/Read Integration Tests ───
+
+describe('artifact I/O with output paths', () => {
+    let harmoniaHome: string;
+    let iterDir: string;
+    let projectDir: string;
+
+    beforeEach(async () => {
+        harmoniaHome = await mkdtemp(join(tmpdir(), 'harmonia-output-test-'));
+        iterDir = join(harmoniaHome, 'iter-1');
+        projectDir = join(harmoniaHome, 'project');
+        await mkdir(join(iterDir, 'artifacts'), { recursive: true });
+        await mkdir(projectDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+        await rm(harmoniaHome, { recursive: true, force: true });
+    });
+
+    const makeIoCtx = (home: string): ArtifactIOContext => ({
+        contextDir: join(home, 'iter-1'),
+        projectDir: join(home, 'project'),
+        contextLabel: 'iter-1',
+    });
+
+    it('should write to {project}/docs and read back', async () => {
+        const ioCtx = makeIoCtx(harmoniaHome);
+        const artifactDef = { name: 'Spec', output: '{project}/docs' };
+        const content = '# Specification';
+
+        const filePath = await writeArtifact(TEST_PROJECT, ITER, 'spec', content, artifactDef, iterDir, ioCtx);
+        expect(filePath).toBe(join(projectDir, 'docs', 'spec.md'));
+
+        const result = await readArtifact(TEST_PROJECT, ITER, 'spec', iterDir, artifactDef, ioCtx);
+        expect(result).toBe(content);
+    });
+
+    it('should write to {global}/prds subdirectory', async () => {
+        const ioCtx = makeIoCtx(harmoniaHome);
+        const artifactDef = { name: 'PRD', output: '{global}/prds' };
+        const content = '# PRD';
+
+        const filePath = await writeArtifact(TEST_PROJECT, ITER, 'prd', content, artifactDef, iterDir, ioCtx);
+        expect(filePath).toBe(join(iterDir, 'artifacts', 'prds', 'prd.md'));
+
+        const result = await readArtifact(TEST_PROJECT, ITER, 'prd', iterDir, artifactDef, ioCtx);
+        expect(result).toBe(content);
+    });
+
+    it('should list artifacts across different output paths using definitions', async () => {
+        const ioCtx = makeIoCtx(harmoniaHome);
+        const defs = {
+            prd: { name: 'PRD', output: '{global}/prds' },
+            spec: { name: 'Spec', output: '{project}/docs' },
+            missing: { name: 'Missing' }, // default path, not written
+        };
+
+        await writeArtifact(TEST_PROJECT, ITER, 'prd', '# PRD', defs.prd, iterDir, ioCtx);
+        await writeArtifact(TEST_PROJECT, ITER, 'spec', '# Spec', defs.spec, iterDir, ioCtx);
+
+        const found = await listArtifacts(TEST_PROJECT, ITER, iterDir, defs, ioCtx);
+        expect(found.sort()).toEqual(['prd', 'spec']);
     });
 });

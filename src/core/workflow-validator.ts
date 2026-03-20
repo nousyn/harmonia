@@ -12,7 +12,14 @@
  * 7. Coordinator validity (definition.coordinator must exist in roles)
  */
 
-import type { WorkflowDefinition, WorkflowNode, GotoTarget, FailureHandler, ValidationError } from './types.js';
+import type {
+    WorkflowDefinition,
+    WorkflowNode,
+    GotoTarget,
+    FailureHandler,
+    ValidationError,
+    ArtifactDefinition,
+} from './types.js';
 
 /** Represents a goto edge for cycle detection */
 interface GotoEdge {
@@ -55,7 +62,11 @@ function collectSubtreeIds(node: WorkflowNode, ids: Set<string>): void {
  * @param availableRoles - Set of role IDs available in the role registry
  * @returns Array of validation errors (empty = valid)
  */
-export function validateWorkflow(definition: WorkflowDefinition, availableRoles: Set<string>): ValidationError[] {
+export function validateWorkflow(
+    definition: WorkflowDefinition,
+    availableRoles: Set<string>,
+    artifactDefinitions: Record<string, ArtifactDefinition> = {},
+): ValidationError[] {
     const errors: ValidationError[] = [];
     const allIds = new Map<string, string>(); // id → location description
     const floatingNodeIds = new Set<string>();
@@ -133,6 +144,9 @@ export function validateWorkflow(definition: WorkflowDefinition, availableRoles:
             message: `Coordinator role "${definition.coordinator}" is not in the role registry`,
         });
     }
+
+    // ── 8. Artifact definition validation ──
+    validateArtifactDefinitions(artifactDefinitions, errors);
 
     return errors;
 }
@@ -449,5 +463,61 @@ function validateRoleReferences(node: WorkflowNode, availableRoles: Set<string>,
                 validateRoleReferences(node.fail as WorkflowNode, availableRoles, errors);
             }
             break;
+    }
+}
+
+// ─── Artifact Definition Validation ───
+
+const KNOWN_PLACEHOLDERS = new Set(['{global}', '{project}', '{context}']);
+const PLACEHOLDER_RE = /\{[^}]+\}/g;
+
+/**
+ * Validate artifact definitions — checks `output` field format.
+ *
+ * Rules:
+ * 1. `output` must start with `{global}` or `{project}`
+ * 2. `{context}` must appear after `{global}` or `{project}`, never standalone as prefix
+ * 3. No unknown placeholders
+ * 4. No `..` in paths (prevent directory traversal)
+ */
+function validateArtifactDefinitions(
+    artifactDefinitions: Record<string, ArtifactDefinition>,
+    errors: ValidationError[],
+): void {
+    for (const [artifactId, def] of Object.entries(artifactDefinitions)) {
+        if (!def.output) continue;
+
+        const output = def.output;
+
+        // Rule 4: no directory traversal
+        if (output.includes('..')) {
+            errors.push({
+                type: 'invalid_artifact_output',
+                message: `Artifact "${artifactId}": output path must not contain ".." (directory traversal)`,
+            });
+            continue;
+        }
+
+        // Rule 1: must start with {global} or {project}
+        if (!output.startsWith('{global}') && !output.startsWith('{project}')) {
+            errors.push({
+                type: 'invalid_artifact_output',
+                message: `Artifact "${artifactId}": output must start with {global} or {project}, got "${output}"`,
+            });
+            continue;
+        }
+
+        // Rule 3: no unknown placeholders
+        const matches = output.match(PLACEHOLDER_RE);
+        if (matches) {
+            for (const m of matches) {
+                if (!KNOWN_PLACEHOLDERS.has(m)) {
+                    errors.push({
+                        type: 'invalid_artifact_output',
+                        message: `Artifact "${artifactId}": unknown placeholder "${m}" in output "${output}"`,
+                    });
+                }
+            }
+        }
     }
 }

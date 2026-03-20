@@ -9,6 +9,7 @@ import type {
     GateNode,
     GotoTarget,
     ValidationError,
+    ArtifactDefinition,
 } from '../src/core/types.js';
 
 // ─── Helpers ───
@@ -447,6 +448,128 @@ describe('workflow-validator', () => {
             const errors = validateWorkflow(def, DEFAULT_ROLES);
             // Should have: duplicate_id, missing_fail_strategy, invalid_role_ref x2, invalid_coordinator
             expect(errors.length).toBeGreaterThanOrEqual(4);
+        });
+    });
+
+    // ─── Artifact Definition Validation ───
+
+    describe('artifact definition validation', () => {
+        const outputErrors = (errors: ValidationError[]) => errors.filter((e) => e.type === 'invalid_artifact_output');
+
+        it('should pass when no artifact definitions are provided', () => {
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass when artifact definitions have no output field', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md' },
+                code: { format: 'ts', unmanaged: true },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass with valid {global} output', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '{global}' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass with valid {project} output', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                code: { format: 'ts', output: '{project}' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass with {global}/{context} output', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '{global}/{context}' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass with {project}/{context} output', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                code: { format: 'ts', output: '{project}/{context}' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass with {global}/subdir output', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '{global}/reports' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            expect(outputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should reject output not starting with {global} or {project}', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '{context}/artifacts' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            const artErrors = outputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('must start with {global} or {project}');
+        });
+
+        it('should reject output starting with a bare path', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '/tmp/output' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            const artErrors = outputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('must start with {global} or {project}');
+        });
+
+        it('should reject output containing ".."', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '{global}/../escape' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            const artErrors = outputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('..');
+        });
+
+        it('should reject unknown placeholders', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                spec: { format: 'md', output: '{global}/{unknown}' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            const artErrors = outputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('unknown placeholder');
+            expect(artErrors[0].message).toContain('{unknown}');
+        });
+
+        it('should report errors for multiple invalid artifact definitions', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                bad1: { format: 'md', output: 'no-prefix' },
+                bad2: { format: 'ts', output: '{global}/../escape' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            const artErrors = outputErrors(errors);
+            expect(artErrors).toHaveLength(2);
+        });
+
+        it('should not flag valid definitions alongside invalid ones', () => {
+            const defs: Record<string, ArtifactDefinition> = {
+                good: { format: 'md', output: '{global}/{context}' },
+                bad: { format: 'ts', output: '{wrong}/path' },
+            };
+            const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
+            const artErrors = outputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('bad');
         });
     });
 });

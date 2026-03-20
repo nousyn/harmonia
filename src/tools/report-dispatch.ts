@@ -30,6 +30,7 @@ import {
 import { resolveActive, isError } from './utils.js';
 import { loadWorkflowForContext, processWorkflowEvent, formatNextAction, findTaskNode } from './engine-helpers.js';
 import { readArtifact, listArtifacts } from '../core/artifacts.js';
+import type { ArtifactIOContext } from '../core/artifacts.js';
 import { readState } from '../core/state.js';
 import type { AgentType, DispatchRecord, SessionRecord, ActionContext, TaskNode } from '../core/types.js';
 
@@ -173,9 +174,35 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                                             pluginConfig: wf.config,
                                             workflowState: currentState,
                                             artifacts: {
-                                                read: (artifactId: string) =>
-                                                    readArtifact(project_name, ctx.number, artifactId, ctx.dir),
-                                                list: () => listArtifacts(project_name, ctx.number, ctx.dir),
+                                                read: (artifactId: string) => {
+                                                    const reportIoCtx: ArtifactIOContext = {
+                                                        contextDir: ctx.dir,
+                                                        projectDir: ctx.entry.dir,
+                                                        contextLabel: ctx.activeContext,
+                                                    };
+                                                    return readArtifact(
+                                                        project_name,
+                                                        ctx.number,
+                                                        artifactId,
+                                                        ctx.dir,
+                                                        wf.artifactDefinitions[artifactId],
+                                                        reportIoCtx,
+                                                    );
+                                                },
+                                                list: () => {
+                                                    const reportIoCtx: ArtifactIOContext = {
+                                                        contextDir: ctx.dir,
+                                                        projectDir: ctx.entry.dir,
+                                                        contextLabel: ctx.activeContext,
+                                                    };
+                                                    return listArtifacts(
+                                                        project_name,
+                                                        ctx.number,
+                                                        ctx.dir,
+                                                        wf.artifactDefinitions,
+                                                        reportIoCtx,
+                                                    );
+                                                },
                                             },
                                         };
                                         for (const actionName of targetNode.afterComplete.actions) {

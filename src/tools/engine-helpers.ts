@@ -9,6 +9,7 @@
 import { readState, persistState } from '../core/state.js';
 import { loadWorkflow } from '../core/plugin.js';
 import { listArtifacts, readArtifact } from '../core/artifacts.js';
+import type { ArtifactIOContext } from '../core/artifacts.js';
 import { readReviews } from '../core/reviews.js';
 import { computeNextAction, startWorkflow } from '../core/workflow-engine.js';
 import type { EngineContext, GateContext } from '../core/workflow-engine.js';
@@ -83,17 +84,19 @@ async function buildEngineContext(
     iteration: number,
     contextDir: string,
     wf: WorkflowPlugin,
+    ioCtx: ArtifactIOContext,
 ): Promise<EngineContext> {
     // Load current artifacts and reviews for gate evaluation
-    const artifactList = await listArtifacts(projectName, iteration, contextDir);
+    const artifactList = await listArtifacts(projectName, iteration, contextDir, wf.artifactDefinitions, ioCtx);
     const existingArtifacts = new Set(artifactList);
     const reviews = await readReviews(projectName, iteration, contextDir);
 
     // Pre-load artifact content for field access (JSON artifacts only)
     const artifactCache = new Map<string, unknown>();
     for (const artifactId of artifactList) {
+        const artifactDef = wf.artifactDefinitions[artifactId];
         try {
-            const content = await readArtifact(projectName, iteration, artifactId, contextDir);
+            const content = await readArtifact(projectName, iteration, artifactId, contextDir, artifactDef, ioCtx);
             // Try to parse as JSON; if it fails, store raw string
             try {
                 artifactCache.set(artifactId, JSON.parse(content));
@@ -186,7 +189,12 @@ export async function processWorkflowEvent(
 ): Promise<EngineResult> {
     const state = await readState(projectName, ctx.number, ctx.dir);
     const wf = await loadWorkflow(workflowsDir, state.workflow);
-    const engineCtx = await buildEngineContext(projectName, ctx.number, ctx.dir, wf);
+    const ioCtx: ArtifactIOContext = {
+        contextDir: ctx.dir,
+        projectDir: ctx.entry.dir,
+        contextLabel: ctx.activeContext,
+    };
+    const engineCtx = await buildEngineContext(projectName, ctx.number, ctx.dir, wf, ioCtx);
 
     const result = computeNextAction(wf.definition, state, event, engineCtx);
 

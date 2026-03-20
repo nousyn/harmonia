@@ -172,8 +172,18 @@ export interface ArtifactDefinition {
     format?: 'md' | 'html' | 'json';
     /** Whether this artifact requires user review/approval */
     review?: boolean;
-    /** External output — not managed by artifact_write (e.g. code) */
-    external?: boolean;
+    /** Unmanaged output — not managed by artifact_write (e.g. code written directly by agent) */
+    unmanaged?: boolean;
+    /**
+     * Output directory template using placeholders:
+     * - `{global}` → `<data_dir>/<project>/iter-N/artifacts/`
+     * - `{project}` → `<projectDir>/`
+     * - `{context}` → `iter-N` or `patch-N` (must follow `{global}` or `{project}`)
+     *
+     * When undefined, defaults to `{global}` behavior.
+     * File name is always `<artifactId>.<ext>` — output only controls the directory.
+     */
+    output?: string;
     /** Sequential steps — when defined, artifact_write requires step parameter */
     steps?: ArtifactStepDefinition[];
 }
@@ -607,6 +617,7 @@ export interface ValidationError {
         | 'invalid_floating_ref'
         | 'invalid_role_ref'
         | 'invalid_coordinator'
+        | 'invalid_artifact_output'
         | 'other';
     /** Human-readable error message */
     message: string;

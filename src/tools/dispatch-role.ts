@@ -26,7 +26,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { readArtifact, listArtifacts } from '../core/artifacts.js';
+import { readArtifact, listArtifacts, resolveArtifactDir } from '../core/artifacts.js';
+import type { ArtifactIOContext } from '../core/artifacts.js';
 import { getMergedOverrides, resolveRoleConfig } from '../core/overrides.js';
 import { createDispatch, findIdleSession, hasRunningDispatch } from '../core/dispatch.js';
 import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
@@ -166,7 +167,7 @@ async function buildArtifactRequirements(
 
     for (const artifactId of roleArtifactIds) {
         const artifactDef = artifactDefs[artifactId];
-        if (!artifactDef || artifactDef.external) continue;
+        if (!artifactDef || artifactDef.unmanaged) continue;
 
         // Load main schema
         const schema = await loadArtifactSchema(workflowsDir, workflowName, artifactId);
@@ -301,6 +302,13 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
 
                 const targetNodeId = targetNode.id;
 
+                // Build I/O context for artifact path resolution
+                const ioCtx: ArtifactIOContext = {
+                    contextDir: ctx.dir,
+                    projectDir: ctx.entry.dir,
+                    contextLabel: ctx.activeContext,
+                };
+
                 // Get merged overrides
                 const overrides = await getMergedOverrides(project_name);
 
@@ -328,8 +336,16 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                             workflowState: state,
                             artifacts: {
                                 read: (artifactId: string) =>
-                                    readArtifact(project_name, ctx.number, artifactId, ctx.dir),
-                                list: () => listArtifacts(project_name, ctx.number, ctx.dir),
+                                    readArtifact(
+                                        project_name,
+                                        ctx.number,
+                                        artifactId,
+                                        ctx.dir,
+                                        wf.artifactDefinitions[artifactId],
+                                        ioCtx,
+                                    ),
+                                list: () =>
+                                    listArtifacts(project_name, ctx.number, ctx.dir, wf.artifactDefinitions, ioCtx),
                             },
                         };
                         for (const actionName of targetNode.beforeDispatch.actions) {
@@ -361,9 +377,16 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 const missingArtifacts: string[] = [];
                 for (const artifactId of artifactIds) {
                     const artifactDef = wf.artifactDefinitions[artifactId];
-                    if (artifactDef?.external) continue; // external not stored
+                    if (artifactDef?.unmanaged) continue; // unmanaged not stored via artifact_write
                     try {
-                        inputArtifacts[artifactId] = await readArtifact(project_name, ctx.number, artifactId, ctx.dir);
+                        inputArtifacts[artifactId] = await readArtifact(
+                            project_name,
+                            ctx.number,
+                            artifactId,
+                            ctx.dir,
+                            artifactDef,
+                            ioCtx,
+                        );
                     } catch {
                         missingArtifacts.push(artifactId);
                     }
@@ -448,9 +471,30 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     `- Project: ${project_name}`,
                     `- Directory: ${state.projectDir}`,
                     `- Workflow: ${state.workflow}`,
+                ];
+
+                // Inject unmanaged artifact output path hints
+                const unmanagedHints: string[] = [];
+                for (const cap of roleDef.frontmatter.capabilities ?? []) {
+                    if (!cap.artifact) continue;
+                    const def = wf.artifactDefinitions[cap.artifact];
+                    if (!def?.unmanaged) continue;
+                    const outputDir = resolveArtifactDir(def.output, ioCtx);
+                    unmanagedHints.push(`- **${cap.artifact}** (${def.name}): \`${outputDir}\``);
+                }
+                if (unmanagedHints.length > 0) {
+                    summary.push(
+                        ``,
+                        `## Unmanaged Artifact Output Paths`,
+                        `以下 artifact 由 agent 直接输出（非 artifact_write），请将产出写入对应路径:`,
+                        ...unmanagedHints,
+                    );
+                }
+
+                summary.push(
                     ``,
                     `## Input Artifacts (${Object.keys(inputArtifacts).length}${missingArtifacts.length > 0 ? `, ${missingArtifacts.length} missing` : ''})`,
-                ];
+                );
 
                 for (const [artifactId, content] of Object.entries(inputArtifacts)) {
                     summary.push(``, `### ${artifactId}`, ``, content);
