@@ -463,8 +463,8 @@ describe('workflow-validator', () => {
 
         it('should pass when artifact definitions have no output field', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md' },
-                code: { format: 'ts', unmanaged: true },
+                spec: { name: 'Spec', format: 'md' },
+                code: { name: 'Code', format: 'json', unmanaged: true },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -472,7 +472,7 @@ describe('workflow-validator', () => {
 
         it('should pass with valid {global} output', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '{global}' },
+                spec: { name: 'Spec', format: 'md', output: '{global}' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -480,7 +480,7 @@ describe('workflow-validator', () => {
 
         it('should pass with valid {project} output', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                code: { format: 'ts', output: '{project}' },
+                code: { name: 'Code', format: 'json', output: '{project}' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -488,7 +488,7 @@ describe('workflow-validator', () => {
 
         it('should pass with {global}/{context} output', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '{global}/{context}' },
+                spec: { name: 'Spec', format: 'md', output: '{global}/{context}' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -496,7 +496,7 @@ describe('workflow-validator', () => {
 
         it('should pass with {project}/{context} output', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                code: { format: 'ts', output: '{project}/{context}' },
+                code: { name: 'Code', format: 'json', output: '{project}/{context}' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -504,7 +504,7 @@ describe('workflow-validator', () => {
 
         it('should pass with {global}/subdir output', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '{global}/reports' },
+                spec: { name: 'Spec', format: 'md', output: '{global}/reports' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -512,7 +512,7 @@ describe('workflow-validator', () => {
 
         it('should reject output not starting with {global} or {project}', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '{context}/artifacts' },
+                spec: { name: 'Spec', format: 'md', output: '{context}/artifacts' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             const artErrors = outputErrors(errors);
@@ -522,7 +522,7 @@ describe('workflow-validator', () => {
 
         it('should reject output starting with a bare path', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '/tmp/output' },
+                spec: { name: 'Spec', format: 'md', output: '/tmp/output' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             const artErrors = outputErrors(errors);
@@ -532,7 +532,7 @@ describe('workflow-validator', () => {
 
         it('should reject output containing ".."', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '{global}/../escape' },
+                spec: { name: 'Spec', format: 'md', output: '{global}/../escape' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             const artErrors = outputErrors(errors);
@@ -542,7 +542,7 @@ describe('workflow-validator', () => {
 
         it('should reject unknown placeholders', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                spec: { format: 'md', output: '{global}/{unknown}' },
+                spec: { name: 'Spec', format: 'md', output: '{global}/{unknown}' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             const artErrors = outputErrors(errors);
@@ -553,8 +553,8 @@ describe('workflow-validator', () => {
 
         it('should report errors for multiple invalid artifact definitions', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                bad1: { format: 'md', output: 'no-prefix' },
-                bad2: { format: 'ts', output: '{global}/../escape' },
+                bad1: { name: 'Bad1', format: 'md', output: 'no-prefix' },
+                bad2: { name: 'Bad2', format: 'md', output: '{global}/../escape' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             const artErrors = outputErrors(errors);
@@ -563,8 +563,8 @@ describe('workflow-validator', () => {
 
         it('should not flag valid definitions alongside invalid ones', () => {
             const defs: Record<string, ArtifactDefinition> = {
-                good: { format: 'md', output: '{global}/{context}' },
-                bad: { format: 'ts', output: '{wrong}/path' },
+                good: { name: 'Good', format: 'md', output: '{global}/{context}' },
+                bad: { name: 'Bad', format: 'md', output: '{wrong}/path' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             const artErrors = outputErrors(errors);

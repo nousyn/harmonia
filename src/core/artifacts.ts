@@ -1,9 +1,11 @@
 /**
- * Artifact management — read/write files under <context_dir>/artifacts/
+ * Artifact management — read/write files to resolved output directories.
  *
- * context_dir is typically iter-<n>/ or patch-<n>/ under the project data dir.
+ * All path resolution goes through `ArtifactIOContext`:
+ * - Default: `<contextDir>/artifacts/`
+ * - Custom: resolved via `ArtifactDefinition.output` template
  *
- * Supports both .md and .html files based on artifact format configuration.
+ * Supports .md, .html, and .json files based on artifact format configuration.
  * Also supports step artifact files for sequential mode (e.g. prd.requirements.json).
  */
 
@@ -49,20 +51,6 @@ export function resolveArtifactDir(output: string | undefined, ioCtx: ArtifactIO
 }
 
 /**
- * Resolve the artifact directory — uses output path if ioCtx is provided, otherwise falls back to contextDir.
- */
-function resolveDir(
-    artifactDef: ArtifactDefinition | undefined,
-    ioCtx: ArtifactIOContext | undefined,
-    contextDir: string | undefined,
-): string {
-    if (ioCtx) {
-        return resolveArtifactDir(artifactDef?.output, ioCtx);
-    }
-    return artifactsDir(contextDir!);
-}
-
-/**
  * Get file extension for an artifact based on its definition.
  */
 function getArtifactExtension(artifactDef?: ArtifactDefinition): string {
@@ -71,20 +59,14 @@ function getArtifactExtension(artifactDef?: ArtifactDefinition): string {
 
 /**
  * Write an artifact to the resolved output directory.
- *
- * When `ioCtx` is provided, uses `resolveArtifactDir` to determine the directory
- * based on the artifact's `output` field. Otherwise falls back to `<contextDir>/artifacts/`.
  */
 export async function writeArtifact(
-    projectName: string,
-    iteration: number,
     artifactId: string,
     content: string,
+    ioCtx: ArtifactIOContext,
     artifactDef?: ArtifactDefinition,
-    contextDir?: string,
-    ioCtx?: ArtifactIOContext,
 ): Promise<string> {
-    const dir = resolveDir(artifactDef, ioCtx, contextDir);
+    const dir = resolveArtifactDir(artifactDef?.output, ioCtx);
     await mkdir(dir, { recursive: true });
     const ext = getArtifactExtension(artifactDef);
     const filePath = join(dir, `${artifactId}${ext}`);
@@ -99,14 +81,11 @@ export async function writeArtifact(
  * before falling back to probing all extensions.
  */
 export async function readArtifact(
-    projectName: string,
-    iteration: number,
     artifactId: string,
-    contextDir?: string,
+    ioCtx: ArtifactIOContext,
     artifactDef?: ArtifactDefinition,
-    ioCtx?: ArtifactIOContext,
 ): Promise<string> {
-    const dir = resolveDir(artifactDef, ioCtx, contextDir);
+    const dir = resolveArtifactDir(artifactDef?.output, ioCtx);
 
     // If we know the format, try it first for a fast path
     if (artifactDef?.format) {
@@ -132,21 +111,18 @@ export async function readArtifact(
 /**
  * List artifacts that exist on disk.
  *
- * When `artifactDefinitions` and `ioCtx` are provided, groups definitions by their
- * resolved output directory and does one `readdir` per unique directory, then matches
- * artifact IDs in memory. This avoids N×3 `fs.access` calls.
+ * Groups definitions by their resolved output directory and does one `readdir`
+ * per unique directory, then matches artifact IDs in memory.
  *
- * Falls back to scanning `<contextDir>/artifacts/` when no definitions are provided.
+ * When `artifactDefinitions` is empty, falls back to scanning
+ * `<ioCtx.contextDir>/artifacts/`.
  */
 export async function listArtifacts(
-    projectName: string,
-    iteration: number,
-    contextDir?: string,
-    artifactDefinitions?: Record<string, ArtifactDefinition>,
-    ioCtx?: ArtifactIOContext,
+    ioCtx: ArtifactIOContext,
+    artifactDefinitions: Record<string, ArtifactDefinition>,
 ): Promise<string[]> {
-    // New path: definition-based grouping
-    if (artifactDefinitions && ioCtx && Object.keys(artifactDefinitions).length > 0) {
+    // Definition-based grouping
+    if (Object.keys(artifactDefinitions).length > 0) {
         // Group artifact IDs by resolved directory
         const dirToIds = new Map<string, string[]>();
         for (const [id, def] of Object.entries(artifactDefinitions)) {
@@ -185,8 +161,8 @@ export async function listArtifacts(
         return found;
     }
 
-    // Legacy path: scan default artifacts directory
-    const dir = artifactsDir(contextDir!);
+    // Fallback: scan default artifacts directory
+    const dir = artifactsDir(ioCtx.contextDir);
     try {
         const files = await readdir(dir);
         return files
@@ -208,17 +184,14 @@ export async function listArtifacts(
  * @returns The file path written
  */
 export async function writeStepArtifact(
-    projectName: string,
-    iteration: number,
     artifactId: string,
     stepId: string,
     content: string,
     format: 'json' | 'md',
-    contextDir?: string,
+    ioCtx: ArtifactIOContext,
     artifactDef?: ArtifactDefinition,
-    ioCtx?: ArtifactIOContext,
 ): Promise<string> {
-    const dir = resolveDir(artifactDef, ioCtx, contextDir);
+    const dir = resolveArtifactDir(artifactDef?.output, ioCtx);
     await mkdir(dir, { recursive: true });
     const ext = format === 'json' ? '.json' : '.md';
     const filePath = join(dir, `${artifactId}.${stepId}${ext}`);
@@ -231,15 +204,12 @@ export async function writeStepArtifact(
  * Tries .json first, then .md.
  */
 export async function readStepArtifact(
-    projectName: string,
-    iteration: number,
     artifactId: string,
     stepId: string,
-    contextDir?: string,
+    ioCtx: ArtifactIOContext,
     artifactDef?: ArtifactDefinition,
-    ioCtx?: ArtifactIOContext,
 ): Promise<string> {
-    const dir = resolveDir(artifactDef, ioCtx, contextDir);
+    const dir = resolveArtifactDir(artifactDef?.output, ioCtx);
 
     for (const ext of ['.json', '.md']) {
         try {

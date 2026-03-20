@@ -87,7 +87,7 @@ async function buildEngineContext(
     ioCtx: ArtifactIOContext,
 ): Promise<EngineContext> {
     // Load current artifacts and reviews for gate evaluation
-    const artifactList = await listArtifacts(projectName, iteration, contextDir, wf.artifactDefinitions, ioCtx);
+    const artifactList = await listArtifacts(ioCtx, wf.artifactDefinitions);
     const existingArtifacts = new Set(artifactList);
     const reviews = await readReviews(projectName, iteration, contextDir);
 
@@ -96,7 +96,7 @@ async function buildEngineContext(
     for (const artifactId of artifactList) {
         const artifactDef = wf.artifactDefinitions[artifactId];
         try {
-            const content = await readArtifact(projectName, iteration, artifactId, contextDir, artifactDef, ioCtx);
+            const content = await readArtifact(artifactId, ioCtx, artifactDef);
             // Try to parse as JSON; if it fails, store raw string
             try {
                 artifactCache.set(artifactId, JSON.parse(content));

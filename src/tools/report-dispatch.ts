@@ -165,6 +165,11 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                                         hookInjections.push(...targetNode.afterComplete.inject);
                                     }
                                     if (targetNode.afterComplete.actions && wf.actions) {
+                                        const reportIoCtx: ArtifactIOContext = {
+                                            contextDir: ctx.dir,
+                                            projectDir: ctx.entry.dir,
+                                            contextLabel: ctx.activeContext,
+                                        };
                                         const nodeState = currentState.nodes[dispatch.nodeId];
                                         const actionCtx: ActionContext = {
                                             nodeId: dispatch.nodeId,
@@ -174,35 +179,13 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                                             pluginConfig: wf.config,
                                             workflowState: currentState,
                                             artifacts: {
-                                                read: (artifactId: string) => {
-                                                    const reportIoCtx: ArtifactIOContext = {
-                                                        contextDir: ctx.dir,
-                                                        projectDir: ctx.entry.dir,
-                                                        contextLabel: ctx.activeContext,
-                                                    };
-                                                    return readArtifact(
-                                                        project_name,
-                                                        ctx.number,
+                                                read: (artifactId: string) =>
+                                                    readArtifact(
                                                         artifactId,
-                                                        ctx.dir,
+                                                        reportIoCtx,
                                                         wf.artifactDefinitions[artifactId],
-                                                        reportIoCtx,
-                                                    );
-                                                },
-                                                list: () => {
-                                                    const reportIoCtx: ArtifactIOContext = {
-                                                        contextDir: ctx.dir,
-                                                        projectDir: ctx.entry.dir,
-                                                        contextLabel: ctx.activeContext,
-                                                    };
-                                                    return listArtifacts(
-                                                        project_name,
-                                                        ctx.number,
-                                                        ctx.dir,
-                                                        wf.artifactDefinitions,
-                                                        reportIoCtx,
-                                                    );
-                                                },
+                                                    ),
+                                                list: () => listArtifacts(reportIoCtx, wf.artifactDefinitions),
                                             },
                                         };
                                         for (const actionName of targetNode.afterComplete.actions) {

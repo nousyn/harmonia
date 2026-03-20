@@ -17,13 +17,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import {
-    writeArtifact,
-    readArtifact,
-    listArtifacts,
-    writeStepArtifact,
-    resolveArtifactDir,
-} from '../core/artifacts.js';
+import { writeArtifact, readArtifact, listArtifacts, writeStepArtifact } from '../core/artifacts.js';
 import type { ArtifactIOContext } from '../core/artifacts.js';
 import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/plugin.js';
@@ -153,15 +147,7 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
                 projectDir: ctx.entry.dir,
                 contextLabel: ctx.activeContext,
             };
-            const filePath = await writeArtifact(
-                project_name,
-                ctx.number,
-                artifact_id,
-                content,
-                artifactDef,
-                ctx.dir,
-                writeIoCtx,
-            );
+            const filePath = await writeArtifact(artifact_id, content, writeIoCtx, artifactDef);
 
             // Trigger engine event: artifact_written
             const engineResult = await processWorkflowEvent(workflowsDir, project_name, ctx, {
@@ -267,14 +253,7 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
                 const artifactDef = wf.artifactDefinitions[artifact_id];
                 const ioCtx: ArtifactIOContext = { contextDir, projectDir, contextLabel };
 
-                const artifactContent = await readArtifact(
-                    project_name,
-                    contextNumber,
-                    artifact_id,
-                    contextDir,
-                    artifactDef,
-                    ioCtx,
-                );
+                const artifactContent = await readArtifact(artifact_id, ioCtx, artifactDef);
                 return {
                     content: [
                         {
@@ -348,13 +327,7 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
             const wf = await loadWorkflow(workflowsDir, state.workflow);
             const ioCtx: ArtifactIOContext = { contextDir, projectDir, contextLabel };
 
-            const artifacts = await listArtifacts(
-                project_name,
-                contextNumber,
-                contextDir,
-                wf.artifactDefinitions,
-                ioCtx,
-            );
+            const artifacts = await listArtifacts(ioCtx, wf.artifactDefinitions);
             return {
                 content: [
                     {
@@ -469,17 +442,7 @@ async function handleSequentialWrite(
         projectDir: ctx.entry.dir,
         contextLabel: ctx.activeContext,
     };
-    const artifactPath = await writeStepArtifact(
-        projectName,
-        ctx.number,
-        artifactId,
-        step,
-        content,
-        stepDef.format,
-        ctx.dir,
-        artifactDef,
-        ioCtx,
-    );
+    const artifactPath = await writeStepArtifact(artifactId, step, content, stepDef.format, ioCtx, artifactDef);
 
     // Record step completion (handles rollback if overwriting)
     await recordStepCompletion(projectName, ctx.number, artifactId, step, artifactPath, stepIds, ctx.dir);
@@ -549,7 +512,7 @@ async function handleFinalStep(
         projectDir: ctx.entry.dir,
         contextLabel: ctx.activeContext,
     };
-    const filePath = await writeArtifact(projectName, ctx.number, artifactId, content, artifactDef, ctx.dir, ioCtx);
+    const filePath = await writeArtifact(artifactId, content, ioCtx, artifactDef);
 
     // Mark as finalized
     await markFinalized(projectName, ctx.number, artifactId, ctx.dir);

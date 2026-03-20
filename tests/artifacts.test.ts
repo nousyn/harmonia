@@ -11,12 +11,18 @@ const ITER = 1;
 describe('artifact management', () => {
     let harmoniaHome: string;
     let iterDir: string;
+    let ioCtx: ArtifactIOContext;
 
     beforeEach(async () => {
         harmoniaHome = await mkdtemp(join(tmpdir(), 'harmonia-artifacts-test-'));
         iterDir = join(harmoniaHome, TEST_PROJECT, `iter-${ITER}`);
         // Create the iteration artifacts dir (normally done by startIteration)
         await mkdir(join(iterDir, 'artifacts'), { recursive: true });
+        ioCtx = {
+            contextDir: iterDir,
+            projectDir: join(harmoniaHome, TEST_PROJECT),
+            contextLabel: `iter-${ITER}`,
+        };
     });
 
     afterEach(async () => {
@@ -25,71 +31,59 @@ describe('artifact management', () => {
 
     it('should write and read an artifact', async () => {
         const content = '# PRD\n\nThis is the product requirements document.';
-        await writeArtifact(TEST_PROJECT, ITER, 'prd', content, undefined, iterDir);
-        const result = await readArtifact(TEST_PROJECT, ITER, 'prd', iterDir);
+        await writeArtifact('prd', content, ioCtx);
+        const result = await readArtifact('prd', ioCtx);
 
         expect(result).toBe(content);
     });
 
     it('should list artifacts', async () => {
-        await writeArtifact(TEST_PROJECT, ITER, 'prd', '# PRD', undefined, iterDir);
-        await writeArtifact(TEST_PROJECT, ITER, 'user-stories', '# User Stories', undefined, iterDir);
+        await writeArtifact('prd', '# PRD', ioCtx);
+        await writeArtifact('user-stories', '# User Stories', ioCtx);
 
-        const artifacts = await listArtifacts(TEST_PROJECT, ITER, iterDir);
+        const artifacts = await listArtifacts(ioCtx, {});
         expect(artifacts.sort()).toEqual(['prd', 'user-stories']);
     });
 
     it('should return empty list when no artifacts exist', async () => {
-        const artifacts = await listArtifacts(TEST_PROJECT, ITER, iterDir);
+        const artifacts = await listArtifacts(ioCtx, {});
         expect(artifacts).toEqual([]);
     });
 
     it('should overwrite existing artifact', async () => {
-        await writeArtifact(TEST_PROJECT, ITER, 'prd', 'v1', undefined, iterDir);
-        await writeArtifact(TEST_PROJECT, ITER, 'prd', 'v2', undefined, iterDir);
-        const result = await readArtifact(TEST_PROJECT, ITER, 'prd', iterDir);
+        await writeArtifact('prd', 'v1', ioCtx);
+        await writeArtifact('prd', 'v2', ioCtx);
+        const result = await readArtifact('prd', ioCtx);
 
         expect(result).toBe('v2');
     });
 
     it('should throw when reading non-existent artifact', async () => {
-        await expect(readArtifact(TEST_PROJECT, ITER, 'nonexistent', iterDir)).rejects.toThrow();
+        await expect(readArtifact('nonexistent', ioCtx)).rejects.toThrow();
     });
 
     it('should write and read an HTML artifact', async () => {
         const html = '<html><body><h1>Prototype</h1></body></html>';
-        await writeArtifact(
-            TEST_PROJECT,
-            ITER,
-            'prototype',
-            html,
-            {
-                name: 'Prototype',
-                format: 'html',
-                scale: { small: 'skip', medium: 'optional', large: 'full' },
-            },
-            iterDir,
-        );
-        const result = await readArtifact(TEST_PROJECT, ITER, 'prototype', iterDir);
+        const artifactDef = {
+            name: 'Prototype',
+            format: 'html' as const,
+            scale: { small: 'skip' as const, medium: 'optional' as const, large: 'full' as const },
+        };
+        await writeArtifact('prototype', html, ioCtx, artifactDef);
+        const result = await readArtifact('prototype', ioCtx);
         expect(result).toBe(html);
     });
 
     it('should list both md and html artifacts', async () => {
-        await writeArtifact(TEST_PROJECT, ITER, 'prd', '# PRD', undefined, iterDir);
-        await writeArtifact(
-            TEST_PROJECT,
-            ITER,
-            'prototype',
-            '<html></html>',
-            {
-                name: 'Prototype',
-                format: 'html',
-                scale: { small: 'skip', medium: 'optional', large: 'full' },
-            },
-            iterDir,
-        );
+        await writeArtifact('prd', '# PRD', ioCtx);
+        const artifactDef = {
+            name: 'Prototype',
+            format: 'html' as const,
+            scale: { small: 'skip' as const, medium: 'optional' as const, large: 'full' as const },
+        };
+        await writeArtifact('prototype', '<html></html>', ioCtx, artifactDef);
 
-        const artifacts = await listArtifacts(TEST_PROJECT, ITER, iterDir);
+        const artifacts = await listArtifacts(ioCtx, {});
         expect(artifacts.sort()).toEqual(['prd', 'prototype']);
     });
 });
@@ -179,10 +173,10 @@ describe('artifact I/O with output paths', () => {
         const artifactDef = { name: 'Spec', output: '{project}/docs' };
         const content = '# Specification';
 
-        const filePath = await writeArtifact(TEST_PROJECT, ITER, 'spec', content, artifactDef, iterDir, ioCtx);
+        const filePath = await writeArtifact('spec', content, ioCtx, artifactDef);
         expect(filePath).toBe(join(projectDir, 'docs', 'spec.md'));
 
-        const result = await readArtifact(TEST_PROJECT, ITER, 'spec', iterDir, artifactDef, ioCtx);
+        const result = await readArtifact('spec', ioCtx, artifactDef);
         expect(result).toBe(content);
     });
 
@@ -191,10 +185,10 @@ describe('artifact I/O with output paths', () => {
         const artifactDef = { name: 'PRD', output: '{global}/prds' };
         const content = '# PRD';
 
-        const filePath = await writeArtifact(TEST_PROJECT, ITER, 'prd', content, artifactDef, iterDir, ioCtx);
+        const filePath = await writeArtifact('prd', content, ioCtx, artifactDef);
         expect(filePath).toBe(join(iterDir, 'artifacts', 'prds', 'prd.md'));
 
-        const result = await readArtifact(TEST_PROJECT, ITER, 'prd', iterDir, artifactDef, ioCtx);
+        const result = await readArtifact('prd', ioCtx, artifactDef);
         expect(result).toBe(content);
     });
 
@@ -206,10 +200,10 @@ describe('artifact I/O with output paths', () => {
             missing: { name: 'Missing' }, // default path, not written
         };
 
-        await writeArtifact(TEST_PROJECT, ITER, 'prd', '# PRD', defs.prd, iterDir, ioCtx);
-        await writeArtifact(TEST_PROJECT, ITER, 'spec', '# Spec', defs.spec, iterDir, ioCtx);
+        await writeArtifact('prd', '# PRD', ioCtx, defs.prd);
+        await writeArtifact('spec', '# Spec', ioCtx, defs.spec);
 
-        const found = await listArtifacts(TEST_PROJECT, ITER, iterDir, defs, ioCtx);
+        const found = await listArtifacts(ioCtx, defs);
         expect(found.sort()).toEqual(['prd', 'spec']);
     });
 });

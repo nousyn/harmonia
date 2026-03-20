@@ -14,6 +14,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/plugin.js';
 import { listArtifacts } from '../core/artifacts.js';
+import type { ArtifactIOContext } from '../core/artifacts.js';
 import { readReviews } from '../core/reviews.js';
 import { readDispatches, readSessions } from '../core/dispatch.js';
 import { readSteps, getCompletedStepIds } from '../core/steps.js';
@@ -360,18 +361,12 @@ export function registerGetProjectStatus(server: McpServer, workflowsDir: string
                 const contextNumber = resolved.number;
                 const state = await readState(project_name, contextNumber, contextDir);
                 const wf = await loadWorkflow(workflowsDir, state.workflow);
-                const statusIoCtx = {
+                const statusIoCtx: ArtifactIOContext = {
                     contextDir,
                     projectDir: entry.dir,
                     contextLabel: entry.activeContext,
                 };
-                const artifactIds = await listArtifacts(
-                    project_name,
-                    contextNumber,
-                    contextDir,
-                    wf.artifactDefinitions,
-                    statusIoCtx,
-                );
+                const artifactIds = await listArtifacts(statusIoCtx, wf.artifactDefinitions);
                 const reviews = await readReviews(project_name, contextNumber, contextDir);
                 const dispatches = await readDispatches(project_name, contextNumber, contextDir);
                 const sessions = await readSessions(project_name, contextNumber, contextDir);

@@ -476,7 +476,7 @@ const PLACEHOLDER_RE = /\{[^}]+\}/g;
  *
  * Rules:
  * 1. `output` must start with `{global}` or `{project}`
- * 2. `{context}` must appear after `{global}` or `{project}`, never standalone as prefix
+ * 2. `{context}` must appear after `{global}` or `{project}` — implicitly covered by Rule 1
  * 3. No unknown placeholders
  * 4. No `..` in paths (prevent directory traversal)
  */

@@ -336,16 +336,8 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                             workflowState: state,
                             artifacts: {
                                 read: (artifactId: string) =>
-                                    readArtifact(
-                                        project_name,
-                                        ctx.number,
-                                        artifactId,
-                                        ctx.dir,
-                                        wf.artifactDefinitions[artifactId],
-                                        ioCtx,
-                                    ),
-                                list: () =>
-                                    listArtifacts(project_name, ctx.number, ctx.dir, wf.artifactDefinitions, ioCtx),
+                                    readArtifact(artifactId, ioCtx, wf.artifactDefinitions[artifactId]),
+                                list: () => listArtifacts(ioCtx, wf.artifactDefinitions),
                             },
                         };
                         for (const actionName of targetNode.beforeDispatch.actions) {
@@ -379,14 +371,7 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     const artifactDef = wf.artifactDefinitions[artifactId];
                     if (artifactDef?.unmanaged) continue; // unmanaged not stored via artifact_write
                     try {
-                        inputArtifacts[artifactId] = await readArtifact(
-                            project_name,
-                            ctx.number,
-                            artifactId,
-                            ctx.dir,
-                            artifactDef,
-                            ioCtx,
-                        );
+                        inputArtifacts[artifactId] = await readArtifact(artifactId, ioCtx, artifactDef);
                     } catch {
                         missingArtifacts.push(artifactId);
                     }
