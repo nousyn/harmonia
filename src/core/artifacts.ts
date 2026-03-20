@@ -54,7 +54,14 @@ export function resolveArtifactDir(output: string | undefined, ioCtx: ArtifactIO
  * Get file extension for an artifact based on its definition.
  */
 function getArtifactExtension(artifactDef?: ArtifactDefinition): string {
-    return artifactDef?.format === 'html' ? '.html' : '.md';
+    switch (artifactDef?.format) {
+        case 'html':
+            return '.html';
+        case 'json':
+            return '.json';
+        default:
+            return '.md';
+    }
 }
 
 /**

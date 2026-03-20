@@ -116,23 +116,6 @@ async function buildEngineContext(
             const roleDef = wf.roles[role];
             return roleDef?.prompt ?? `Role "${role}" prompt not found`;
         },
-        getInputArtifacts: (nodeId: string) => {
-            // Find the task node to get its role
-            const taskNode = findTaskNode(wf, nodeId);
-            if (!taskNode) return [];
-
-            // Get role capabilities and find associated artifact IDs
-            const roleDef = wf.roles[taskNode.role];
-            if (!roleDef?.frontmatter?.capabilities) return [];
-
-            const artifactIds = roleDef.frontmatter.capabilities
-                .filter((cap) => cap.artifact)
-                .map((cap) => cap.artifact!);
-            if (artifactIds.length === 0) return [];
-
-            // Return only artifacts that already exist
-            return artifactIds.filter((id) => existingArtifacts.has(id));
-        },
     };
 }
 

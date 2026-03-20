@@ -572,4 +572,179 @@ describe('workflow-validator', () => {
             expect(artErrors[0].message).toContain('bad');
         });
     });
+
+    // ─── inputArtifacts Reference Validation ───
+
+    describe('inputArtifacts reference validation', () => {
+        const inputErrors = (errors: ValidationError[]) => errors.filter((e) => e.type === 'invalid_input_artifact');
+
+        const sampleArtifacts: Record<string, ArtifactDefinition> = {
+            prd: { name: 'PRD', format: 'md' },
+            'user-stories': { name: 'User Stories', format: 'md' },
+            code: { name: 'Code', unmanaged: true },
+            'tech-design': { name: 'Tech Design', format: 'md' },
+        };
+
+        it('should pass when no inputArtifacts are declared', () => {
+            const def = makeDefinition();
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            expect(inputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass when inputArtifacts reference valid artifact IDs', () => {
+            const task: TaskNode = {
+                type: 'task',
+                id: 'test-task',
+                role: 'developer',
+                inputArtifacts: ['prd', 'user-stories'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [task]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            expect(inputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should pass when inputArtifacts reference unmanaged artifacts', () => {
+            const task: TaskNode = {
+                type: 'task',
+                id: 'test-task',
+                role: 'developer',
+                inputArtifacts: ['code'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [task]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            expect(inputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should detect inputArtifacts referencing non-existent artifact', () => {
+            const task: TaskNode = {
+                type: 'task',
+                id: 'test-task',
+                role: 'developer',
+                inputArtifacts: ['prd', 'nonexistent-artifact'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [task]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].nodeId).toBe('test-task');
+            expect(artErrors[0].message).toContain('nonexistent-artifact');
+        });
+
+        it('should detect multiple invalid inputArtifacts on one node', () => {
+            const task: TaskNode = {
+                type: 'task',
+                id: 'test-task',
+                role: 'developer',
+                inputArtifacts: ['ghost-1', 'ghost-2'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [task]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(2);
+            expect(artErrors[0].message).toContain('ghost-1');
+            expect(artErrors[1].message).toContain('ghost-2');
+        });
+
+        it('should validate inputArtifacts in nested nodes (gate pass branch)', () => {
+            const passTask: TaskNode = {
+                type: 'task',
+                id: 'nested-task',
+                role: 'developer',
+                inputArtifacts: ['nonexistent'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [makeGate('g1', passTask, makeTask('fail-task', 'developer'))]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].nodeId).toBe('nested-task');
+        });
+
+        it('should validate inputArtifacts in parallel children', () => {
+            const taskA: TaskNode = {
+                type: 'task',
+                id: 'par-a',
+                role: 'developer',
+                inputArtifacts: ['prd'],
+            };
+            const taskB: TaskNode = {
+                type: 'task',
+                id: 'par-b',
+                role: 'developer',
+                inputArtifacts: ['missing-art'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [makeParallel('par', [taskA, taskB])]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].nodeId).toBe('par-b');
+        });
+
+        it('should validate inputArtifacts on floating nodes', () => {
+            const floatingTask: TaskNode = {
+                type: 'task',
+                id: 'escalate',
+                role: 'coordinator',
+                inputArtifacts: ['nonexistent-float-art'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [makeTask('t1', 'developer')]),
+                floatingNodes: [floatingTask],
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].nodeId).toBe('escalate');
+            expect(artErrors[0].message).toContain('nonexistent-float-art');
+        });
+
+        it('should pass when artifactDefinitions is empty and no inputArtifacts declared', () => {
+            const def = makeDefinition();
+            const errors = validateWorkflow(def, DEFAULT_ROLES, {});
+            expect(inputErrors(errors)).toHaveLength(0);
+        });
+
+        it('should detect error when artifactDefinitions is empty but inputArtifacts declared', () => {
+            const task: TaskNode = {
+                type: 'task',
+                id: 'test-task',
+                role: 'developer',
+                inputArtifacts: ['prd'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [task]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, {});
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('prd');
+        });
+
+        it('should not flag valid inputArtifacts alongside invalid ones', () => {
+            const task: TaskNode = {
+                type: 'task',
+                id: 'test-task',
+                role: 'developer',
+                inputArtifacts: ['prd', 'nonexistent', 'user-stories'],
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [task]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = inputErrors(errors);
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].message).toContain('nonexistent');
+        });
+    });
 });

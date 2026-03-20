@@ -50,8 +50,6 @@ export interface EngineContext {
     gate: GateContext;
     /** Get role prompt (assembled by plugin layer) */
     getRolePrompt?: (role: string, nodeId: string, gateResults?: GateEvaluationResult) => string;
-    /** Get input artifact IDs for a node */
-    getInputArtifacts?: (nodeId: string) => string[];
 }
 
 // ─── Node State Initialization ───
@@ -194,7 +192,6 @@ function activateTask(
     state.activeNodeId = node.id;
 
     const rolePrompt = context.getRolePrompt ? context.getRolePrompt(node.role, node.id, gateResults) : undefined;
-    const inputArtifacts = context.getInputArtifacts ? context.getInputArtifacts(node.id) : undefined;
 
     return {
         state,
@@ -204,7 +201,6 @@ function activateTask(
             role: node.role,
             instructions: `Dispatch role "${node.role}" for task "${node.id}"`,
             rolePrompt,
-            inputArtifacts,
             gateResults,
         },
     };

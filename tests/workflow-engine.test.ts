@@ -167,13 +167,11 @@ describe('workflow-engine', () => {
             const state = makeState(def);
             const ctx = makeContext({
                 getRolePrompt: () => 'Custom prompt for developer',
-                getInputArtifacts: () => ['prd', 'user-stories'],
             });
 
             const result = startWorkflow(def, state, ctx);
 
             expect(result.nextAction.rolePrompt).toBe('Custom prompt for developer');
-            expect(result.nextAction.inputArtifacts).toEqual(['prd', 'user-stories']);
         });
     });
 

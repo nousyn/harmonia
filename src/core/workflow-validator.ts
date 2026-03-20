@@ -148,6 +148,15 @@ export function validateWorkflow(
     // ── 8. Artifact definition validation ──
     validateArtifactDefinitions(artifactDefinitions, errors);
 
+    // ── 9. inputArtifacts reference validation ──
+    validateInputArtifactReferences(definition.root, artifactDefinitions, errors);
+
+    if (definition.floatingNodes) {
+        for (const fn of definition.floatingNodes) {
+            validateTaskInputArtifacts(fn, artifactDefinitions, errors);
+        }
+    }
+
     return errors;
 }
 
@@ -518,6 +527,58 @@ function validateArtifactDefinitions(
                     });
                 }
             }
+        }
+    }
+}
+
+// ─── Input Artifact Reference Validation ───
+
+/**
+ * Validate that inputArtifacts references on task nodes refer to
+ * artifact IDs that exist in artifactDefinitions.
+ */
+function validateInputArtifactReferences(
+    node: WorkflowNode,
+    artifactDefinitions: Record<string, ArtifactDefinition>,
+    errors: ValidationError[],
+): void {
+    switch (node.type) {
+        case 'task':
+            validateTaskInputArtifacts(node, artifactDefinitions, errors);
+            break;
+        case 'sequence':
+        case 'parallel':
+            for (const child of node.children) {
+                validateInputArtifactReferences(child, artifactDefinitions, errors);
+            }
+            break;
+        case 'gate':
+            validateInputArtifactReferences(node.pass, artifactDefinitions, errors);
+            if ('type' in node.fail) {
+                validateInputArtifactReferences(node.fail as WorkflowNode, artifactDefinitions, errors);
+            }
+            break;
+    }
+}
+
+/**
+ * Validate inputArtifacts on a single task node.
+ * Each ID must exist in artifactDefinitions.
+ */
+function validateTaskInputArtifacts(
+    node: import('./types.js').TaskNode,
+    artifactDefinitions: Record<string, ArtifactDefinition>,
+    errors: ValidationError[],
+): void {
+    if (!node.inputArtifacts) return;
+
+    for (const artifactId of node.inputArtifacts) {
+        if (!artifactDefinitions[artifactId]) {
+            errors.push({
+                type: 'invalid_input_artifact',
+                message: `Task node "${node.id}" declares inputArtifact "${artifactId}" which is not defined in artifactDefinitions`,
+                nodeId: node.id,
+            });
         }
     }
 }

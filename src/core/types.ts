@@ -59,6 +59,8 @@ export interface TaskNode {
     id: string;
     /** Role ID that executes this task */
     role: string;
+    /** Artifact IDs this task needs as input (resolved to name + path references at dispatch time) */
+    inputArtifacts?: string[];
     /** Optional timeout in seconds */
     timeout?: number;
     /** Optional failure handler */
@@ -340,8 +342,6 @@ export interface NextAction {
     instructions: string;
     /** Fully assembled prompt for the team member (if dispatching) */
     rolePrompt?: string;
-    /** Artifact IDs the team member should reference */
-    inputArtifacts?: string[];
     /** Gate evaluation results (if coming from a gate fail/goto) */
     gateResults?: GateEvaluationResult;
     /** Parallel dispatch targets (when dispatching multiple tasks simultaneously) */
@@ -618,6 +618,7 @@ export interface ValidationError {
         | 'invalid_role_ref'
         | 'invalid_coordinator'
         | 'invalid_artifact_output'
+        | 'invalid_input_artifact'
         | 'other';
     /** Human-readable error message */
     message: string;

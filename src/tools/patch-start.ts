@@ -92,7 +92,6 @@ export function registerPatchStart(server: McpServer, workflowsDir: string): voi
                         const roleDef = wf.roles[role];
                         return roleDef?.prompt ?? `Role "${role}" prompt not found`;
                     },
-                    getInputArtifacts: () => [],
                 };
 
                 const result = startWorkflow(wf.definition, state, engineCtx);

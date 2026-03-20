@@ -28,6 +28,7 @@
                     "type": "task",
                     "id": "design",
                     "role": "architect",
+                    "inputArtifacts": ["prd", "user-stories"],
                     "beforeDispatch": {
                         "inject": ["请基于 prd 和 user-stories 进行技术设计。产出 tech-design 和 task-breakdown。"]
                     },
@@ -52,6 +53,7 @@
                     "type": "task",
                     "id": "develop",
                     "role": "developer",
+                    "inputArtifacts": ["tech-design", "task-breakdown", "prd"],
                     "beforeDispatch": {
                         "inject": ["请基于 task-breakdown 和 tech-design 实现代码。"]
                     },
@@ -69,6 +71,7 @@
                 "type": "task",
                 "id": "test",
                 "role": "tester",
+                "inputArtifacts": ["prd", "user-stories", "code"],
                 "beforeDispatch": {
                     "inject": ["请基于 prd、user-stories 编写测试计划并执行测试，产出 test-report。"]
                 },
@@ -92,6 +95,7 @@
                     "type": "task",
                     "id": "deliver",
                     "role": "coordinator",
+                    "inputArtifacts": ["prd", "test-report", "code"],
                     "beforeDispatch": {
                         "inject": ["所有测试通过。请进行最终交付验收，产出 retrospective。"]
                     }

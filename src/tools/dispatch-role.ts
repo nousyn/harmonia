@@ -137,6 +137,82 @@ function buildSessionGuidance(params: {
 }
 
 /**
+ * Get file extension from artifact definition format.
+ * - 'html' → '.html'
+ * - 'json' → '.json'
+ * - 'md' or undefined → '.md'
+ */
+export function getFormatExtension(format?: 'md' | 'html' | 'json'): string {
+    switch (format) {
+        case 'html':
+            return '.html';
+        case 'json':
+            return '.json';
+        default:
+            return '.md';
+    }
+}
+
+/** A resolved input artifact reference */
+export interface InputReference {
+    /** Artifact ID */
+    id: string;
+    /** Human-readable name from artifact definition */
+    name: string;
+    /** Resolved file path (managed) or directory path (unmanaged) */
+    path: string;
+    /** Whether this artifact was found on disk */
+    found: boolean;
+}
+
+/**
+ * Resolve an artifact ID to a name + path reference.
+ *
+ * - Managed artifacts: resolves to full file path via format → extension mapping
+ * - Unmanaged artifacts: resolves to the output directory
+ * - Unknown artifacts: returns not-found
+ */
+export function resolveInputReference(
+    artifactId: string,
+    wf: WorkflowPlugin,
+    ioCtx: ArtifactIOContext,
+    existingArtifacts: Set<string>,
+): InputReference {
+    const artifactDef = wf.artifactDefinitions[artifactId];
+    if (!artifactDef) {
+        return {
+            id: artifactId,
+            name: artifactId,
+            path: '',
+            found: false,
+        };
+    }
+
+    if (artifactDef.unmanaged) {
+        // Unmanaged: resolve to directory
+        const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+        return {
+            id: artifactId,
+            name: artifactDef.name,
+            path: dir,
+            found: true, // unmanaged dirs are always "available"
+        };
+    }
+
+    // Managed: resolve to full file path via format → extension
+    const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+    const ext = getFormatExtension(artifactDef.format);
+    const filePath = `${dir}/${artifactId}${ext}`;
+
+    return {
+        id: artifactId,
+        name: artifactDef.name,
+        path: filePath,
+        found: existingArtifacts.has(artifactId),
+    };
+}
+
+/**
  * Build Artifact Requirements section for the dispatch data package.
  * Only includes schemas for artifacts associated with the dispatched role
  * (via the role's capabilities).
@@ -215,7 +291,7 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                 .array(z.string())
                 .optional()
                 .describe(
-                    'Artifact IDs to include as input for the team member. If not specified, no artifacts are auto-included.',
+                    'Supplementary artifact IDs to include as input references (name + path) for the team member. These are merged with the node-level inputArtifacts declaration. Note: only path references are provided, not content.',
                 ),
         },
         async ({ project_name, role, task_brief, node_id, input_artifact_ids }) => {
@@ -363,19 +439,20 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
                     fullPrompt += '\n\n' + hookInjections.join('\n\n');
                 }
 
-                // Read input artifacts
-                const artifactIds = input_artifact_ids ?? [];
-                const inputArtifacts: Record<string, string> = {};
-                const missingArtifacts: string[] = [];
-                for (const artifactId of artifactIds) {
-                    const artifactDef = wf.artifactDefinitions[artifactId];
-                    if (artifactDef?.unmanaged) continue; // unmanaged not stored via artifact_write
-                    try {
-                        inputArtifacts[artifactId] = await readArtifact(artifactId, ioCtx, artifactDef);
-                    } catch {
-                        missingArtifacts.push(artifactId);
-                    }
-                }
+                // Resolve input artifact references (merge node declaration + coordinator parameter)
+                const nodeInputIds = targetNode.inputArtifacts ?? [];
+                const paramInputIds = input_artifact_ids ?? [];
+                const mergedInputIds = [...new Set([...nodeInputIds, ...paramInputIds])];
+
+                // List existing artifacts for reference resolution
+                const existingArtifacts = new Set(await listArtifacts(ioCtx, wf.artifactDefinitions));
+
+                // Resolve all input references
+                const inputRefs: InputReference[] = mergedInputIds.map((id) =>
+                    resolveInputReference(id, wf, ioCtx, existingArtifacts),
+                );
+                const foundRefs = inputRefs.filter((r) => r.found);
+                const missingRefs = inputRefs.filter((r) => !r.found);
 
                 // Resolve agent/model: override takes precedence over frontmatter
                 const roleConfig = resolveRoleConfig(role, overrides);
@@ -478,15 +555,20 @@ export function registerDispatchRole(server: McpServer, workflowsDir: string): v
 
                 summary.push(
                     ``,
-                    `## Input Artifacts (${Object.keys(inputArtifacts).length}${missingArtifacts.length > 0 ? `, ${missingArtifacts.length} missing` : ''})`,
+                    `## Input References (${foundRefs.length}${missingRefs.length > 0 ? `, ${missingRefs.length} missing` : ''})`,
                 );
 
-                for (const [artifactId, content] of Object.entries(inputArtifacts)) {
-                    summary.push(``, `### ${artifactId}`, ``, content);
+                if (foundRefs.length > 0) {
+                    for (const ref of foundRefs) {
+                        summary.push(`- **${ref.id}** (${ref.name}): \`${ref.path}\``);
+                    }
                 }
 
-                if (missingArtifacts.length > 0) {
-                    summary.push(``, `### Missing Artifacts`, ...missingArtifacts.map((a) => `- ${a}`));
+                if (missingRefs.length > 0) {
+                    summary.push(``, `### Missing`);
+                    for (const ref of missingRefs) {
+                        summary.push(`- **${ref.id}** (${ref.name}): 未找到`);
+                    }
                 }
 
                 summary.push(
