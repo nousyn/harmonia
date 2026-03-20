@@ -6,7 +6,7 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import type { ReviewState, ReviewStatus } from './types.js';
+import type { ReviewState } from './types.js';
 
 const REVIEWS_FILE = 'reviews.json';
 

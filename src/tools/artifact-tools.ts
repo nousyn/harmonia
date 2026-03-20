@@ -1,6 +1,6 @@
 /**
  * MCP Tools: artifact_write / artifact_read / artifact_list
- * Read and write project artifacts under <data_dir>/<project_name>/artifacts/
+ * Read and write project artifacts. Output paths are resolved per artifact
  *
  * artifact_write validates content against artifact schemas and checks review
  * configuration. If validation fails, the write is rejected with specific
@@ -451,7 +451,17 @@ async function handleSequentialWrite(
 
     if (isLastStep) {
         // Auto-merge: validate against final artifact schema, write formal artifact, trigger review
-        return handleFinalStep(workflowsDir, workflowName, projectName, ctx, artifactId, content, artifactDef, stepDef);
+        return handleFinalStep(
+            workflowsDir,
+            workflowName,
+            projectName,
+            ctx,
+            artifactId,
+            content,
+            artifactDef,
+            stepDef,
+            ioCtx,
+        );
     }
 
     // Not the last step — return progress info
@@ -480,6 +490,7 @@ async function handleFinalStep(
     content: string,
     artifactDef: ArtifactDefinition,
     stepDef: ArtifactStepDefinition,
+    ioCtx: ArtifactIOContext,
 ): Promise<ToolResult> {
     const isHtml = artifactDef.format === 'html';
 
@@ -507,11 +518,6 @@ async function handleFinalStep(
     }
 
     // Write the formal artifact
-    const ioCtx: ArtifactIOContext = {
-        contextDir: ctx.dir,
-        projectDir: ctx.entry.dir,
-        contextLabel: ctx.activeContext,
-    };
     const filePath = await writeArtifact(artifactId, content, ioCtx, artifactDef);
 
     // Mark as finalized

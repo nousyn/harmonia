@@ -31,8 +31,7 @@ import { resolveActive, isError } from './utils.js';
 import { loadWorkflowForContext, processWorkflowEvent, formatNextAction, findTaskNode } from './engine-helpers.js';
 import { readArtifact, listArtifacts } from '../core/artifacts.js';
 import type { ArtifactIOContext } from '../core/artifacts.js';
-import { readState } from '../core/state.js';
-import type { AgentType, DispatchRecord, SessionRecord, ActionContext, TaskNode } from '../core/types.js';
+import type { AgentType, DispatchRecord, SessionRecord, ActionContext } from '../core/types.js';
 
 export function registerReportDispatch(server: McpServer, workflowsDir: string): void {
     server.tool(
@@ -158,7 +157,7 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                                     project_name,
                                     ctx,
                                 );
-                                let targetNode = findTaskNode(wf, dispatch.nodeId);
+                                const targetNode = findTaskNode(wf, dispatch.nodeId);
                                 if (targetNode?.afterComplete) {
                                     const hookInjections: string[] = [];
                                     if (targetNode.afterComplete.inject) {

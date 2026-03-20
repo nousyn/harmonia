@@ -67,7 +67,6 @@ describe('artifact management', () => {
         const artifactDef = {
             name: 'Prototype',
             format: 'html' as const,
-            scale: { small: 'skip' as const, medium: 'optional' as const, large: 'full' as const },
         };
         await writeArtifact('prototype', html, ioCtx, artifactDef);
         const result = await readArtifact('prototype', ioCtx);
@@ -79,7 +78,6 @@ describe('artifact management', () => {
         const artifactDef = {
             name: 'Prototype',
             format: 'html' as const,
-            scale: { small: 'skip' as const, medium: 'optional' as const, large: 'full' as const },
         };
         await writeArtifact('prototype', '<html></html>', ioCtx, artifactDef);
 

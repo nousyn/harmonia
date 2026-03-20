@@ -21,15 +21,7 @@ import { readSteps, getCompletedStepIds } from '../core/steps.js';
 import { listProjects, getProject, resolveContextDir } from '../core/registry.js';
 import { readIssues } from '../core/issues.js';
 import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
-import type {
-    DispatchRecord,
-    SessionRecord,
-    WorkflowNode,
-    WorkflowState,
-    NodeState,
-    ArtifactDefinition,
-    WorkflowPlugin,
-} from '../core/types.js';
+import type { DispatchRecord, SessionRecord, WorkflowNode, NodeState, ArtifactDefinition } from '../core/types.js';
 import type { ArtifactStepState } from '../core/types.js';
 import type { ResolvedContext } from './utils.js';
 

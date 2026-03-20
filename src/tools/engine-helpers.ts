@@ -11,7 +11,7 @@ import { loadWorkflow } from '../core/plugin.js';
 import { listArtifacts, readArtifact } from '../core/artifacts.js';
 import type { ArtifactIOContext } from '../core/artifacts.js';
 import { readReviews } from '../core/reviews.js';
-import { computeNextAction, startWorkflow } from '../core/workflow-engine.js';
+import { computeNextAction } from '../core/workflow-engine.js';
 import type { EngineContext, GateContext } from '../core/workflow-engine.js';
 import type {
     WorkflowState,
