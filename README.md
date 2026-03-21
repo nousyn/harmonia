@@ -6,7 +6,7 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 
 ## 核心理念
 
-- **节点树驱动** — 工作流定义为节点树（sequence / parallel / task / gate），支持条件分支、失败重试、并行执行
+- **节点树驱动** — 工作流定义为节点树（sequence / parallel / task / gate / loop），支持条件分支、循环迭代、失败重试、并行执行
 - **角色分离** — Coordinator、架构师、开发者、测试各司其职，通过产出（artifact）交接而非直接对话
 - **可插拔工作流** — 工作流以插件形式存在，包含节点树定义、角色提示词、产出 Schema、钩子脚本
 - **数据隔离** — 所有项目数据存储在平台数据目录，不污染代码仓库
@@ -14,7 +14,7 @@ Harmonia 是一个基于 [Model Context Protocol (MCP)](https://modelcontextprot
 
 ## 特性
 
-- **节点树工作流** — 4 种节点类型（task / sequence / parallel / gate），声明式定义复杂工作流
+- **节点树工作流** — 5 种节点类型（task / sequence / parallel / gate / loop），声明式定义复杂工作流
 - **Gate 条件引擎** — 支持 `artifact_exists`、`artifact_approved`、`artifact_field` 三种条件，自动评估
 - **产出系统** — 通用的读写 / 审批机制，Schema 校验，逐步写入支持
 - **迭代管理** — 同一项目支持多次迭代，每次迭代独立的状态和产出
@@ -226,14 +226,15 @@ harmonia --version             显示版本号
 
 ## 工作流系统
 
-Harmonia 使用**节点树**定义工作流，支持 4 种节点类型：
+Harmonia 使用**节点树**定义工作流，支持 5 种节点类型：
 
-| 节点类型     | 语义                                                          |
-| ------------ | ------------------------------------------------------------- |
-| **task**     | 工作单元，分配给某个角色执行                                  |
-| **sequence** | 子节点按顺序执行                                              |
-| **parallel** | 子节点并行执行，需指定 `failStrategy`（fail-fast / wait-all） |
-| **gate**     | 条件检查节点，pass/fail 两条路径                              |
+| 节点类型     | 语义                                                           |
+| ------------ | -------------------------------------------------------------- |
+| **task**     | 工作单元，分配给某个角色执行                                   |
+| **sequence** | 子节点按顺序执行                                               |
+| **parallel** | 子节点并行执行，需指定 `failStrategy`（fail-fast / wait-all）  |
+| **gate**     | 条件检查节点，pass/fail 两条路径                               |
+| **loop**     | 循环节点，重复执行 body 子树直到满足退出条件或达到最大迭代次数 |
 
 工作流通过**插件机制**加载——以目录形式存在，包含 `workflow.json`（节点树 + 产出定义）、角色提示词、产出 Schema 以及可选的钩子/动作模块。内置 `dev` 工作流提供完整的软件开发流程（需求 → 设计 → 开发 → 测试 → 交付），自定义工作流可覆盖或扩展。
 
@@ -286,6 +287,7 @@ harmonia/
 │   │   ├── types.ts             # 核心类型定义
 │   │   ├── workflow-engine.ts   # 工作流状态机引擎
 │   │   ├── workflow-validator.ts # 工作流静态校验
+│   │   ├── tree-utils.ts        # 节点树遍历纯函数
 │   │   ├── plugin.ts            # 工作流插件加载系统
 │   │   ├── action-registry.ts   # 节点钩子动作注册
 │   │   ├── state.ts             # 工作流状态管理
@@ -331,7 +333,7 @@ harmonia/
 │       │   ├── developer.md
 │       │   └── tester.md
 │       └── schemas/             # 产出 + 步骤 Schema（26 个）
-└── tests/                       # 测试（20 个文件，334 个测试）
+└── tests/                       # 测试（21 个文件，416 个测试）
 ```
 
 ### 开发命令

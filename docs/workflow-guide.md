@@ -20,6 +20,7 @@
   - [节点树](#节点树)
   - [节点类型](#节点类型)
   - [Gate 条件](#gate-条件)
+  - [Loop 终止机制](#loop-终止机制)
   - [节点钩子](#节点钩子)
   - [游离节点](#游离节点floating-nodes)
   - [产出定义](#产出定义)
@@ -148,11 +149,11 @@ workflows/<workflow-name>/
 
 ### 节点树
 
-工作流的核心是一棵节点树。根节点 `root` 可以是任意节点类型，子节点通过 `children`（sequence / parallel）或 `pass` / `fail`（gate）嵌套。
+工作流的核心是一棵节点树。根节点 `root` 可以是任意节点类型，子节点通过 `children`（sequence / parallel）、`pass` / `fail`（gate）或 `body`（loop）嵌套。
 
 ### 节点类型
 
-Harmonia 支持 4 种节点类型：
+Harmonia 支持 5 种节点类型：
 
 #### task — 工作单元
 
@@ -262,6 +263,41 @@ Harmonia 支持 4 种节点类型：
 | `conditions` | `GateCondition[]`            | 是   | 条件数组（AND 逻辑）                |
 | `pass`       | `WorkflowNode`               | 是   | 条件通过时的分支（内联节点）        |
 | `fail`       | `WorkflowNode \| GotoTarget` | 是   | 条件失败时的分支（内联节点或 goto） |
+
+#### loop — 循环执行
+
+重复执行 `body` 子树，直到收到 `loop_done` 信号或达到 `maxIterations` 上限。每次迭代前，body 内所有节点状态自动重置为 `pending`。
+
+```json
+{
+  "type": "loop",
+  "id": "refine-loop",
+  "maxIterations": 10,
+  "body": {
+    "type": "sequence",
+    "id": "refine-cycle",
+    "children": [
+      { "type": "task", "id": "refine", "role": "developer" },
+      { "type": "task", "id": "verify", "role": "tester" }
+    ]
+  },
+  "onFailed": { "goto": "design", "maxRetries": 2 }
+}
+```
+
+| 字段            | 类型             | 必需   | 说明                                                                   |
+| --------------- | ---------------- | ------ | ---------------------------------------------------------------------- |
+| `type`          | `"loop"`         | 是     |                                                                        |
+| `id`            | `string`         | 是     | 全局唯一标识                                                           |
+| `maxIterations` | `number`         | **是** | 最大迭代次数（正整数），安全上限。达到上限时 loop **失败**而非成功     |
+| `body`          | `WorkflowNode`   | **是** | 每次迭代执行的子工作流，可以是任意节点类型。必须包含至少一个 task 节点 |
+| `onFailed`      | `FailureHandler` | 否     | 失败后的处理策略（达到 maxIterations 或 body 内节点失败冒泡时触发）    |
+
+**终止机制：**
+
+- **正常终止** — body 内的角色通过 `dispatch_report` 触发 `loop_done` 事件，标记当前迭代为最后一轮。当前迭代正常完成后 loop 标记为 `completed`
+- **达到上限** — 如果迭代次数达到 `maxIterations` 且未收到 `loop_done`，loop 标记为 `failed`（可被 `onFailed` 捕获）
+- **body 失败** — body 内节点失败且无法自行处理时，失败冒泡到 loop 节点
 
 ### Gate 条件
 
@@ -837,17 +873,19 @@ Action 按声明顺序依次执行，每个 Action 返回的 `inject` 追加到�
 
 Harmonia 在加载工作流插件时会自动校验 `workflow.json`。校验不通过时抛出 `PluginValidationError`，包含详细错误列表。
 
-**7 条校验规则：**
+**9 条校验规则：**
 
-| #   | 规则               | 错误类型                | 说明                                                   |
-| --- | ------------------ | ----------------------- | ------------------------------------------------------ |
-| 1   | ID 唯一性          | `duplicate_id`          | 节点树 + floatingNodes 中所有 ID 不能重复              |
-| 2   | Goto 目标合法性    | `invalid_goto`          | goto 目标必须存在，且是祖先或执行顺序上的前驱节点      |
-| 3   | 循环检测           | `cycle`                 | 没有 maxRetries 的 goto 边不能构成无出口循环           |
-| 4   | failStrategy 必填  | `missing_fail_strategy` | parallel 节点必须设置 `failStrategy`                   |
-| 5   | 游离节点引用有效性 | `invalid_floating_ref`  | `onExhausted` 引用的 ID 必须存在于 `floatingNodes` 中  |
-| 6   | 角色引用有效性     | `invalid_role_ref`      | task 节点的 `role` 必须在 `roles/` 目录中有对应文件    |
-| 7   | 协调者有效性       | `invalid_coordinator`   | `coordinator` 字段的值必须在 `roles/` 目录中有对应文件 |
+| #   | 规则               | 错误类型                | 说明                                                                          |
+| --- | ------------------ | ----------------------- | ----------------------------------------------------------------------------- |
+| 1   | ID 唯一性          | `duplicate_id`          | 节点树 + floatingNodes 中所有 ID 不能重复                                     |
+| 2   | Goto 目标合法性    | `invalid_goto`          | goto 目标必须存在，且是祖先或执行顺序上的前驱节点；不允许从外部跳入 loop body |
+| 3   | 循环检测           | `cycle`                 | 没有 maxRetries 的 goto 边不能构成无出口循环                                  |
+| 4   | failStrategy 必填  | `missing_fail_strategy` | parallel 节点必须设置 `failStrategy`                                          |
+| 5   | 游离节点引用有效性 | `invalid_floating_ref`  | `onExhausted` 引用的 ID 必须存在于 `floatingNodes` 中                         |
+| 6   | 角色引用有效性     | `invalid_role_ref`      | task 节点的 `role` 必须在 `roles/` 目录中有对应文件                           |
+| 7   | 协调者有效性       | `invalid_coordinator`   | `coordinator` 字段的值必须在 `roles/` 目录中有对应文件                        |
+| 8   | Loop 迭代上限      | `other`                 | loop 节点的 `maxIterations` 必须是正整数                                      |
+| 9   | Loop body 有效性   | `other`                 | loop 节点的 `body` 必须存在且包含至少一个 task 节点（防止同步栈溢出）         |
 
 **Goto 目标的具体约束：**
 
@@ -855,6 +893,8 @@ Harmonia 在加载工作流插件时会自动校验 `workflow.json`。校验不�
 - 可以 goto 到同一 sequence 中**位于当前节点之前**的兄弟节点
 - task 节点可以 goto 到**自身**（自重试）
 - **不允许**跨并行分支跳转
+- **不允许**从 loop 外部跳转到 loop body 内部节点（loop 视为不透明边界，外部只能 goto 到 loop 节点本身）
+- loop body 内部**允许** goto 到 loop 自身或 loop 的祖先/前序节点
 
 **错误信息示例：**
 
