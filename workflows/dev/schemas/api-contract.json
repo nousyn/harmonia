@@ -1,0 +1,42 @@
+{
+    "sections": [
+        {
+            "heading": "## 端点列表",
+            "required": true,
+            "aliases": [
+                "## API Endpoints",
+                "## 接口列表",
+                "## Endpoints"
+            ]
+        },
+        {
+            "heading": "## 请求/响应格式",
+            "required": true,
+            "aliases": [
+                "## Request/Response",
+                "## 数据格式",
+                "## 请求响应"
+            ]
+        },
+        {
+            "heading": "## 错误码",
+            "required": true,
+            "aliases": [
+                "## Error Codes",
+                "## 错误处理",
+                "## 异常码"
+            ]
+        },
+        {
+            "heading": "## 认证与授权",
+            "required": false,
+            "aliases": [
+                "## Authentication",
+                "## Auth",
+                "## 权限"
+            ]
+        }
+    ],
+    "minLength": 100,
+    "guidance": "对外 HTTP 接口契约：路由、请求/响应格式、认证鉴权方案、错误码约定。仅前后端分离或需对外暴露接口的项目需要此产出。"
+}

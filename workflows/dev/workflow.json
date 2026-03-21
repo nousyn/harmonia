@@ -81,7 +81,7 @@
                     "role": "architect",
                     "inputArtifacts": ["prd", "user-stories", "prototype"],
                     "beforeDispatch": {
-                        "inject": ["需求阶段全部完成。请基于 prd、user-stories 和 prototype 进行技术设计，产出 tech-design（技术方案）。\n\ntech-design 应包含：技术选型、现有代码结构分析、架构决策、技术预研（三方对接/外部依赖的可行性验证）、风险评估。"]
+                        "inject": ["需求阶段全部完成。请基于 prd、user-stories 和 prototype 进行技术设计，产出 tech-design（技术方案）。"]
                     },
                     "afterComplete": {
                         "inject": ["技术方案设计完成。请确认 tech-design 已写入并提交用户审批。"]
@@ -106,7 +106,7 @@
                     "role": "architect",
                     "inputArtifacts": ["prd", "user-stories", "prototype", "tech-design"],
                     "beforeDispatch": {
-                        "inject": ["tech-design 已通过用户确认。请基于已确认的技术方案，继续完成以下产出：\n\n必须产出：api-design、task-breakdown\n可选产出（根据项目实际需要判断）：api-contract、data-model"]
+                        "inject": ["tech-design 已通过用户确认。请基于已确认的技术方案，继续完成后续设计产出。"]
                     },
                     "afterComplete": {
                         "inject": ["API 设计和任务拆解完成。请确认 api-design 和 task-breakdown 已写入，task-breakdown 需提交用户审批。"]
@@ -155,7 +155,7 @@
                 "role": "tester",
                 "inputArtifacts": ["prd", "user-stories", "prototype", "api-design"],
                 "beforeDispatch": {
-                    "inject": ["请基于 user-stories 验收标准编写测试计划，覆盖功能测试（参照 prototype）和内部模块 API 测试（参照 api-design）。"]
+                    "inject": ["开发完成。请基于 user-stories 验收标准编写测试计划，产出 test-plan。"]
                 },
                 "afterComplete": {
                     "inject": ["测试计划编写完成。请确认 test-plan 已写入并提交用户审批。"]

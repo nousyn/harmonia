@@ -1,0 +1,21 @@
+{
+    "jsonFields": [
+        {
+            "field": "items",
+            "required": true,
+            "type": "array",
+            "minItems": 1
+        },
+        {
+            "field": "risks",
+            "required": true,
+            "type": "array"
+        },
+        {
+            "field": "conclusion",
+            "required": true,
+            "type": "string"
+        }
+    ],
+    "guidance": "技术预研报告：三方对接/外部依赖的可行性验证、风险评估、替代方案。每项预研包含结论和依据。"
+}

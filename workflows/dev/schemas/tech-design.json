@@ -28,24 +28,24 @@
             ]
         },
         {
-            "heading": "## 接口设计",
+            "heading": "## 架构决策",
             "required": true,
             "aliases": [
-                "## Interface Design",
-                "## API 设计",
-                "## 接口定义"
+                "## Architecture Decisions",
+                "## 设计决策",
+                "## 技术决策"
             ]
         },
         {
-            "heading": "## 数据模型",
+            "heading": "## 风险评估",
             "required": true,
             "aliases": [
-                "## Data Model",
-                "## 数据设计",
-                "## 数据结构"
+                "## Risk Assessment",
+                "## 技术风险",
+                "## 风险分析"
             ]
         }
     ],
     "minLength": 200,
-    "guidance": "技术方案描述如何实现需求（怎么做），包括架构决策、技术选型、模块划分。不重复 PRD 中的需求描述（做什么）。"
+    "guidance": "技术方案描述如何实现需求（怎么做），包括架构概述、技术选型、模块设计、架构决策及其依据、风险评估。接口设计和数据模型已拆为独立产出（api-design、data-model），此处聚焦架构层面。"
 }

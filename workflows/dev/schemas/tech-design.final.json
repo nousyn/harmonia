@@ -28,24 +28,24 @@
             ]
         },
         {
-            "heading": "## 接口设计",
+            "heading": "## 架构决策",
             "required": true,
             "aliases": [
-                "## Interface Design",
-                "## API 设计",
-                "## 接口定义"
+                "## Architecture Decisions",
+                "## 设计决策",
+                "## 技术决策"
             ]
         },
         {
-            "heading": "## 数据模型",
+            "heading": "## 风险评估",
             "required": true,
             "aliases": [
-                "## Data Model",
-                "## 数据设计",
-                "## 数据结构"
+                "## Risk Assessment",
+                "## 技术风险",
+                "## 风险分析"
             ]
         }
     ],
     "minLength": 200,
-    "guidance": "技术方案最终版，需包含所有必需章节。确保架构决策有理有据，模块设计清晰可执行。"
+    "guidance": "技术方案最终版，需包含所有必需章节。确保架构决策有理有据，模块设计清晰可执行，风险评估完整。"
 }

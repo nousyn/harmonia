@@ -1,42 +1,42 @@
 {
     "sections": [
         {
-            "heading": "## 端点列表",
+            "heading": "## 模块划分与职责",
             "required": true,
             "aliases": [
-                "## API Endpoints",
-                "## 接口列表",
-                "## Endpoints"
+                "## Module Responsibilities",
+                "## 模块职责",
+                "## 模块设计"
             ]
         },
         {
-            "heading": "## 请求/响应格式",
+            "heading": "## 公共方法签名",
             "required": true,
             "aliases": [
-                "## Request/Response",
-                "## 数据格式",
-                "## 请求响应"
+                "## Public API",
+                "## 方法签名",
+                "## 接口签名"
             ]
         },
         {
-            "heading": "## 错误码",
+            "heading": "## 模块间依赖与调用关系",
             "required": true,
             "aliases": [
-                "## Error Codes",
-                "## 错误处理",
-                "## 异常码"
+                "## Dependencies",
+                "## 依赖关系",
+                "## 调用关系"
             ]
         },
         {
-            "heading": "## 认证与授权",
-            "required": true,
+            "heading": "## 数据流转路径",
+            "required": false,
             "aliases": [
-                "## Authentication",
-                "## Auth",
-                "## 权限"
+                "## Data Flow",
+                "## 数据流",
+                "## 数据流转"
             ]
         }
     ],
     "minLength": 100,
-    "guidance": "API 接口设计文档，定义端点、请求/响应格式、错误码和认证方式。适用于有前后端分离或外部集成的项目。"
+    "guidance": "内部模块 API 设计：模块划分与职责、公共方法签名（参数、返回值、异常）、模块间依赖与调用关系、数据流转路径。如有对外 HTTP 接口需求，另见 api-contract。"
 }
