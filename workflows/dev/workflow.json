@@ -12,8 +12,11 @@
                 "type": "task",
                 "id": "clarify",
                 "role": "coordinator",
+                "beforeDispatch": {
+                    "inject": ["进入需求澄清阶段。请与用户沟通，理解需求意图、功能范围和约束条件，然后产出 prd（需求文档）。"]
+                },
                 "afterComplete": {
-                    "inject": ["需求澄清完成。请检查 prd 和 user-stories 是否已写入，以及 prd 是否需要审批。"]
+                    "inject": ["需求澄清完成。请检查 prd 是否已写入并提交用户审批。"]
                 }
             },
             {
@@ -21,19 +24,18 @@
                 "id": "prd-gate",
                 "conditions": [
                     { "type": "artifact_exists", "artifact": "prd" },
-                    { "type": "artifact_exists", "artifact": "user-stories" },
                     { "type": "artifact_approved", "artifact": "prd" }
                 ],
                 "pass": {
                     "type": "task",
-                    "id": "design",
-                    "role": "architect",
-                    "inputArtifacts": ["prd", "user-stories"],
+                    "id": "prototype",
+                    "role": "coordinator",
+                    "inputArtifacts": ["prd"],
                     "beforeDispatch": {
-                        "inject": ["请基于 prd 和 user-stories 进行技术设计。产出 tech-design 和 task-breakdown。"]
+                        "inject": ["prd 已通过用户确认。请基于 prd 创建高保真 HTML 原型，展示页面布局、交互流程和状态反馈。"]
                     },
                     "afterComplete": {
-                        "inject": ["设计阶段完成。请确认 tech-design 和 task-breakdown 已写入。"]
+                        "inject": ["原型设计完成。请检查 prototype 是否已写入并提交用户审批。"]
                     }
                 },
                 "fail": {
@@ -44,21 +46,70 @@
             },
             {
                 "type": "gate",
-                "id": "design-gate",
+                "id": "prototype-gate",
                 "conditions": [
-                    { "type": "artifact_exists", "artifact": "tech-design" },
-                    { "type": "artifact_exists", "artifact": "task-breakdown" }
+                    { "type": "artifact_exists", "artifact": "prototype" },
+                    { "type": "artifact_approved", "artifact": "prototype" }
                 ],
                 "pass": {
                     "type": "task",
-                    "id": "develop",
-                    "role": "developer",
-                    "inputArtifacts": ["tech-design", "task-breakdown", "prd"],
+                    "id": "stories",
+                    "role": "coordinator",
+                    "inputArtifacts": ["prd", "prototype"],
                     "beforeDispatch": {
-                        "inject": ["请基于 task-breakdown 和 tech-design 实现代码。"]
+                        "inject": ["原型已通过用户确认。请基于 prd 和已确认的原型交互设计，撰写 user-stories（用户故事 + 验收标准）。"]
                     },
                     "afterComplete": {
-                        "inject": ["开发阶段完成。代码已实现。"]
+                        "inject": ["用户故事撰写完成。请确认 user-stories 已写入。"]
+                    }
+                },
+                "fail": {
+                    "goto": "prototype",
+                    "maxRetries": 3,
+                    "onExhausted": "escalate"
+                }
+            },
+            {
+                "type": "gate",
+                "id": "stories-gate",
+                "conditions": [
+                    { "type": "artifact_exists", "artifact": "user-stories" }
+                ],
+                "pass": {
+                    "type": "task",
+                    "id": "design",
+                    "role": "architect",
+                    "inputArtifacts": ["prd", "user-stories", "prototype"],
+                    "beforeDispatch": {
+                        "inject": ["需求阶段全部完成。请基于 prd、user-stories 和 prototype 进行技术设计，产出 tech-design（技术方案）。\n\ntech-design 应包含：技术选型、现有代码结构分析、架构决策、技术预研（三方对接/外部依赖的可行性验证）、风险评估。"]
+                    },
+                    "afterComplete": {
+                        "inject": ["技术方案设计完成。请确认 tech-design 已写入并提交用户审批。"]
+                    }
+                },
+                "fail": {
+                    "goto": "stories",
+                    "maxRetries": 3,
+                    "onExhausted": "escalate"
+                }
+            },
+            {
+                "type": "gate",
+                "id": "tech-design-gate",
+                "conditions": [
+                    { "type": "artifact_exists", "artifact": "tech-design" },
+                    { "type": "artifact_approved", "artifact": "tech-design" }
+                ],
+                "pass": {
+                    "type": "task",
+                    "id": "design-detail",
+                    "role": "architect",
+                    "inputArtifacts": ["prd", "user-stories", "prototype", "tech-design"],
+                    "beforeDispatch": {
+                        "inject": ["tech-design 已通过用户确认。请基于已确认的技术方案，继续完成以下产出：\n\n必须产出：api-design、task-breakdown\n可选产出（根据项目实际需要判断）：api-contract、data-model"]
+                    },
+                    "afterComplete": {
+                        "inject": ["API 设计和任务拆解完成。请确认 api-design 和 task-breakdown 已写入，task-breakdown 需提交用户审批。"]
                     }
                 },
                 "fail": {
@@ -68,40 +119,90 @@
                 }
             },
             {
+                "type": "gate",
+                "id": "design-gate",
+                "conditions": [
+                    { "type": "artifact_exists", "artifact": "api-design" },
+                    { "type": "artifact_exists", "artifact": "task-breakdown" },
+                    { "type": "artifact_approved", "artifact": "task-breakdown" }
+                ],
+                "pass": {
+                    "type": "loop",
+                    "id": "develop-loop",
+                    "maxIterations": 20,
+                    "body": {
+                        "type": "task",
+                        "id": "develop-batch",
+                        "role": "developer",
+                        "inputArtifacts": ["tech-design", "api-design", "task-breakdown", "prd"],
+                        "beforeDispatch": {
+                            "inject": ["按 task-breakdown 中的顺序执行开发任务，每次完成 2 条任务后提交代码并汇报。\n\n首次迭代：直接开始前 2 条任务。\n后续迭代：先向用户简要汇报上批完成情况，等用户确认后再继续下 2 条任务。"]
+                        },
+                        "afterComplete": {
+                            "inject": ["本批任务已完成。请检查 task-breakdown，判断是否所有任务都已完成：\n- 如果还有未完成的任务：继续下一轮迭代。\n- 如果所有任务已完成：调用 loop_done 结束开发循环。"]
+                        }
+                    }
+                },
+                "fail": {
+                    "goto": "design-detail",
+                    "maxRetries": 3,
+                    "onExhausted": "escalate"
+                }
+            },
+            {
                 "type": "task",
-                "id": "test",
+                "id": "test-plan",
                 "role": "tester",
-                "inputArtifacts": ["prd", "user-stories", "code"],
+                "inputArtifacts": ["prd", "user-stories", "prototype", "api-design"],
                 "beforeDispatch": {
-                    "inject": ["请基于 prd、user-stories 编写测试计划并执行测试，产出 test-report。"]
+                    "inject": ["请基于 user-stories 验收标准编写测试计划，覆盖功能测试（参照 prototype）和内部模块 API 测试（参照 api-design）。"]
                 },
                 "afterComplete": {
-                    "inject": ["测试阶段完成。请检查 test-report 结果。"]
+                    "inject": ["测试计划编写完成。请确认 test-plan 已写入并提交用户审批。"]
+                }
+            },
+            {
+                "type": "gate",
+                "id": "test-plan-gate",
+                "conditions": [
+                    { "type": "artifact_exists", "artifact": "test-plan" },
+                    { "type": "artifact_approved", "artifact": "test-plan" }
+                ],
+                "pass": {
+                    "type": "task",
+                    "id": "test-execute",
+                    "role": "tester",
+                    "inputArtifacts": ["test-plan", "api-design", "prototype", "code"],
+                    "beforeDispatch": {
+                        "inject": ["测试计划已通过用户确认。请按照 test-plan 执行测试，产出 test-report。"]
+                    },
+                    "afterComplete": {
+                        "inject": ["测试执行完成。请确认 test-report 已写入并提交用户审批。"]
+                    }
+                },
+                "fail": {
+                    "goto": "test-plan",
+                    "maxRetries": 3,
+                    "onExhausted": "escalate"
                 }
             },
             {
                 "type": "gate",
                 "id": "test-gate",
                 "conditions": [
-                    {
-                        "type": "artifact_field",
-                        "artifact": "test-report",
-                        "field": "result",
-                        "operator": "eq",
-                        "value": "pass"
-                    }
+                    { "type": "artifact_exists", "artifact": "test-report" },
+                    { "type": "artifact_approved", "artifact": "test-report" }
                 ],
                 "pass": {
                     "type": "task",
                     "id": "deliver",
                     "role": "coordinator",
-                    "inputArtifacts": ["prd", "test-report", "code"],
                     "beforeDispatch": {
-                        "inject": ["所有测试通过。请进行最终交付验收，产出 retrospective。"]
+                        "inject": ["所有测试已通过用户确认，开发流程完成。请向用户做最终交付总结。"]
                     }
                 },
                 "fail": {
-                    "goto": "develop",
+                    "goto": "develop-loop",
                     "maxRetries": 3,
                     "onExhausted": "escalate"
                 }
@@ -115,7 +216,7 @@
             "role": "coordinator",
             "beforeDispatch": {
                 "inject": [
-                    "⚠️ 升级处理：某个流程门控（gate）的重试次数已耗尽，流程无法继续。请检查当前工作流状态（project_status），识别失败的 gate 和对应的条件，与用户沟通决定下一步行动方案。"
+                    "升级处理：某个流程门控（gate）的重试次数已耗尽，流程无法继续。请检查当前工作流状态（project_status），识别失败的 gate 和对应的条件，与用户沟通决定下一步行动方案。"
                 ]
             }
         }
@@ -154,37 +255,32 @@
         "user-stories": {
             "name": "用户故事 + 验收标准"
         },
-        "fsd": {
-            "name": "功能规格"
-        },
         "prototype": {
             "name": "高保真原型",
             "format": "html",
             "review": true
         },
-        "project-plan": {
-            "name": "项目计划"
-        },
         "tech-design": {
             "name": "技术方案",
+            "review": true,
             "steps": [
                 {
                     "id": "analysis",
-                    "name": "架构分析",
+                    "name": "技术分析",
                     "format": "json",
                     "description": "分析现有代码结构、技术约束、可行方案，输出结构化分析报告"
                 },
                 {
-                    "id": "api-contract",
-                    "name": "API 契约定义",
+                    "id": "research",
+                    "name": "技术预研",
                     "format": "json",
-                    "description": "定义 API 端点、请求/响应格式、错误码，输出契约文档"
+                    "description": "三方对接/外部依赖的可行性验证、风险评估、替代方案"
                 },
                 {
                     "id": "draft",
                     "name": "技术方案草稿",
                     "format": "md",
-                    "description": "基于分析和契约生成完整技术方案文档"
+                    "description": "基于分析和预研结果，生成完整技术方案文档（含技术选型、架构决策、风险评估）"
                 },
                 {
                     "id": "final",
@@ -198,10 +294,16 @@
             "name": "数据模型设计"
         },
         "api-design": {
-            "name": "API 设计"
+            "name": "API 设计",
+            "description": "内部模块 API 设计：模块划分与职责、公共方法签名（参数、返回值、异常）、模块间依赖与调用关系、数据流转路径。如有对外 HTTP 接口需求，另见 api-contract。"
+        },
+        "api-contract": {
+            "name": "对外接口契约",
+            "description": "对外 HTTP 接口定义：路由、请求/响应格式、认证鉴权方案、错误码约定（仅前后端分离或需对外暴露接口的项目）"
         },
         "task-breakdown": {
             "name": "任务拆解",
+            "review": true,
             "steps": [
                 {
                     "id": "coarse",
@@ -229,20 +331,13 @@
                 }
             ]
         },
-        "risk-assessment": {
-            "name": "技术风险评估"
-        },
         "test-plan": {
-            "name": "测试计划"
+            "name": "测试计划",
+            "review": true
         },
         "test-report": {
-            "name": "测试报告"
-        },
-        "deploy": {
-            "name": "部署文档"
-        },
-        "retrospective": {
-            "name": "复盘记录"
+            "name": "测试报告",
+            "review": true
         },
         "code": {
             "name": "代码实现",
