@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getFormatExtension, resolveInputReference } from '../src/tools/dispatch-role.js';
-import type { InputReference } from '../src/tools/dispatch-role.js';
+import { getFormatExtension, resolveInputReference } from '../src/tools/role-dispatch.js';
+import type { InputReference } from '../src/tools/role-dispatch.js';
 import type { ArtifactIOContext } from '../src/core/artifacts.js';
 import type { WorkflowPlugin, ArtifactDefinition, WorkflowDefinition, RoleDefinition } from '../src/core/types.js';
 
@@ -33,7 +33,7 @@ function makePlugin(artifactDefs: Record<string, ArtifactDefinition> = {}): Work
 
 // ─── Tests ───
 
-describe('dispatch-role helpers', () => {
+describe('role-dispatch helpers', () => {
     // ─── getFormatExtension ───
 
     describe('getFormatExtension', () => {

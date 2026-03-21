@@ -87,9 +87,9 @@ Setup options:
     const { registerGetRolePrompt } = await import('./tools/get-role-prompt.js');
     const { registerArtifactTools } = await import('./tools/artifact-tools.js');
     const { registerGetProjectStatus } = await import('./tools/get-project-status.js');
-    const { registerApproveArtifact } = await import('./tools/approve-artifact.js');
-    const { registerDispatchRole } = await import('./tools/dispatch-role.js');
-    const { registerReportDispatch } = await import('./tools/report-dispatch.js');
+    const { registerApproveArtifact } = await import('./tools/artifact-approve.js');
+    const { registerDispatchRole } = await import('./tools/role-dispatch.js');
+    const { registerReportDispatch } = await import('./tools/dispatch-report.js');
     const { registerPatchStart } = await import('./tools/patch-start.js');
     const { registerIssueTools } = await import('./tools/issue-tools.js');
     const { registerArtifactSchema } = await import('./tools/artifact-schema.js');

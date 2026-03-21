@@ -31,7 +31,8 @@ import { resolveActive, isError } from './utils.js';
 import { loadWorkflowForContext, processWorkflowEvent, formatNextAction, findTaskNode } from './engine-helpers.js';
 import { readArtifact, listArtifacts } from '../core/artifacts.js';
 import type { ArtifactIOContext } from '../core/artifacts.js';
-import type { AgentType, DispatchRecord, SessionRecord, ActionContext } from '../core/types.js';
+import type { AgentType, DispatchRecord, SessionRecord, ActionContext, LoopNodeState } from '../core/types.js';
+import { findAncestorLoopId } from '../core/tree-utils.js';
 
 export function registerReportDispatch(server: McpServer, workflowsDir: string): void {
     server.tool(
@@ -170,6 +171,18 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                                             contextLabel: ctx.activeContext,
                                         };
                                         const nodeState = currentState.nodes[dispatch.nodeId];
+                                        // Resolve loopIteration: find ancestor loop node and read its current iteration
+                                        let loopIteration: number | undefined;
+                                        const ancestorLoopId = findAncestorLoopId(wf.definition.root, dispatch.nodeId);
+                                        if (ancestorLoopId) {
+                                            const loopState = currentState.nodes[ancestorLoopId] as
+                                                | LoopNodeState
+                                                | undefined;
+                                            if (loopState) {
+                                                loopIteration = loopState.currentIteration;
+                                            }
+                                        }
+
                                         const actionCtx: ActionContext = {
                                             nodeId: dispatch.nodeId,
                                             role: dispatch.role,
@@ -186,6 +199,7 @@ export function registerReportDispatch(server: McpServer, workflowsDir: string):
                                                     ),
                                                 list: () => listArtifacts(reportIoCtx, wf.artifactDefinitions),
                                             },
+                                            loopIteration,
                                         };
                                         for (const actionName of targetNode.afterComplete.actions) {
                                             const handler = wf.actions[actionName];

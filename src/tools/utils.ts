@@ -87,7 +87,7 @@ export function isError(result: ResolvedContext | ToolResult): result is ToolRes
 
 /**
  * Build override instructions to inject into a role prompt.
- * Shared by dispatch-role and get-role-prompt.
+ * Shared by role-dispatch and get-role-prompt.
  */
 export function buildOverrideSection(roleId: string, overrides: OverrideConfig): string {
     const roleOverrides = overrides.roles?.[roleId]?.capabilities;

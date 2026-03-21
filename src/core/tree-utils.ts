@@ -4,7 +4,7 @@
  * All functions here are pure (no side effects, no engine state dependency),
  * and only depend on types from ./types.ts.
  *
- * Extracted from workflow-engine.ts, loop-done.ts, dispatch-role.ts,
+ * Extracted from workflow-engine.ts, loop-done.ts, role-dispatch.ts,
  * engine-helpers.ts, and workflow-validator.ts to eliminate duplication
  * and avoid circular dependencies.
  */

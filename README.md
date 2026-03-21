@@ -305,11 +305,11 @@ harmonia/
 │   │   ├── iteration-start.ts   # iteration_start
 │   │   ├── get-project-status.ts # project_status
 │   │   ├── get-role-prompt.ts   # role_prompt
-│   │   ├── dispatch-role.ts     # role_dispatch
-│   │   ├── report-dispatch.ts   # dispatch_report
+│   │   ├── role-dispatch.ts     # role_dispatch
+│   │   ├── dispatch-report.ts   # dispatch_report
 │   │   ├── artifact-tools.ts    # artifact_write/read/list
 │   │   ├── artifact-schema.ts   # artifact_schema
-│   │   ├── approve-artifact.ts  # artifact_approve + review_list
+│   │   ├── artifact-approve.ts  # artifact_approve + review_list
 │   │   ├── patch-start.ts       # patch_start
 │   │   ├── issue-tools.ts       # issue_create/update/list
 │   │   └── utils.ts             # 工具共享辅助函数
