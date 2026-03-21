@@ -8,6 +8,8 @@ import type {
     SequenceNode,
     ParallelNode,
     GateNode,
+    LoopNode,
+    LoopNodeState,
     GotoTarget,
     WorkflowState,
     NodeState,
@@ -39,6 +41,10 @@ function makeGate(
     conditions: GateCondition[] = [{ type: 'artifact_exists', artifact: 'test-artifact' }],
 ): GateNode {
     return { type: 'gate', id, conditions, pass, fail };
+}
+
+function makeLoop(id: string, body: WorkflowNode, maxIterations = 10): LoopNode {
+    return { type: 'loop', id, body, maxIterations };
 }
 
 function makeDefinition(overrides: Partial<WorkflowDefinition> = {}): WorkflowDefinition {
@@ -1501,6 +1507,386 @@ describe('workflow-engine', () => {
                 ctx,
             );
             expect(result.nextAction.type).toBe('completed');
+        });
+    });
+
+    // ─── Loop basic flow ───
+
+    describe('loop basic flow', () => {
+        it('should activate loop body and track iteration state', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 5),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            const result = startWorkflow(def, state, ctx);
+
+            expect(result.state.nodes['my-loop'].status).toBe('active');
+            expect(result.state.nodes['work'].status).toBe('active');
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(0);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).done).toBe(false);
+            expect(result.nextAction.type).toBe('dispatch');
+            expect(result.nextAction.nodeId).toBe('work');
+        });
+
+        it('should start next iteration when body completes', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 5),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(0);
+
+            // Complete body → iteration 1
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(1);
+            expect(result.state.nodes['work'].status).toBe('active');
+            expect(result.nextAction.type).toBe('dispatch');
+            expect(result.nextAction.nodeId).toBe('work');
+
+            // Complete body → iteration 2
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(2);
+            expect(result.state.nodes['work'].status).toBe('active');
+        });
+
+        it('should reset body node retryCount between iterations', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 5),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+
+            // Complete first iteration
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+
+            // Body node should have retryCount reset to 0
+            expect(result.state.nodes['work'].retryCount).toBe(0);
+        });
+
+        it('should handle loop with sequence body', () => {
+            const def = makeDefinition({
+                root: makeLoop(
+                    'my-loop',
+                    makeSequence('body-seq', [makeTask('t1', 'developer'), makeTask('t2', 'developer')]),
+                    5,
+                ),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            // Start → loop activates → body-seq activates → t1
+            let result = startWorkflow(def, state, ctx);
+            expect(result.nextAction.nodeId).toBe('t1');
+
+            // Complete t1 → t2
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't1' }, ctx);
+            expect(result.nextAction.nodeId).toBe('t2');
+
+            // Complete t2 → body-seq completes → iteration 1 → t1 again
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't2' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(1);
+            expect(result.state.nodes['t1'].status).toBe('active');
+            expect(result.state.nodes['t2'].status).toBe('pending');
+            expect(result.nextAction.nodeId).toBe('t1');
+        });
+
+        it('should handle loop within a sequence', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeTask('init', 'coordinator'),
+                    makeLoop('dev-loop', makeTask('develop', 'developer'), 5),
+                    makeTask('finalize', 'coordinator'),
+                ]),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            // Start → init
+            let result = startWorkflow(def, state, ctx);
+            expect(result.nextAction.nodeId).toBe('init');
+
+            // Complete init → loop activates → develop (iteration 0)
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'init' }, ctx);
+            expect(result.state.nodes['dev-loop'].status).toBe('active');
+            expect((result.state.nodes['dev-loop'] as LoopNodeState).currentIteration).toBe(0);
+            expect(result.nextAction.nodeId).toBe('develop');
+
+            // Complete develop → iteration 1
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'develop' }, ctx);
+            expect((result.state.nodes['dev-loop'] as LoopNodeState).currentIteration).toBe(1);
+
+            // Mark loop_done, then complete develop → loop terminates → finalize
+            result = computeNextAction(def, result.state, { type: 'loop_done', nodeId: 'dev-loop' }, ctx);
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'develop' }, ctx);
+            expect(result.state.nodes['dev-loop'].status).toBe('completed');
+            expect(result.nextAction.nodeId).toBe('finalize');
+
+            // Complete finalize → workflow complete
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'finalize' }, ctx);
+            expect(result.nextAction.type).toBe('completed');
+        });
+    });
+
+    // ─── Loop termination ───
+
+    describe('loop termination', () => {
+        it('should terminate loop after current iteration when loop_done is called', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 10),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+
+            // Send loop_done event
+            result = computeNextAction(def, result.state, { type: 'loop_done', nodeId: 'my-loop' }, ctx);
+            expect(result.nextAction.type).toBe('wait');
+            expect((result.state.nodes['my-loop'] as LoopNodeState).done).toBe(true);
+            // Loop is still active — current iteration continues
+            expect(result.state.nodes['my-loop'].status).toBe('active');
+
+            // Complete current iteration → loop completes
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect(result.state.nodes['my-loop'].status).toBe('completed');
+            expect(result.nextAction.type).toBe('completed');
+        });
+
+        it('should fail when maxIterations is reached', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 3),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(0);
+
+            // Complete → iteration 1
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(1);
+
+            // Complete → iteration 2
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(2);
+
+            // Complete → nextIteration (3) >= maxIterations (3) → FAILED
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect(result.state.nodes['my-loop'].status).toBe('failed');
+            expect(result.nextAction.type).toBe('failed');
+        });
+
+        it('should reject loop_done for non-active loop', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 10),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            // Don't start workflow — loop is still pending
+            const result = computeNextAction(def, state, { type: 'loop_done', nodeId: 'my-loop' }, ctx);
+            expect(result.nextAction.type).toBe('wait');
+            expect(result.nextAction.instructions).toContain('not active');
+        });
+
+        it('should allow loop_done mid-sequence-body and terminate after body completes', () => {
+            const def = makeDefinition({
+                root: makeLoop(
+                    'my-loop',
+                    makeSequence('body-seq', [makeTask('t1', 'developer'), makeTask('t2', 'developer')]),
+                    10,
+                ),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+            expect(result.nextAction.nodeId).toBe('t1');
+
+            // Call loop_done while t1 is active
+            result = computeNextAction(def, result.state, { type: 'loop_done', nodeId: 'my-loop' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).done).toBe(true);
+
+            // Complete t1 → t2 (current iteration continues)
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't1' }, ctx);
+            expect(result.nextAction.nodeId).toBe('t2');
+
+            // Complete t2 → body-seq completes → loop checks done=true → loop completed
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't2' }, ctx);
+            expect(result.state.nodes['my-loop'].status).toBe('completed');
+        });
+    });
+
+    // ─── Loop failure propagation ───
+
+    describe('loop failure propagation', () => {
+        it('should propagate body task failure to loop when no onFailed', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 5),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+
+            // work fails → bubbles to loop → loop fails → workflow fails
+            result = computeNextAction(
+                def,
+                result.state,
+                { type: 'node_failed', nodeId: 'work', error: 'task crashed' },
+                ctx,
+            );
+            expect(result.state.nodes['work'].status).toBe('failed');
+            expect(result.state.nodes['my-loop'].status).toBe('failed');
+            expect(result.nextAction.type).toBe('failed');
+        });
+
+        it('should handle body task onFailed retry within loop', () => {
+            const bodyTask = { ...makeTask('work', 'developer'), onFailed: { goto: 'work', maxRetries: 2 } };
+            const def = makeDefinition({
+                root: makeLoop('my-loop', bodyTask, 5),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+
+            // work fails → task-level onFailed retries work
+            result = computeNextAction(
+                def,
+                result.state,
+                { type: 'node_failed', nodeId: 'work', error: 'first fail' },
+                ctx,
+            );
+            expect(result.state.nodes['work'].status).toBe('active');
+            expect(result.state.nodes['work'].retryCount).toBe(1);
+            // Loop is still active
+            expect(result.state.nodes['my-loop'].status).toBe('active');
+            expect(result.nextAction.type).toBe('dispatch');
+        });
+
+        it('should use loop onFailed when loop itself fails', () => {
+            const loopNode: LoopNode = {
+                ...makeLoop('my-loop', makeTask('work', 'developer'), 2),
+                onFailed: { goto: 'my-loop', maxRetries: 1 },
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [loopNode]),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+
+            // iteration 0 → complete → iteration 1
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(1);
+
+            // Complete iteration 1 → nextIteration(2) >= maxIterations(2) → loop fails → onFailed goto my-loop
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+
+            // Loop should be retried via onFailed
+            expect(result.state.nodes['my-loop'].status).toBe('active');
+            expect(result.state.nodes['my-loop'].retryCount).toBe(1);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).currentIteration).toBe(0);
+        });
+
+        it('should escalate when loop onFailed retries are exhausted', () => {
+            const loopNode: LoopNode = {
+                ...makeLoop('my-loop', makeTask('work', 'developer'), 1),
+                onFailed: { goto: 'my-loop', maxRetries: 1, onExhausted: 'escalate' },
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [loopNode]),
+                floatingNodes: [makeTask('escalate', 'coordinator')],
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            let result = startWorkflow(def, state, ctx);
+
+            // iteration 0 complete → maxIterations(1) reached → loop fails → onFailed retry (retryCount 1)
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect(result.state.nodes['my-loop'].retryCount).toBe(1);
+
+            // iteration 0 complete again → maxIterations(1) reached → loop fails → retries exhausted → escalate
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect(result.nextAction.nodeId).toBe('escalate');
+            expect(result.state.nodes['escalate'].status).toBe('active');
+        });
+    });
+
+    // ─── Loop body goto out ───
+
+    describe('loop body goto out', () => {
+        it('should allow gate fail goto to node outside loop', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeTask('setup', 'coordinator'),
+                    makeLoop(
+                        'dev-loop',
+                        makeGate(
+                            'quality-gate',
+                            makeTask('continue-work', 'developer'),
+                            { goto: 'setup', maxRetries: 3 },
+                            [{ type: 'artifact_exists', artifact: 'quality-report' }],
+                        ),
+                        5,
+                    ),
+                    makeTask('finalize', 'coordinator'),
+                ]),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            // Start → setup
+            let result = startWorkflow(def, state, ctx);
+            expect(result.nextAction.nodeId).toBe('setup');
+
+            // Complete setup → loop activates → gate evaluates → fails → goto setup
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'setup' }, ctx);
+
+            // Gate should fail (artifact doesn't exist) and goto setup
+            expect(result.state.nodes['setup'].status).toBe('active');
+            expect(result.state.nodes['setup'].retryCount).toBe(1);
+            // Loop should be reset (goto target is outside loop)
+            expect(result.state.nodes['dev-loop'].status).toBe('pending');
+        });
+    });
+
+    // ─── initNodeStates with loop ───
+
+    describe('initNodeStates with loop', () => {
+        it('should create states for loop and its body nodes', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeSequence('body-seq', [makeTask('t1'), makeTask('t2')]), 5),
+            });
+            const states = initNodeStates(def);
+
+            // my-loop, body-seq, t1, t2
+            expect(states['my-loop']).toBeDefined();
+            expect(states['body-seq']).toBeDefined();
+            expect(states['t1']).toBeDefined();
+            expect(states['t2']).toBeDefined();
+            expect(states['my-loop'].status).toBe('pending');
+            expect(states['body-seq'].status).toBe('pending');
+        });
+
+        it('should create states for nested loops', () => {
+            const def = makeDefinition({
+                root: makeLoop('outer-loop', makeLoop('inner-loop', makeTask('work'), 3), 5),
+            });
+            const states = initNodeStates(def);
+
+            expect(states['outer-loop']).toBeDefined();
+            expect(states['inner-loop']).toBeDefined();
+            expect(states['work']).toBeDefined();
         });
     });
 });

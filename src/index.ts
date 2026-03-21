@@ -93,6 +93,7 @@ Setup options:
     const { registerPatchStart } = await import('./tools/patch-start.js');
     const { registerIssueTools } = await import('./tools/issue-tools.js');
     const { registerArtifactSchema } = await import('./tools/artifact-schema.js');
+    const { registerLoopDone } = await import('./tools/loop-done.js');
 
     // Workflows directory: <data_dir>/harmonia/.workflows
     const WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
@@ -114,6 +115,7 @@ Setup options:
     registerPatchStart(server, WORKFLOWS_DIR);
     registerIssueTools(server);
     registerArtifactSchema(server, WORKFLOWS_DIR);
+    registerLoopDone(server, WORKFLOWS_DIR);
 
     // Connect via stdio
     const transport = new StdioServerTransport();

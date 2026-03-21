@@ -19,6 +19,7 @@ import type {
     FailureHandler,
     ValidationError,
     ArtifactDefinition,
+    LoopNode,
 } from './types.js';
 
 /** Represents a goto edge for cycle detection */
@@ -47,6 +48,9 @@ function collectSubtreeIds(node: WorkflowNode, ids: Set<string>): void {
             if ('type' in node.fail) {
                 collectSubtreeIds(node.fail as WorkflowNode, ids);
             }
+            break;
+        case 'loop':
+            collectSubtreeIds(node.body, ids);
             break;
         case 'task':
             break;
@@ -202,6 +206,10 @@ function collectAndValidateIds(
                 collectAndValidateIds(node.fail as WorkflowNode, childAncestors, allIds, errors);
             }
             break;
+        case 'loop':
+            validateLoopNode(node, errors);
+            collectAndValidateIds(node.body, childAncestors, allIds, errors);
+            break;
         case 'task':
             break;
     }
@@ -327,6 +335,32 @@ function validateGotoTargets(
                     floatingNodeIds,
                     errors,
                     gotoEdges,
+                );
+            }
+            break;
+        }
+        case 'loop': {
+            // Body can see loop's ancestors — body is not isolated
+            validateGotoTargets(
+                node.body,
+                childAncestors,
+                new Set(reachableIds),
+                allIds,
+                floatingNodeIds,
+                errors,
+                gotoEdges,
+            );
+            if (node.onFailed) {
+                validateFailureHandler(
+                    node.onFailed,
+                    node.id,
+                    allIds,
+                    floatingNodeIds,
+                    ancestorIds,
+                    reachableIds,
+                    errors,
+                    gotoEdges,
+                    false,
                 );
             }
             break;
@@ -472,6 +506,9 @@ function validateRoleReferences(node: WorkflowNode, availableRoles: Set<string>,
                 validateRoleReferences(node.fail as WorkflowNode, availableRoles, errors);
             }
             break;
+        case 'loop':
+            validateRoleReferences(node.body, availableRoles, errors);
+            break;
     }
 }
 
@@ -531,6 +568,31 @@ function validateArtifactDefinitions(
     }
 }
 
+// ─── Loop Node Validation ───
+
+/**
+ * Validate loop-specific constraints:
+ * - maxIterations must be a positive integer
+ * - body must exist (covered by type system, but validate at runtime for JSON input)
+ */
+function validateLoopNode(node: LoopNode, errors: ValidationError[]): void {
+    if (typeof node.maxIterations !== 'number' || !Number.isInteger(node.maxIterations) || node.maxIterations <= 0) {
+        errors.push({
+            type: 'other',
+            message: `Loop node "${node.id}" must have maxIterations as a positive integer, got ${node.maxIterations}`,
+            nodeId: node.id,
+        });
+    }
+
+    if (!node.body) {
+        errors.push({
+            type: 'other',
+            message: `Loop node "${node.id}" must have a body`,
+            nodeId: node.id,
+        });
+    }
+}
+
 // ─── Input Artifact Reference Validation ───
 
 /**
@@ -557,6 +619,9 @@ function validateInputArtifactReferences(
             if ('type' in node.fail) {
                 validateInputArtifactReferences(node.fail as WorkflowNode, artifactDefinitions, errors);
             }
+            break;
+        case 'loop':
+            validateInputArtifactReferences(node.body, artifactDefinitions, errors);
             break;
     }
 }

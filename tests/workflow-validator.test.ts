@@ -7,6 +7,7 @@ import type {
     SequenceNode,
     ParallelNode,
     GateNode,
+    LoopNode,
     GotoTarget,
     ValidationError,
     ArtifactDefinition,
@@ -38,6 +39,10 @@ function makeGate(id: string, pass: WorkflowNode, fail: WorkflowNode | GotoTarge
         pass,
         fail,
     };
+}
+
+function makeLoop(id: string, body: WorkflowNode, maxIterations = 10): LoopNode {
+    return { type: 'loop', id, body, maxIterations };
 }
 
 function makeDefinition(overrides: Partial<WorkflowDefinition> = {}): WorkflowDefinition {
@@ -745,6 +750,202 @@ describe('workflow-validator', () => {
             const artErrors = inputErrors(errors);
             expect(artErrors).toHaveLength(1);
             expect(artErrors[0].message).toContain('nonexistent');
+        });
+    });
+
+    // ─── Loop validation ───
+
+    describe('loop validation', () => {
+        it('should pass for a valid loop node', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [makeLoop('my-loop', makeTask('work', 'developer'), 5)]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            expect(errors).toHaveLength(0);
+        });
+
+        it('should detect duplicate IDs within loop body', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeTask('dup', 'developer'),
+                    makeLoop('my-loop', makeTask('dup', 'developer'), 5),
+                ]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const dupErrors = errors.filter((e) => e.type === 'duplicate_id');
+            expect(dupErrors).toHaveLength(1);
+            expect(dupErrors[0].nodeId).toBe('dup');
+        });
+
+        it('should detect invalid maxIterations (zero)', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 0),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const otherErrors = errors.filter((e) => e.type === 'other' && e.nodeId === 'my-loop');
+            expect(otherErrors).toHaveLength(1);
+            expect(otherErrors[0].message).toContain('maxIterations');
+        });
+
+        it('should detect invalid maxIterations (negative)', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), -1),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const otherErrors = errors.filter((e) => e.type === 'other' && e.nodeId === 'my-loop');
+            expect(otherErrors).toHaveLength(1);
+            expect(otherErrors[0].message).toContain('maxIterations');
+        });
+
+        it('should detect invalid maxIterations (non-integer)', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'developer'), 3.5),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const otherErrors = errors.filter((e) => e.type === 'other' && e.nodeId === 'my-loop');
+            expect(otherErrors).toHaveLength(1);
+            expect(otherErrors[0].message).toContain('maxIterations');
+        });
+
+        it('should validate role references inside loop body', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeTask('work', 'ghost-role'), 5),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const roleErrors = errors.filter((e) => e.type === 'invalid_role_ref');
+            expect(roleErrors).toHaveLength(1);
+            expect(roleErrors[0].nodeId).toBe('work');
+            expect(roleErrors[0].message).toContain('ghost-role');
+        });
+
+        it('should validate inputArtifacts inside loop body', () => {
+            const sampleArtifacts: Record<string, ArtifactDefinition> = {
+                prd: { name: 'PRD', format: 'md' },
+            };
+            const bodyTask: TaskNode = {
+                type: 'task',
+                id: 'work',
+                role: 'developer',
+                inputArtifacts: ['nonexistent-art'],
+            };
+            const def = makeDefinition({
+                root: makeLoop('my-loop', bodyTask, 5),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES, sampleArtifacts);
+            const artErrors = errors.filter((e) => e.type === 'invalid_input_artifact');
+            expect(artErrors).toHaveLength(1);
+            expect(artErrors[0].nodeId).toBe('work');
+        });
+
+        it('should validate goto targets inside loop body', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeTask('setup', 'coordinator'),
+                    makeLoop(
+                        'my-loop',
+                        makeGate('g1', makeTask('pass', 'developer'), {
+                            goto: 'setup',
+                            maxRetries: 3,
+                            onExhausted: 'escalate',
+                        }),
+                        5,
+                    ),
+                ]),
+                floatingNodes: [makeTask('escalate', 'coordinator')],
+            });
+            // goto to 'setup' which is a preceding sibling of the loop — should be valid
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const gotoErrors = errors.filter((e) => e.type === 'invalid_goto');
+            expect(gotoErrors).toHaveLength(0);
+        });
+
+        it('should detect invalid goto target inside loop body', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeLoop(
+                        'my-loop',
+                        makeGate('g1', makeTask('pass', 'developer'), {
+                            goto: 'nonexistent',
+                            maxRetries: 3,
+                        }),
+                        5,
+                    ),
+                    makeTask('after-loop', 'developer'),
+                ]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const gotoErrors = errors.filter((e) => e.type === 'invalid_goto');
+            expect(gotoErrors).toHaveLength(1);
+            expect(gotoErrors[0].message).toContain('nonexistent');
+        });
+
+        it('should validate loop onFailed goto target', () => {
+            const loopNode: LoopNode = {
+                ...makeLoop('my-loop', makeTask('work', 'developer'), 5),
+                onFailed: { goto: 'nonexistent-target', maxRetries: 2 },
+            };
+            const def = makeDefinition({
+                root: makeSequence('main', [loopNode]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const gotoErrors = errors.filter((e) => e.type === 'invalid_goto');
+            expect(gotoErrors).toHaveLength(1);
+            expect(gotoErrors[0].message).toContain('nonexistent-target');
+        });
+
+        it('should validate nested loops', () => {
+            const def = makeDefinition({
+                root: makeLoop('outer-loop', makeLoop('inner-loop', makeTask('work', 'developer'), 3), 5),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            expect(errors).toHaveLength(0);
+        });
+
+        it('should detect duplicate IDs in nested loops', () => {
+            const def = makeDefinition({
+                root: makeLoop(
+                    'outer-loop',
+                    makeLoop('inner-loop', makeSequence('dup', [makeTask('work', 'developer')]), 3),
+                    5,
+                ),
+            });
+            // Add a node with the same ID at a different level
+            const defWithDup = makeDefinition({
+                root: makeSequence('main', [
+                    makeTask('dup', 'developer'),
+                    makeLoop(
+                        'outer-loop',
+                        makeLoop('inner-loop', makeSequence('dup', [makeTask('work', 'developer')]), 3),
+                        5,
+                    ),
+                ]),
+            });
+            const errors = validateWorkflow(defWithDup, DEFAULT_ROLES);
+            const dupErrors = errors.filter((e) => e.type === 'duplicate_id');
+            expect(dupErrors).toHaveLength(1);
+            expect(dupErrors[0].nodeId).toBe('dup');
+        });
+
+        it('should validate complex loop body (sequence with gate)', () => {
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeTask('init', 'coordinator'),
+                    makeLoop(
+                        'dev-loop',
+                        makeSequence('loop-body', [
+                            makeTask('develop', 'developer'),
+                            makeGate('review-gate', makeTask('continue', 'developer'), {
+                                goto: 'develop',
+                                maxRetries: 3,
+                            }),
+                        ]),
+                        10,
+                    ),
+                    makeTask('finalize', 'coordinator'),
+                ]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            expect(errors).toHaveLength(0);
         });
     });
 });

@@ -140,6 +140,9 @@ export function collectTaskNodes(node: WorkflowNode): TaskNode[] {
                 tasks.push(...collectTaskNodes(node.fail as WorkflowNode));
             }
             break;
+        case 'loop':
+            tasks.push(...collectTaskNodes(node.body));
+            break;
     }
     return tasks;
 }

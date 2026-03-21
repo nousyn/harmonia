@@ -5,7 +5,7 @@
  * Workflow plugins use these primitives to define specific processes.
  *
  * This file defines:
- * - Workflow node types (task, sequence, parallel, gate)
+ * - Workflow node types (task, sequence, parallel, gate, loop)
  * - Workflow state (node-based, not phase-based)
  * - Engine types (nextAction, events, gate evaluation)
  * - Artifact system
@@ -23,7 +23,7 @@ export type { AgentType };
 
 // ─── Workflow Node Types ───
 
-export type NodeType = 'task' | 'sequence' | 'parallel' | 'gate';
+export type NodeType = 'task' | 'sequence' | 'parallel' | 'gate' | 'loop';
 
 /** Hook configuration for beforeDispatch / afterComplete */
 export interface NodeHook {
@@ -132,8 +132,20 @@ export interface GateNode {
     fail: WorkflowNode | GotoTarget;
 }
 
+/** Loop node — repeated execution of a sub-workflow with iteration state */
+export interface LoopNode {
+    type: 'loop';
+    id: string;
+    /** Maximum iterations (safety cap) */
+    maxIterations: number;
+    /** The sub-workflow to repeat each iteration */
+    body: WorkflowNode;
+    /** Optional failure handler */
+    onFailed?: FailureHandler;
+}
+
 /** Union of all workflow node types */
-export type WorkflowNode = TaskNode | SequenceNode | ParallelNode | GateNode;
+export type WorkflowNode = TaskNode | SequenceNode | ParallelNode | GateNode | LoopNode;
 
 // ─── Workflow Definition (workflow.json root) ───
 
@@ -275,6 +287,14 @@ export interface NodeState {
     error?: string;
 }
 
+/** Runtime state for loop nodes (extends NodeState) */
+export interface LoopNodeState extends NodeState {
+    /** Current iteration index (0-based) */
+    currentIteration: number;
+    /** Whether loop_done has been called — loop will terminate after current iteration completes */
+    done: boolean;
+}
+
 /** Complete workflow state (persisted in state.json) */
 export interface WorkflowState {
     /** Project name (unique identifier) */
@@ -355,7 +375,8 @@ export type WorkflowEvent =
     | { type: 'artifact_written'; artifactId: string }
     | { type: 'artifact_approved'; artifactId: string }
     | { type: 'dispatch_requested'; nodeId: string }
-    | { type: 'query_status' };
+    | { type: 'query_status' }
+    | { type: 'loop_done'; nodeId: string };
 
 // ─── Action System (node hooks) ───
 
@@ -382,6 +403,8 @@ export interface ActionContext {
     };
     /** Task completion result (only in afterComplete) */
     taskResult?: unknown;
+    /** Current loop iteration index (0-based), only set when task is inside a loop */
+    loopIteration?: number;
 }
 
 /** Return value from action handlers */

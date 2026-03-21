@@ -21,7 +21,14 @@ import { readSteps, getCompletedStepIds } from '../core/steps.js';
 import { listProjects, getProject, resolveContextDir } from '../core/registry.js';
 import { readIssues } from '../core/issues.js';
 import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
-import type { DispatchRecord, SessionRecord, WorkflowNode, NodeState, ArtifactDefinition } from '../core/types.js';
+import type {
+    DispatchRecord,
+    SessionRecord,
+    WorkflowNode,
+    NodeState,
+    ArtifactDefinition,
+    LoopNodeState,
+} from '../core/types.js';
 import type { ArtifactStepState } from '../core/types.js';
 import type { ResolvedContext } from './utils.js';
 
@@ -102,6 +109,26 @@ function formatNodeTree(
                 const failTarget = node.fail as { goto: string };
                 lines.push(indent + '  ↩ fail → goto ' + failTarget.goto);
             }
+            break;
+        }
+        case 'loop': {
+            const loopState = state as LoopNodeState | undefined;
+            const iteration = loopState?.currentIteration ?? 0;
+            const done = loopState?.done ? ', done marked' : '';
+            lines.push(
+                indent +
+                    icon +
+                    ' ' +
+                    node.id +
+                    ' (loop, ' +
+                    iteration +
+                    '/' +
+                    node.maxIterations +
+                    done +
+                    ') — ' +
+                    status,
+            );
+            lines.push(...formatNodeTree(node.body, nodes, dispatches, depth + 1));
             break;
         }
     }

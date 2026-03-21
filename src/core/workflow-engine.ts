@@ -21,10 +21,12 @@ import type {
     SequenceNode,
     ParallelNode,
     GateNode,
+    LoopNode,
     GotoTarget,
     FailureHandler,
     WorkflowState,
     NodeState,
+    LoopNodeState,
     NextAction,
     WorkflowEvent,
     GateCondition,
@@ -85,6 +87,9 @@ function collectNodeStates(node: WorkflowNode, states: Record<string, NodeState>
                 collectNodeStates(node.fail as WorkflowNode, states);
             }
             break;
+        case 'loop':
+            collectNodeStates(node.body, states);
+            break;
         case 'task':
             break;
     }
@@ -144,6 +149,30 @@ export function computeNextAction(
         case 'dispatch_requested':
             return handleDispatchRequest(newState, definition, event.nodeId, context);
 
+        case 'loop_done': {
+            // Mark the loop as done — it will terminate after current iteration completes
+            const loopState = newState.nodes[event.nodeId] as LoopNodeState | undefined;
+            if (!loopState || loopState.status !== 'active') {
+                return {
+                    state: newState,
+                    nextAction: {
+                        type: 'wait',
+                        instructions: `Loop node "${event.nodeId}" is not active (current: ${loopState?.status ?? 'unknown'})`,
+                    },
+                };
+            }
+            loopState.done = true;
+            newState.nodes[event.nodeId] = loopState;
+            return {
+                state: newState,
+                nextAction: {
+                    type: 'wait',
+                    nodeId: event.nodeId,
+                    instructions: `Loop "${event.nodeId}" marked for termination. Current iteration (${loopState.currentIteration}) will complete, then the loop will end.`,
+                },
+            };
+        }
+
         case 'query_status':
             return { state: newState, nextAction: computeStatusAction(newState, definition, context) };
     }
@@ -180,6 +209,9 @@ function activateNode(
 
         case 'gate':
             return activateGate(node, definition, state, context);
+
+        case 'loop':
+            return activateLoop(node, definition, state, context);
     }
 }
 
@@ -291,6 +323,26 @@ function activateGate(
     }
 }
 
+function activateLoop(
+    node: LoopNode,
+    definition: WorkflowDefinition,
+    state: WorkflowState,
+    context: EngineContext,
+): { state: WorkflowState; nextAction: NextAction } {
+    // Initialize loop state with iteration tracking
+    const loopState: LoopNodeState = {
+        ...state.nodes[node.id],
+        status: 'active',
+        startedAt: new Date().toISOString(),
+        currentIteration: 0,
+        done: false,
+    };
+    state.nodes[node.id] = loopState;
+
+    // Activate the body node
+    return activateNode(node.body, definition, state, context);
+}
+
 // ─── Node Completion ───
 
 /**
@@ -337,6 +389,9 @@ export function completeNode(
             // Pass/fail branch task completed — gate's work is done
             // Mark gate as completed and check parent
             return markCompleted(parent, definition, state, context);
+
+        case 'loop':
+            return handleLoopBodyComplete(parent, definition, state, context);
 
         default:
             return {
@@ -418,6 +473,62 @@ function handleParallelChildComplete(
 
     // All succeeded
     return markCompleted(parallel, definition, state, context);
+}
+
+function handleLoopBodyComplete(
+    loop: LoopNode,
+    definition: WorkflowDefinition,
+    state: WorkflowState,
+    context: EngineContext,
+): { state: WorkflowState; nextAction: NextAction } {
+    const loopState = state.nodes[loop.id] as LoopNodeState;
+
+    // Check if loop_done has been called — terminate loop
+    if (loopState.done) {
+        return markCompleted(loop, definition, state, context);
+    }
+
+    // Check if maxIterations reached — safety cap, mark as failed
+    const nextIteration = loopState.currentIteration + 1;
+    if (nextIteration >= loop.maxIterations) {
+        return failNode(
+            state,
+            definition,
+            loop.id,
+            `Loop "${loop.id}" reached maxIterations (${loop.maxIterations}) without loop_done being called`,
+            context,
+        );
+    }
+
+    // Continue: increment iteration, reset body, re-activate
+    loopState.currentIteration = nextIteration;
+    state.nodes[loop.id] = loopState;
+
+    // Reset all body nodes to pending
+    resetLoopBody(state, loop);
+
+    // Re-activate body
+    return activateNode(loop.body, definition, state, context);
+}
+
+/**
+ * Reset all nodes within a loop's body subtree to pending state.
+ * Used between loop iterations.
+ */
+function resetLoopBody(state: WorkflowState, loopNode: LoopNode): void {
+    const bodyIds = new Set<string>();
+    collectAllNodeIds(loopNode.body, bodyIds);
+
+    bodyIds.forEach((id) => {
+        const existing = state.nodes[id];
+        if (existing) {
+            state.nodes[id] = {
+                id,
+                status: 'pending',
+                retryCount: 0,
+            };
+        }
+    });
 }
 
 /**
@@ -503,7 +614,7 @@ function failNode(
  * Get the failure handler from a node (only task and parallel have onFailed).
  */
 function getFailureHandler(node: WorkflowNode): FailureHandler | undefined {
-    if (node.type === 'task' || node.type === 'parallel') {
+    if (node.type === 'task' || node.type === 'parallel' || node.type === 'loop') {
         return node.onFailed;
     }
     return undefined;
@@ -782,6 +893,11 @@ function findPathTo(node: WorkflowNode, targetId: string): WorkflowNode[] | null
             }
             break;
         }
+        case 'loop': {
+            const bodyPath = findPathTo(node.body, targetId);
+            if (bodyPath) return [node, ...bodyPath];
+            break;
+        }
     }
 
     return null;
@@ -804,6 +920,9 @@ function collectAllNodeIds(node: WorkflowNode, ids: Set<string>): void {
             if ('type' in node.fail) {
                 collectAllNodeIds(node.fail as WorkflowNode, ids);
             }
+            break;
+        case 'loop':
+            collectAllNodeIds(node.body, ids);
             break;
     }
 }
@@ -943,6 +1062,11 @@ function findActiveGates(node: WorkflowNode, state: WorkflowState): GateNode[] {
             gates.push(...findActiveGates(node.pass, state));
             if ('type' in node.fail) {
                 gates.push(...findActiveGates(node.fail as WorkflowNode, state));
+            }
+            break;
+        case 'loop':
+            if (state.nodes[node.id]?.status === 'active') {
+                gates.push(...findActiveGates(node.body, state));
             }
             break;
     }
@@ -1108,6 +1232,14 @@ function findParent(
                 if (failResult) return failResult;
             }
             break;
+
+        case 'loop':
+            if (node.body.id === targetId) {
+                return { parent: node, childIndex: 0 };
+            }
+            const loopResult = findParent(root, targetId, node.body);
+            if (loopResult) return loopResult;
+            break;
     }
 
     return null;
@@ -1151,6 +1283,11 @@ function findNodeInTree(node: WorkflowNode, targetId: string): WorkflowNode | nu
                 const failResult = findNodeInTree(node.fail as WorkflowNode, targetId);
                 if (failResult) return failResult;
             }
+            break;
+        }
+        case 'loop': {
+            const bodyResult = findNodeInTree(node.body, targetId);
+            if (bodyResult) return bodyResult;
             break;
         }
     }
