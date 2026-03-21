@@ -164,6 +164,7 @@ Harmonia 支持 5 种节点类型：
   "type": "task",
   "id": "design",
   "role": "architect",
+  "inputArtifacts": ["prd", "user-stories"],
   "timeout": 3600,
   "onFailed": {
     "goto": "clarify",
@@ -175,15 +176,20 @@ Harmonia 支持 5 种节点类型：
 }
 ```
 
-| 字段             | 类型             | 必需 | 说明                |
-| ---------------- | ---------------- | ---- | ------------------- |
-| `type`           | `"task"`         | 是   |                     |
-| `id`             | `string`         | 是   | 全局唯一标识        |
-| `role`           | `string`         | 是   | 执行此任务的角色 ID |
-| `timeout`        | `number`         | 否   | 超时时间（秒）      |
-| `onFailed`       | `FailureHandler` | 否   | 失败后的处理策略    |
-| `beforeDispatch` | `NodeHook`       | 否   | 分派前钩子          |
-| `afterComplete`  | `NodeHook`       | 否   | 完成后钩子          |
+| 字段             | 类型             | 必需 | 说明                                                                 |
+| ---------------- | ---------------- | ---- | -------------------------------------------------------------------- |
+| `type`           | `"task"`         | 是   |                                                                      |
+| `id`             | `string`         | 是   | 全局唯一标识                                                         |
+| `role`           | `string`         | 是   | 执行此任务的角色 ID                                                  |
+| `inputArtifacts` | `string[]`       | 否   | 输入依赖的产出 ID 列表，dispatch 时自动解析为名称 + 路径引用注入角色 |
+| `timeout`        | `number`         | 否   | 超时时间（秒）                                                       |
+| `onFailed`       | `FailureHandler` | 否   | 失败后的处理策略                                                     |
+| `beforeDispatch` | `NodeHook`       | 否   | 分派前钩子                                                           |
+| `afterComplete`  | `NodeHook`       | 否   | 完成后钩子                                                           |
+
+**inputArtifacts 合并机制：**
+
+`inputArtifacts` 声明的是节点级别的静态输入依赖。在运行时，`role_dispatch` 工具还接受一个 `input_artifact_ids` 参数，由 Coordinator 动态传入补充的产出 ID。两者会自动去重合并（`[...new Set([...nodeInputIds, ...paramInputIds])]`），解析为产出名称 + 文件路径引用注入给角色（仅提供路径引用，不注入内容）。
 
 #### sequence — 顺序执行
 
@@ -763,18 +769,19 @@ export function registerActions(api: { register: (name: string, handler: ActionH
 
 每个 Action 执行时收到的上下文：
 
-| 字段                 | 类型                          | 说明                                      |
-| -------------------- | ----------------------------- | ----------------------------------------- |
-| `nodeId`             | `string`                      | 当前节点 ID                               |
-| `role`               | `string`                      | 当前节点的角色                            |
-| `retryCount`         | `number`                      | 当前重试次数（0 = 首次执行）              |
-| `projectName`        | `string`                      | 项目名称                                  |
-| `pluginConfig`       | `unknown`                     | 插件配置                                  |
-| `gateResults`        | `GateEvaluationResult?`       | Gate 评估结果（从 gate fail/goto 到达时） |
-| `workflowState`      | `WorkflowState`               | 当前工作流状态快照                        |
-| `artifacts.read(id)` | `(string) => Promise<string>` | 读取产出内容                              |
-| `artifacts.list()`   | `() => Promise<string[]>`     | 列出已有产出                              |
-| `taskResult`         | `unknown?`                    | 任务完成结果（仅 afterComplete 中可用）   |
+| 字段                 | 类型                          | 说明                                                |
+| -------------------- | ----------------------------- | --------------------------------------------------- |
+| `nodeId`             | `string`                      | 当前节点 ID                                         |
+| `role`               | `string`                      | 当前节点的角色                                      |
+| `retryCount`         | `number`                      | 当前重试次数（0 = 首次执行）                        |
+| `projectName`        | `string`                      | 项目名称                                            |
+| `pluginConfig`       | `unknown`                     | 插件配置                                            |
+| `gateResults`        | `GateEvaluationResult?`       | Gate 评估结果（从 gate fail/goto 到达时）           |
+| `workflowState`      | `WorkflowState`               | 当前工作流状态快照                                  |
+| `artifacts.read(id)` | `(string) => Promise<string>` | 读取产出内容                                        |
+| `artifacts.list()`   | `() => Promise<string[]>`     | 列出已有产出                                        |
+| `taskResult`         | `unknown?`                    | 任务完成结果（仅 afterComplete 中可用）             |
+| `loopIteration`      | `number?`                     | 当前 loop 迭代索引（0-based），仅在 loop 内节点可用 |
 
 Action 的返回值：
 
@@ -873,19 +880,21 @@ Action 按声明顺序依次执行，每个 Action 返回的 `inject` 追加到�
 
 Harmonia 在加载工作流插件时会自动校验 `workflow.json`。校验不通过时抛出 `PluginValidationError`，包含详细错误列表。
 
-**9 条校验规则：**
+**11 条校验规则：**
 
-| #   | 规则               | 错误类型                | 说明                                                                          |
-| --- | ------------------ | ----------------------- | ----------------------------------------------------------------------------- |
-| 1   | ID 唯一性          | `duplicate_id`          | 节点树 + floatingNodes 中所有 ID 不能重复                                     |
-| 2   | Goto 目标合法性    | `invalid_goto`          | goto 目标必须存在，且是祖先或执行顺序上的前驱节点；不允许从外部跳入 loop body |
-| 3   | 循环检测           | `cycle`                 | 没有 maxRetries 的 goto 边不能构成无出口循环                                  |
-| 4   | failStrategy 必填  | `missing_fail_strategy` | parallel 节点必须设置 `failStrategy`                                          |
-| 5   | 游离节点引用有效性 | `invalid_floating_ref`  | `onExhausted` 引用的 ID 必须存在于 `floatingNodes` 中                         |
-| 6   | 角色引用有效性     | `invalid_role_ref`      | task 节点的 `role` 必须在 `roles/` 目录中有对应文件                           |
-| 7   | 协调者有效性       | `invalid_coordinator`   | `coordinator` 字段的值必须在 `roles/` 目录中有对应文件                        |
-| 8   | Loop 迭代上限      | `other`                 | loop 节点的 `maxIterations` 必须是正整数                                      |
-| 9   | Loop body 有效性   | `other`                 | loop 节点的 `body` 必须存在且包含至少一个 task 节点（防止同步栈溢出）         |
+| #   | 规则                | 错误类型                  | 说明                                                                                   |
+| --- | ------------------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| 1   | ID 唯一性           | `duplicate_id`            | 节点树 + floatingNodes 中所有 ID 不能重复                                              |
+| 2   | Goto 目标合法性     | `invalid_goto`            | goto 目标必须存在，且是祖先或执行顺序上的前驱节点；不允许从外部跳入 loop body          |
+| 3   | 循环检测            | `cycle`                   | 没有 maxRetries 的 goto 边不能构成无出口循环                                           |
+| 4   | failStrategy 必填   | `missing_fail_strategy`   | parallel 节点必须设置 `failStrategy`                                                   |
+| 5   | 游离节点引用有效性  | `invalid_floating_ref`    | `onExhausted` 引用的 ID 必须存在于 `floatingNodes` 中                                  |
+| 6   | 角色引用有效性      | `invalid_role_ref`        | task 节点的 `role` 必须在 `roles/` 目录中有对应文件                                    |
+| 7   | 协调者有效性        | `invalid_coordinator`     | `coordinator` 字段的值必须在 `roles/` 目录中有对应文件                                 |
+| 8   | 产出定义有效性      | `invalid_artifact_output` | artifacts 中 output 路径必须以 `{global}` 或 `{project}` 开头，不含 `..`，无未知占位符 |
+| 9   | inputArtifacts 引用 | `invalid_input_artifact`  | task 节点的 `inputArtifacts` 中引用的产出 ID 必须存在于 `artifacts` 定义中             |
+| 10  | Loop 迭代上限       | `other`                   | loop 节点的 `maxIterations` 必须是正整数                                               |
+| 11  | Loop body 有效性    | `other`                   | loop 节点的 `body` 必须存在且包含至少一个 task 节点（防止同步栈溢出）                  |
 
 **Goto 目标的具体约束：**
 
@@ -934,77 +943,4 @@ Harmonia 从 `<data_dir>/harmonia/.workflows/<name>/workflow.json` 查找工作�
 
 ## 内置 dev 工作流参考
 
-内置的 `dev` 工作流（软件开发流程）是一个完整的参考实现，可作为搭建自定义工作流的模板。
-
-### 节点树
-
-```
-sequence(main)
-├── task(clarify)          → Coordinator 澄清需求，产出 PRD
-├── gate(prd-gate)         → 检查 PRD 存在 + 审批通过
-│   ├── pass → task(design) → 架构师设计方案
-│   └── fail → goto clarify（最多 5 次）
-├── gate(design-gate)      → 检查 tech-design + task-breakdown 存在
-│   ├── pass → task(develop) → 开发者编码实现
-│   └── fail → goto design（最多 3 次）
-├── task(test)             → 测试编写测试、执行、产出 test-report
-├── gate(test-gate)        → 检查 test-report.result == "pass"
-│   ├── pass → task(deliver) → Coordinator 验收交付
-│   └── fail → goto develop（最多 3 次）
-└── floating: escalate     → 重试耗尽时升级处理
-```
-
-### 角色
-
-| 角色        | model           | session    | parallel | 说明                         |
-| ----------- | --------------- | ---------- | -------- | ---------------------------- |
-| coordinator | claude-sonnet-4 | none       | false    | 需求澄清、任务分派、验收交付 |
-| architect   | claude-opus-4   | persistent | false    | 代码分析、技术方案、任务拆解 |
-| developer   | claude-sonnet-4 | persistent | true     | 编码实现、单元测试、代码质量 |
-| tester      | claude-sonnet-4 | optional   | false    | 测试计划、测试执行、测试报告 |
-
-### 产出
-
-| 产出 ID           | 名称                | 格式 | 审批 | 逐步写入                                                  |
-| ----------------- | ------------------- | ---- | ---- | --------------------------------------------------------- |
-| `prd`             | 需求文档            | md   | 是   | 4 步（requirements → completeness-check → draft → final） |
-| `user-stories`    | 用户故事 + 验收标准 | json | 否   | —                                                         |
-| `fsd`             | 功能规格            | md   | 否   | —                                                         |
-| `prototype`       | 高保真原型          | html | 是   | —                                                         |
-| `project-plan`    | 项目计划            | json | 否   | —                                                         |
-| `tech-design`     | 技术方案            | md   | 否   | 4 步（analysis → api-contract → draft → final）           |
-| `data-model`      | 数据模型设计        | json | 否   | —                                                         |
-| `api-design`      | API 设计            | json | 否   | —                                                         |
-| `task-breakdown`  | 任务拆解            | json | 否   | 4 步（coarse → dependencies → detailed → final）          |
-| `risk-assessment` | 技术风险评估        | json | 否   | —                                                         |
-| `code`            | 代码实现            | —    | 否   | 外部产出                                                  |
-| `test-plan`       | 测试计划            | json | 否   | —                                                         |
-| `test-report`     | 测试报告            | json | 否   | —                                                         |
-| `deploy`          | 部署文档            | md   | 否   | —                                                         |
-| `retrospective`   | 复盘记录            | md   | 否   | —                                                         |
-
-### 文件结构
-
-```
-workflows/dev/
-├── workflow.json            # 节点树定义
-├── hooks/                   # Hook 模块
-│   ├── index.js             #   入口，导出 createHooks()
-│   ├── content.js           #   共享常量（被阻止的工具/扩展名/超时阈值）
-│   ├── claude.js            #   Claude Code / Codex hook 生成器
-│   ├── opencode.js          #   OpenCode hook 生成器
-│   └── openclaw.js          #   OpenClaw hook 生成器
-├── tools/                   # Action 模块
-│   └── index.js             #   registerActions()（当前为空实现）
-├── roles/
-│   ├── coordinator.md
-│   ├── architect.md
-│   ├── developer.md
-│   └── tester.md
-└── schemas/                 # 26 个 Schema 文件
-```
-
-dev 工作流的 Hook 实现了两大功能：
-
-1. **边界守卫** — 阻止 Coordinator 直接修改代码文件或运行开发命令
-2. **主动提醒** — 扫描数据目录，提醒 Dispatch 超时（30min）、工作流空闲（15min）、Review 待审核（10min）
+内置的 `dev` 工作流（`workflows/dev/`）是一个完整的软件开发流程实现，涵盖需求澄清、原型设计、技术方案、批次开发、测试验收等阶段，使用了本文档中描述的所有功能（gate 条件链、loop 循环、inputArtifacts 依赖、review 审批、分步写入、Hooks 边界守卫等）。建议直接阅读 `workflows/dev/workflow.json` 和 `roles/*.md` 作为搭建自定义工作流的参考模板。
