@@ -17,7 +17,7 @@ import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
 import type { LoopNode, LoopNodeState } from '../core/types.js';
 
 /**
- * Find a node by ID in the workflow tree (non-recursive helper).
+ * Find a node by ID in the workflow tree (recursive).
  */
 function findNodeById(
     node: import('../core/types.js').WorkflowNode,
