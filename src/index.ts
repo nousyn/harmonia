@@ -78,6 +78,7 @@ Setup options:
     }
 } else {
     // Default: MCP stdio server mode
+    const { readFile } = await import('node:fs/promises');
     const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     const { getGlobalDir } = await import('./core/registry.js');
@@ -95,12 +96,15 @@ Setup options:
     const { registerArtifactSchema } = await import('./tools/artifact-schema.js');
     const { registerLoopDone } = await import('./tools/loop-done.js');
 
+    // Read version from package.json (single source of truth)
+    const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
+
     // Workflows directory: <data_dir>/harmonia/.workflows
     const WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
 
     const server = new McpServer({
         name: 'harmonia',
-        version: '1.3.0',
+        version: pkg.version,
     });
 
     // Register all tools
