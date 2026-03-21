@@ -32,28 +32,72 @@ interface GotoEdge {
     hasExit: boolean;
 }
 
-// ─── Utility: collect all IDs in a node subtree ───
+// ─── Utility: collect reachable IDs (loop-opaque) ───
 
-function collectSubtreeIds(node: WorkflowNode, ids: Set<string>): void {
+/**
+ * Like collectSubtreeIds, but treats loop nodes as opaque — only collects the
+ * loop's own ID without entering its body. This prevents external nodes from
+ * being able to goto into loop body internals, which would bypass loop state
+ * initialization.
+ */
+function collectReachableIds(node: WorkflowNode, ids: Set<string>): void {
     ids.add(node.id);
     switch (node.type) {
         case 'sequence':
         case 'parallel':
             for (const child of node.children) {
-                collectSubtreeIds(child, ids);
+                collectReachableIds(child, ids);
             }
             break;
         case 'gate':
-            collectSubtreeIds(node.pass, ids);
+            collectReachableIds(node.pass, ids);
             if ('type' in node.fail) {
-                collectSubtreeIds(node.fail as WorkflowNode, ids);
+                collectReachableIds(node.fail as WorkflowNode, ids);
             }
             break;
         case 'loop':
-            collectSubtreeIds(node.body, ids);
+            // Intentionally do NOT recurse into node.body.
+            // Loop body is an internal implementation detail; external nodes
+            // should goto the loop node itself to re-enter the loop.
             break;
         case 'task':
             break;
+    }
+}
+
+// ─── Utility: check if subtree contains at least one task node ───
+
+/**
+ * Recursively checks whether the given node subtree contains at least one task node.
+ * Used to validate that loop bodies are not empty/synchronous-only, which would cause
+ * stack overflow via synchronous recursive iteration.
+ *
+ * Known edge case (accepted as 80/20 fix): if a gate node's pass branch has no task
+ * but its fail branch has a task (or is a GotoTarget), this function returns true
+ * (any branch having a task suffices). At runtime, if the gate condition is persistently
+ * true and the pass branch synchronously completes every iteration, a stack overflow
+ * is still theoretically possible. This scenario is considered extreme and rare enough
+ * that the current "any branch has task" logic is acceptable.
+ */
+function containsTaskNode(node: WorkflowNode): boolean {
+    switch (node.type) {
+        case 'task':
+            return true;
+        case 'sequence':
+        case 'parallel':
+            return node.children.some((child) => containsTaskNode(child));
+        case 'gate': {
+            if (containsTaskNode(node.pass)) return true;
+            if ('type' in node.fail) {
+                return containsTaskNode(node.fail as WorkflowNode);
+            }
+            // fail is GotoTarget — goto itself interrupts synchronous recursion
+            return true;
+        }
+        case 'loop':
+            return containsTaskNode(node.body);
+        default:
+            return false;
     }
 }
 
@@ -267,8 +311,9 @@ function validateGotoTargets(
                     errors,
                     gotoEdges,
                 );
-                // After processing child, add its entire subtree to accumulated
-                collectSubtreeIds(child, accumulated);
+                // After processing child, add its reachable subtree to accumulated
+                // (loop-opaque: only loop's own ID, not body internals)
+                collectReachableIds(child, accumulated);
             }
             break;
         }
@@ -588,6 +633,12 @@ function validateLoopNode(node: LoopNode, errors: ValidationError[]): void {
         errors.push({
             type: 'other',
             message: `Loop node "${node.id}" must have a body`,
+            nodeId: node.id,
+        });
+    } else if (!containsTaskNode(node.body)) {
+        errors.push({
+            type: 'other',
+            message: `Loop node "${node.id}" body must contain at least one task node — a loop body without tasks would cause synchronous stack overflow`,
             nodeId: node.id,
         });
     }

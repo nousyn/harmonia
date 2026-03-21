@@ -947,5 +947,71 @@ describe('workflow-validator', () => {
             const errors = validateWorkflow(def, DEFAULT_ROLES);
             expect(errors).toHaveLength(0);
         });
+
+        it('should reject goto from outside loop to loop body internal node', () => {
+            // A task after the loop tries to goto a node inside the loop body
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeLoop('my-loop', makeSequence('loop-body', [makeTask('inner-task', 'developer')]), 5),
+                    {
+                        ...makeTask('after-loop', 'developer'),
+                        onFailed: { goto: 'inner-task', maxRetries: 2 },
+                    } as TaskNode & { onFailed: GotoTarget },
+                ]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const gotoErrors = errors.filter((e) => e.type === 'invalid_goto');
+            expect(gotoErrors).toHaveLength(1);
+            expect(gotoErrors[0].message).toContain('inner-task');
+        });
+
+        it('should allow goto to the loop node itself from a subsequent sibling', () => {
+            // Goto to the loop node (not its internals) should be allowed
+            const def = makeDefinition({
+                root: makeSequence('main', [
+                    makeLoop('my-loop', makeTask('work', 'developer'), 5),
+                    {
+                        ...makeTask('after-loop', 'developer'),
+                        onFailed: { goto: 'my-loop', maxRetries: 2 },
+                    } as TaskNode & { onFailed: GotoTarget },
+                ]),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const gotoErrors = errors.filter((e) => e.type === 'invalid_goto');
+            expect(gotoErrors).toHaveLength(0);
+        });
+
+        it('should reject loop body without any task node (empty sequence)', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeSequence('empty-body', []), 5),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const taskErrors = errors.filter((e) => e.message?.includes('at least one task node'));
+            expect(taskErrors).toHaveLength(1);
+            expect(taskErrors[0].nodeId).toBe('my-loop');
+        });
+
+        it('should reject loop body with only nested sequences (no task)', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeSequence('outer', [makeSequence('inner', [])]), 5),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            const taskErrors = errors.filter((e) => e.message?.includes('at least one task node'));
+            expect(taskErrors).toHaveLength(1);
+        });
+
+        it('should accept loop body with task inside nested structure', () => {
+            const def = makeDefinition({
+                root: makeLoop(
+                    'my-loop',
+                    makeSequence('body', [
+                        makeParallel('par', [makeTask('t1', 'developer'), makeTask('t2', 'developer')]),
+                    ]),
+                    5,
+                ),
+            });
+            const errors = validateWorkflow(def, DEFAULT_ROLES);
+            expect(errors).toHaveLength(0);
+        });
     });
 });

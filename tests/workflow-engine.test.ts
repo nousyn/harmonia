@@ -1889,4 +1889,82 @@ describe('workflow-engine', () => {
             expect(states['work']).toBeDefined();
         });
     });
+
+    // ─── Nested loop runtime ───
+
+    describe('nested loop runtime', () => {
+        it('should handle inner loop_done while outer loop continues iterating', () => {
+            // outer-loop body = inner-loop body = task
+            const def = makeDefinition({
+                root: makeLoop('outer-loop', makeLoop('inner-loop', makeTask('work'), 5), 3),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            // Start → outer-loop activates → inner-loop activates → work dispatched
+            let result = startWorkflow(def, state, ctx);
+            expect(result.nextAction.nodeId).toBe('work');
+            expect(result.state.nodes['outer-loop'].status).toBe('active');
+            expect(result.state.nodes['inner-loop'].status).toBe('active');
+
+            // Complete work (inner iteration 0) → inner loops back (iteration 1) → work dispatched
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect(result.nextAction.nodeId).toBe('work');
+            const innerState = result.state.nodes['inner-loop'] as LoopNodeState;
+            expect(innerState.currentIteration).toBe(1);
+
+            // Signal inner loop done
+            result = computeNextAction(def, result.state, { type: 'loop_done', nodeId: 'inner-loop' }, ctx);
+            expect((result.state.nodes['inner-loop'] as LoopNodeState).done).toBe(true);
+
+            // Complete work → inner loop terminates (done=true) → outer loop iterates → inner-loop reactivated → work dispatched
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 'work' }, ctx);
+            expect(result.nextAction.nodeId).toBe('work');
+            // Outer loop should be on iteration 1 now
+            const outerState = result.state.nodes['outer-loop'] as LoopNodeState;
+            expect(outerState.currentIteration).toBe(1);
+            // Inner loop should be reset (new iteration, done cleared)
+            const innerState2 = result.state.nodes['inner-loop'] as LoopNodeState;
+            expect(innerState2.currentIteration).toBe(0);
+            expect(innerState2.done).toBeFalsy();
+        });
+    });
+
+    // ─── Loop with parallel body ───
+
+    describe('loop with parallel body', () => {
+        it('should iterate after parallel body completes', () => {
+            const def = makeDefinition({
+                root: makeLoop('my-loop', makeParallel('par', [makeTask('t1'), makeTask('t2')]), 3),
+            });
+            const state = makeState(def);
+            const ctx = makeContext();
+
+            // Start → loop activates → parallel activates → both tasks dispatched
+            let result = startWorkflow(def, state, ctx);
+            expect(result.state.nodes['t1'].status).toBe('active');
+            expect(result.state.nodes['t2'].status).toBe('active');
+
+            // Complete t1
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't1' }, ctx);
+            // parallel not done yet, waiting for t2
+            expect(result.nextAction.type).toBe('wait');
+
+            // Complete t2 → parallel completes → loop iterates (iteration 1) → parallel reactivated
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't2' }, ctx);
+            const loopState = result.state.nodes['my-loop'] as LoopNodeState;
+            expect(loopState.currentIteration).toBe(1);
+            expect(result.state.nodes['t1'].status).toBe('active');
+            expect(result.state.nodes['t2'].status).toBe('active');
+
+            // Signal loop done
+            result = computeNextAction(def, result.state, { type: 'loop_done', nodeId: 'my-loop' }, ctx);
+            expect((result.state.nodes['my-loop'] as LoopNodeState).done).toBe(true);
+
+            // Complete t1, t2 → parallel completes → loop terminates (done=true)
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't1' }, ctx);
+            result = computeNextAction(def, result.state, { type: 'node_completed', nodeId: 't2' }, ctx);
+            expect(result.state.nodes['my-loop'].status).toBe('completed');
+        });
+    });
 });

@@ -14,41 +14,8 @@ import { readState } from '../core/state.js';
 import { loadWorkflow } from '../core/plugin.js';
 import { resolveActive, isError } from './utils.js';
 import { processWorkflowEvent, formatNextAction } from './engine-helpers.js';
+import { findNodeInTree } from '../core/tree-utils.js';
 import type { LoopNode, LoopNodeState } from '../core/types.js';
-
-/**
- * Find a node by ID in the workflow tree (recursive).
- */
-function findNodeById(
-    node: import('../core/types.js').WorkflowNode,
-    targetId: string,
-): import('../core/types.js').WorkflowNode | null {
-    if (node.id === targetId) return node;
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                const found = findNodeById(child, targetId);
-                if (found) return found;
-            }
-            break;
-        case 'gate': {
-            const passResult = findNodeById(node.pass, targetId);
-            if (passResult) return passResult;
-            if ('type' in node.fail) {
-                const failResult = findNodeById(node.fail as import('../core/types.js').WorkflowNode, targetId);
-                if (failResult) return failResult;
-            }
-            break;
-        }
-        case 'loop': {
-            const bodyResult = findNodeById(node.body, targetId);
-            if (bodyResult) return bodyResult;
-            break;
-        }
-    }
-    return null;
-}
 
 export function registerLoopDone(server: McpServer, workflowsDir: string): void {
     server.tool(
@@ -68,7 +35,7 @@ export function registerLoopDone(server: McpServer, workflowsDir: string): void 
                 const wf = await loadWorkflow(workflowsDir, state.workflow);
 
                 // Validate: node exists and is a loop
-                const node = findNodeById(wf.definition.root, node_id);
+                const node = findNodeInTree(wf.definition.root, node_id);
                 if (!node) {
                     return {
                         content: [

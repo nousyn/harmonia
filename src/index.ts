@@ -100,7 +100,7 @@ Setup options:
 
     const server = new McpServer({
         name: 'harmonia',
-        version: '0.1.0',
+        version: '1.3.0',
     });
 
     // Register all tools

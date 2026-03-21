@@ -33,13 +33,8 @@ import { createDispatch, findIdleSession, hasRunningDispatch } from '../core/dis
 import { loadArtifactSchema, formatSchemaGuidance } from '../core/schema.js';
 import type { StepSchemaEntry } from '../core/schema.js';
 import { resolveActive, isError, buildOverrideSection } from './utils.js';
-import {
-    loadWorkflowForContext,
-    processWorkflowEvent,
-    formatNextAction,
-    collectTaskNodes,
-    findTaskNode,
-} from './engine-helpers.js';
+import { loadWorkflowForContext, processWorkflowEvent, formatNextAction, findTaskNode } from './engine-helpers.js';
+import { collectTaskNodes, findAncestorLoopId } from '../core/tree-utils.js';
 import type {
     TaskNode,
     WorkflowPlugin,
@@ -48,51 +43,6 @@ import type {
     LoopNodeState,
     WorkflowNode,
 } from '../core/types.js';
-
-/**
- * Find the nearest ancestor loop node for a given node ID.
- * Returns the loop node ID if found, undefined otherwise.
- */
-function findAncestorLoopId(root: WorkflowNode, targetId: string): string | undefined {
-    const path = findPathToNode(root, targetId);
-    if (!path) return undefined;
-    // Walk backwards through ancestors (excluding the target itself)
-    for (let i = path.length - 2; i >= 0; i--) {
-        if (path[i].type === 'loop') return path[i].id;
-    }
-    return undefined;
-}
-
-/**
- * Find the path from root to a target node (inclusive).
- */
-function findPathToNode(node: WorkflowNode, targetId: string): WorkflowNode[] | null {
-    if (node.id === targetId) return [node];
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                const path = findPathToNode(child, targetId);
-                if (path) return [node, ...path];
-            }
-            break;
-        case 'gate': {
-            const passPath = findPathToNode(node.pass, targetId);
-            if (passPath) return [node, ...passPath];
-            if ('type' in node.fail) {
-                const failPath = findPathToNode(node.fail as WorkflowNode, targetId);
-                if (failPath) return [node, ...failPath];
-            }
-            break;
-        }
-        case 'loop': {
-            const bodyPath = findPathToNode(node.body, targetId);
-            if (bodyPath) return [node, ...bodyPath];
-            break;
-        }
-    }
-    return null;
-}
 
 /**
  * Find task nodes for a given role that are active or pending.

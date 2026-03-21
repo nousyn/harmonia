@@ -33,6 +33,13 @@ import type {
     GateConditionResult,
     GateEvaluationResult,
 } from './types.js';
+import {
+    findNodeInTree,
+    findPathToNode,
+    collectAllNodeIds,
+    findParent,
+    collectSubsequentNodeIds,
+} from './tree-utils.js';
 
 // ─── Types ───
 
@@ -835,98 +842,6 @@ function executeGoto(state: WorkflowState, definition: WorkflowDefinition, targe
 }
 
 /**
- * Collect all node IDs that come after the target node in execution order.
- * This includes:
- * - Subsequent siblings (and their full subtrees) in the parent sequence
- * - Any nodes that follow the parent in its grandparent sequence (recursively)
- *
- * For parallel nodes, subsequent siblings don't apply (they execute simultaneously).
- */
-function collectSubsequentNodeIds(root: WorkflowNode, targetId: string): Set<string> {
-    const result = new Set<string>();
-
-    // Find the path from root to the target
-    const path = findPathTo(root, targetId);
-    if (!path || path.length === 0) return result;
-
-    // Walk up the path, collecting subsequent siblings at each level
-    for (let i = 0; i < path.length - 1; i++) {
-        const parent = path[i];
-        const child = path[i + 1];
-
-        if (parent.type === 'sequence') {
-            const childIndex = parent.children.findIndex((c) => c.id === child.id);
-            // Collect all children after the one on our path
-            for (let j = childIndex + 1; j < parent.children.length; j++) {
-                collectAllNodeIds(parent.children[j], result);
-            }
-        }
-        // For gate nodes, if our path goes through pass, we don't need to collect fail
-        // because fail is an alternative path, not a subsequent one.
-        // For parallel nodes, siblings are concurrent not subsequent — don't reset.
-    }
-
-    return result;
-}
-
-/**
- * Find the path from root to a specific node (inclusive on both ends).
- * Returns null if node not found.
- */
-function findPathTo(node: WorkflowNode, targetId: string): WorkflowNode[] | null {
-    if (node.id === targetId) return [node];
-
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                const path = findPathTo(child, targetId);
-                if (path) return [node, ...path];
-            }
-            break;
-        case 'gate': {
-            const passPath = findPathTo(node.pass, targetId);
-            if (passPath) return [node, ...passPath];
-            if ('type' in node.fail) {
-                const failPath = findPathTo(node.fail as WorkflowNode, targetId);
-                if (failPath) return [node, ...failPath];
-            }
-            break;
-        }
-        case 'loop': {
-            const bodyPath = findPathTo(node.body, targetId);
-            if (bodyPath) return [node, ...bodyPath];
-            break;
-        }
-    }
-
-    return null;
-}
-
-/**
- * Recursively collect all node IDs in a subtree.
- */
-function collectAllNodeIds(node: WorkflowNode, ids: Set<string>): void {
-    ids.add(node.id);
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                collectAllNodeIds(child, ids);
-            }
-            break;
-        case 'gate':
-            collectAllNodeIds(node.pass, ids);
-            if ('type' in node.fail) {
-                collectAllNodeIds(node.fail as WorkflowNode, ids);
-            }
-            break;
-        case 'loop':
-            collectAllNodeIds(node.body, ids);
-            break;
-    }
-}
-
 // ─── Gate Evaluation ───
 
 /**
@@ -1194,59 +1109,8 @@ function computeStatusAction(state: WorkflowState, definition: WorkflowDefinitio
 // ─── Helper Functions ───
 
 /**
- * Find the parent of a node by its ID.
- * Returns the parent node and the child's index, or null if not found.
- */
-function findParent(
-    root: WorkflowNode,
-    targetId: string,
-    current?: WorkflowNode,
-): { parent: WorkflowNode; childIndex: number } | null {
-    const node = current ?? root;
-
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (let i = 0; i < node.children.length; i++) {
-                if (node.children[i].id === targetId) {
-                    return { parent: node, childIndex: i };
-                }
-                const found = findParent(root, targetId, node.children[i]);
-                if (found) return found;
-            }
-            break;
-
-        case 'gate':
-            if (node.pass.id === targetId) {
-                return { parent: node, childIndex: 0 };
-            }
-            const passResult = findParent(root, targetId, node.pass);
-            if (passResult) return passResult;
-
-            if ('type' in node.fail) {
-                const failNode = node.fail as WorkflowNode;
-                if (failNode.id === targetId) {
-                    return { parent: node, childIndex: 1 };
-                }
-                const failResult = findParent(root, targetId, failNode);
-                if (failResult) return failResult;
-            }
-            break;
-
-        case 'loop':
-            if (node.body.id === targetId) {
-                return { parent: node, childIndex: 0 };
-            }
-            const loopResult = findParent(root, targetId, node.body);
-            if (loopResult) return loopResult;
-            break;
-    }
-
-    return null;
-}
-
-/**
  * Find a node by ID anywhere in the workflow tree (including floating nodes).
+ * This stays in engine because it accesses floatingNodes — engine-specific logic.
  */
 function findNode(root: WorkflowNode, targetId: string, floatingNodes?: TaskNode[]): WorkflowNode | null {
     // Check the tree
@@ -1257,39 +1121,6 @@ function findNode(root: WorkflowNode, targetId: string, floatingNodes?: TaskNode
     if (floatingNodes) {
         const floating = floatingNodes.find((fn) => fn.id === targetId);
         if (floating) return floating;
-    }
-
-    return null;
-}
-
-/**
- * Find a node by ID within a workflow tree.
- */
-function findNodeInTree(node: WorkflowNode, targetId: string): WorkflowNode | null {
-    if (node.id === targetId) return node;
-
-    switch (node.type) {
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                const found = findNodeInTree(child, targetId);
-                if (found) return found;
-            }
-            break;
-        case 'gate': {
-            const passResult = findNodeInTree(node.pass, targetId);
-            if (passResult) return passResult;
-            if ('type' in node.fail) {
-                const failResult = findNodeInTree(node.fail as WorkflowNode, targetId);
-                if (failResult) return failResult;
-            }
-            break;
-        }
-        case 'loop': {
-            const bodyResult = findNodeInTree(node.body, targetId);
-            if (bodyResult) return bodyResult;
-            break;
-        }
     }
 
     return null;

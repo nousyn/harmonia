@@ -21,6 +21,7 @@ import type {
     WorkflowNode,
     TaskNode,
 } from '../core/types.js';
+import { collectTaskNodes } from '../core/tree-utils.js';
 import type { ResolvedContext } from './utils.js';
 
 /** Result of processing a workflow event through the engine */
@@ -117,34 +118,6 @@ async function buildEngineContext(
             return roleDef?.prompt ?? `Role "${role}" prompt not found`;
         },
     };
-}
-
-/**
- * Collect all task nodes from a workflow tree (recursive).
- */
-export function collectTaskNodes(node: WorkflowNode): TaskNode[] {
-    const tasks: TaskNode[] = [];
-    switch (node.type) {
-        case 'task':
-            tasks.push(node);
-            break;
-        case 'sequence':
-        case 'parallel':
-            for (const child of node.children) {
-                tasks.push(...collectTaskNodes(child));
-            }
-            break;
-        case 'gate':
-            tasks.push(...collectTaskNodes(node.pass));
-            if ('type' in node.fail) {
-                tasks.push(...collectTaskNodes(node.fail as WorkflowNode));
-            }
-            break;
-        case 'loop':
-            tasks.push(...collectTaskNodes(node.body));
-            break;
-    }
-    return tasks;
 }
 
 /**
