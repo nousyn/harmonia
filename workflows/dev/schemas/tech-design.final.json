@@ -44,6 +44,11 @@
                 "## 技术风险",
                 "## 风险分析"
             ]
+        },
+        {
+            "heading": "## UML 建模",
+            "required": true,
+            "aliases": ["## UML", "## UML 图", "## 架构建模"]
         }
     ],
     "minLength": 200,

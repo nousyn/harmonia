@@ -41,6 +41,11 @@
                 "## 约束条件",
                 "## 前提假设"
             ]
+        },
+        {
+            "heading": "## UML 建模",
+            "required": true,
+            "aliases": ["## UML", "## UML 图", "## 业务建模"]
         }
     ],
     "minLength": 200,
