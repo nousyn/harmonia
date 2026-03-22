@@ -49,7 +49,9 @@ export function registerArtifactTools(server: McpServer, workflowsDir: string): 
                 .describe('Artifact ID (e.g. prd, user-stories, fsd, prototype, tech-design, task-breakdown, etc.)'),
             content: z
                 .string()
-                .describe('Artifact content (markdown, HTML, or JSON depending on artifact type and step)'),
+                .describe(
+                    'Artifact content (markdown, HTML, or JSON depending on artifact type and step). There is NO size limit — always write the complete content in a single call.',
+                ),
             step: z
                 .string()
                 .optional()
