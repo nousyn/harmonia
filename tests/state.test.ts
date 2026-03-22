@@ -152,14 +152,7 @@ describe('workflow state (node-based)', () => {
 
         it('should handle patch type', async () => {
             const plugin = makePlugin();
-            const state = await initWorkflowState(
-                TEST_PROJECT,
-                TEST_PROJECT_DIR,
-                plugin,
-                1,
-                'patch',
-                contextDir,
-            );
+            const state = await initWorkflowState(TEST_PROJECT, TEST_PROJECT_DIR, plugin, 1, 'patch', contextDir);
 
             expect(state.type).toBe('patch');
         });
