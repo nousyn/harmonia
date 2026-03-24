@@ -156,7 +156,14 @@ export interface WorkflowDefinition {
     version?: string;
     /** Author of this workflow */
     author?: string;
-    /** Coordinator role ID — every workflow must have one */
+    /**
+     * Coordinator role ID — every workflow must have one.
+     *
+     * In the orchestrator architecture, the coordinator is the "user communication
+     * bridge" rather than the "flow driver" (Orchestrator handles flow driving).
+     * The Orchestrator uses this field to identify which connected agent is the
+     * coordinator for push-targeting (approval requests, status notifications, etc.).
+     */
     coordinator: string;
     /** Root node of the workflow tree */
     root: WorkflowNode;
@@ -188,6 +195,12 @@ export interface ArtifactDefinition {
     review?: boolean;
     /** Unmanaged output — not managed by artifact_write (e.g. code written directly by agent) */
     unmanaged?: boolean;
+    /**
+     * Validation strategy for agent-produced artifacts.
+     * Replaces the binary `unmanaged` concept with a richer validation model.
+     * When undefined, defaults to `{ type: 'none' }`.
+     */
+    validation?: ValidationConfig;
     /**
      * Output directory template using placeholders:
      * - `{global}` → `<data_dir>/<project>/iter-N/artifacts/`
@@ -647,4 +660,54 @@ export interface ValidationError {
     message: string;
     /** Node ID where the error was found (if applicable) */
     nodeId?: string;
+}
+
+// ─── Orchestrator Types (added for orchestrator refactor) ───
+
+/**
+ * Artifact validation strategy.
+ * - `schema`  — JSON Schema validation (reuses existing schema system)
+ * - `command` — Run a custom validation command
+ * - `none`    — No validation (default)
+ */
+export type ValidationConfig = { type: 'schema' } | { type: 'command'; command: string } | { type: 'none' };
+
+/** Status of a connected agent */
+export type AgentStatus = 'running' | 'idle' | 'exited' | 'unreachable';
+
+/**
+ * Task payload dispatched to an agent via an adapter.
+ *
+ * `prompt` is the fully assembled prompt built by PromptBuilder (Phase 1.7),
+ * containing role instructions + context artifacts + output expectations.
+ * This differs from the `description` field in the 003 adapter draft — the
+ * adapter receives a ready-to-use prompt, not a raw task description.
+ */
+export interface TaskPayload {
+    /** Workflow node that triggered this dispatch */
+    nodeId: string;
+    /** Role assigned to this task */
+    role: string;
+    /** Fully assembled prompt (built by PromptBuilder) */
+    prompt: string;
+    /** Artifact IDs/paths the agent should read as context */
+    inputArtifacts: string[];
+    /** Expected output artifact definitions */
+    outputExpectations: ArtifactDefinition[];
+    /** Additional constraints (e.g. coding standards, format rules) */
+    constraints?: string;
+    /** Timeout in seconds (from TaskNode.timeout or global default) */
+    timeout?: number;
+}
+
+/** Result returned by an agent after completing a dispatched task */
+export interface TaskResult {
+    /** Whether the task succeeded or failed */
+    status: 'completed' | 'failed';
+    /** Artifact IDs produced by the agent */
+    artifacts: string[];
+    /** Error message if status is 'failed' */
+    error?: string;
+    /** Adapter-specific metadata (e.g. exit code, duration) */
+    metadata?: Record<string, unknown>;
 }

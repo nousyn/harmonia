@@ -8,6 +8,10 @@
  * Sessions represent agent instances (can be reused across dispatches).
  * Dispatches represent individual task assignments to a role.
  * Relationship: Session 1:N Dispatch (a persistent session can receive multiple dispatches).
+ *
+ * The pure CRUD functions below are the stateless core (preserved for backward
+ * compatibility and direct testing). `DispatchManager` wraps them with EventBus
+ * integration and timeout management for the orchestrator architecture.
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -287,4 +291,149 @@ export async function hasRunningDispatch(
 ): Promise<boolean> {
     const dispatches = await readDispatches(projectName, iteration, contextDir);
     return dispatches.some((d) => d.role === role && (d.status === 'dispatched' || d.status === 'running'));
+}
+
+// ─── DispatchManager (orchestrator integration) ───
+
+import type { EventBus } from './event-bus.js';
+
+/** Options for creating a dispatch through the manager. */
+export interface ManagedDispatchOptions {
+    projectName: string;
+    iteration: number;
+    role: string;
+    taskBrief: string;
+    expectedOutputs: string[];
+    nodeId: string;
+    agentType: string;
+    contextDir: string;
+    /** Timeout in seconds. When elapsed, triggers status check flow. */
+    timeout?: number;
+    sessionId?: string;
+}
+
+/** Active timeout tracker. */
+interface TimeoutEntry {
+    dispatchId: string;
+    nodeId: string;
+    timer: ReturnType<typeof setTimeout>;
+    startedAt: number;
+}
+
+/**
+ * Wraps pure dispatch CRUD with EventBus integration and timeout management.
+ *
+ * - Emits `task.dispatched` when a dispatch is created
+ * - Emits `node.completed` / `node.failed` on terminal status transitions
+ * - Manages per-dispatch timeout timers
+ * - Provides `onTimeout` callback for the Orchestrator to handle stall/fail logic
+ */
+export class DispatchManager {
+    private readonly timeouts = new Map<string, TimeoutEntry>();
+    private onTimeoutCallback?: (dispatchId: string, nodeId: string, elapsed: number) => void;
+
+    constructor(private readonly eventBus: EventBus) {}
+
+    /** Register a callback invoked when a dispatch timeout fires. */
+    onTimeout(cb: (dispatchId: string, nodeId: string, elapsed: number) => void): void {
+        this.onTimeoutCallback = cb;
+    }
+
+    /**
+     * Create a dispatch record and emit `task.dispatched`.
+     * Optionally starts a timeout timer.
+     */
+    async dispatch(opts: ManagedDispatchOptions): Promise<DispatchRecord> {
+        const record = await createDispatch(
+            opts.projectName,
+            opts.iteration,
+            opts.role,
+            opts.taskBrief,
+            opts.expectedOutputs,
+            opts.sessionId,
+            opts.contextDir,
+            opts.nodeId,
+        );
+
+        this.eventBus.emit('task.dispatched', {
+            nodeId: opts.nodeId,
+            role: opts.role,
+            dispatchId: record.id,
+            agentType: opts.agentType,
+            ts: Date.now(),
+        });
+
+        // Register timeout timer if configured
+        if (opts.timeout && opts.timeout > 0) {
+            this.registerTimeout(record.id, opts.nodeId, opts.timeout);
+        }
+
+        return record;
+    }
+
+    /**
+     * Update a dispatch status. Emits events on terminal transitions
+     * and clears timeout timers.
+     */
+    async updateStatus(
+        projectName: string,
+        iteration: number,
+        dispatchId: string,
+        status: DispatchStatus,
+        contextDir: string,
+        note?: string,
+    ): Promise<DispatchRecord> {
+        const record = await updateDispatch(projectName, iteration, dispatchId, { status, note }, contextDir);
+
+        // Clear timeout on terminal status
+        if (isTerminalStatus(status)) {
+            this.clearTimeout(dispatchId);
+        }
+
+        return record;
+    }
+
+    /** Clear all active timeout timers (e.g. on shutdown). */
+    clearAllTimeouts(): void {
+        for (const entry of this.timeouts.values()) {
+            clearTimeout(entry.timer);
+        }
+        this.timeouts.clear();
+    }
+
+    // ─── Private ───
+
+    private registerTimeout(dispatchId: string, nodeId: string, timeoutSeconds: number): void {
+        const timer = setTimeout(() => {
+            this.timeouts.delete(dispatchId);
+            const elapsed = timeoutSeconds;
+            this.eventBus.emit('task.timeout', {
+                nodeId,
+                dispatchId,
+                elapsed,
+                ts: Date.now(),
+            });
+            this.onTimeoutCallback?.(dispatchId, nodeId, elapsed);
+        }, timeoutSeconds * 1000);
+
+        // Allow Node.js to exit even if timer is pending (unref)
+        if (typeof timer === 'object' && 'unref' in timer) {
+            timer.unref();
+        }
+
+        this.timeouts.set(dispatchId, {
+            dispatchId,
+            nodeId,
+            timer,
+            startedAt: Date.now(),
+        });
+    }
+
+    private clearTimeout(dispatchId: string): void {
+        const entry = this.timeouts.get(dispatchId);
+        if (entry) {
+            clearTimeout(entry.timer);
+            this.timeouts.delete(dispatchId);
+        }
+    }
 }

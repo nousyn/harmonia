@@ -4,14 +4,14 @@
  * This module handles:
  * - Node state initialization from a WorkflowDefinition
  * - State transitions based on WorkflowEvents
- * - NextAction computation (telling the coordinator what to do)
+ * - NextAction computation (telling the orchestrator what to do)
  * - Gate evaluation
  * - Goto execution (state reset + retry tracking)
  * - Failure handling (onFailed, bubbling, onExhausted)
  *
- * Key insight: Core is passive (MCP server). Every interaction is
- * coordinator-driven. Engine computes state changes and returns nextAction,
- * but never proactively pushes the workflow forward.
+ * The pure functions (initNodeStates, computeNextAction, etc.) are the
+ * stateless core. The `Engine` class wraps them with state management
+ * and EventBus integration for the orchestrator architecture.
  */
 
 import type {
@@ -1124,4 +1124,113 @@ function findNode(root: WorkflowNode, targetId: string, floatingNodes?: TaskNode
     }
 
     return null;
+}
+
+// ─── Engine Class ───
+
+import type { EventBus } from './event-bus.js';
+
+/**
+ * Stateful wrapper around the pure workflow engine functions.
+ *
+ * Holds WorkflowDefinition + WorkflowState + EngineContext + EventBus,
+ * and emits typed events on state transitions. The pure functions are
+ * preserved as the internal implementation; existing tests continue
+ * to test them directly.
+ */
+export class Engine {
+    private state: WorkflowState;
+
+    constructor(
+        private readonly definition: WorkflowDefinition,
+        initialState: WorkflowState,
+        private readonly context: EngineContext,
+        private readonly eventBus: EventBus,
+    ) {
+        this.state = initialState;
+    }
+
+    /** Start the workflow — activate the root node. */
+    start(): NextAction {
+        const result = startWorkflow(this.definition, this.state, this.context);
+        const prevState = this.state;
+        this.state = result.state;
+        this.emitTransitionEvents(prevState, result.state, result.nextAction);
+        return result.nextAction;
+    }
+
+    /** Process a workflow event and return the next action. */
+    handleEvent(event: WorkflowEvent): NextAction {
+        const prevState = this.state;
+        const result = computeNextAction(this.definition, this.state, event, this.context);
+        this.state = result.state;
+        this.emitTransitionEvents(prevState, result.state, result.nextAction);
+        return result.nextAction;
+    }
+
+    /** Get a snapshot of the current workflow state. */
+    getState(): WorkflowState {
+        return this.state;
+    }
+
+    /** Compute the current next action without processing an event. */
+    getNextAction(): NextAction {
+        const result = computeNextAction(this.definition, this.state, { type: 'query_status' }, this.context);
+        return result.nextAction;
+    }
+
+    /** Get the workflow definition. */
+    getDefinition(): WorkflowDefinition {
+        return this.definition;
+    }
+
+    // ─── Private helpers ───
+
+    /**
+     * Compare previous and current state, emit events for any transitions.
+     * Also emits events derived from the nextAction (e.g. node.activated for dispatch).
+     */
+    private emitTransitionEvents(prev: WorkflowState, curr: WorkflowState, nextAction: NextAction): void {
+        const ts = Date.now();
+
+        // Detect node status changes
+        for (const [nodeId, currNode] of Object.entries(curr.nodes)) {
+            const prevNode = prev.nodes[nodeId];
+            if (!prevNode || prevNode.status === currNode.status) continue;
+
+            const node = findNode(this.definition.root, nodeId, this.definition.floatingNodes);
+            const role = node?.type === 'task' ? (node as TaskNode).role : nodeId;
+
+            if (currNode.status === 'completed' && prevNode.status !== 'completed') {
+                this.eventBus.emit('node.completed', { nodeId, role, ts });
+            } else if (currNode.status === 'failed' && prevNode.status !== 'failed') {
+                this.eventBus.emit('node.failed', {
+                    nodeId,
+                    role,
+                    error: `Node ${nodeId} failed`,
+                    ts,
+                });
+            }
+        }
+
+        // Emit node.activated for dispatch-type actions
+        if (nextAction.type === 'dispatch' && nextAction.nodeId && nextAction.role) {
+            this.eventBus.emit('node.activated', {
+                nodeId: nextAction.nodeId,
+                role: nextAction.role,
+                ts,
+            });
+        }
+
+        // Emit node.activated for each target in parallel dispatch
+        if (nextAction.parallelDispatch) {
+            for (const target of nextAction.parallelDispatch) {
+                this.eventBus.emit('node.activated', {
+                    nodeId: target.nodeId,
+                    role: target.role,
+                    ts,
+                });
+            }
+        }
+    }
 }
