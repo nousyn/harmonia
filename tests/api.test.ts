@@ -1,0 +1,326 @@
+/**
+ * API integration tests — routes.ts + server.ts
+ *
+ * Tests HTTP endpoints using Hono's built-in request testing
+ * (no actual HTTP server needed). Uses real filesystem for data.
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm, cp } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createApp } from '../src/server.js';
+import { registerProject, startIteration, startPatch } from '../src/core/registry.js';
+import type { Hono } from 'hono';
+
+const WORKFLOWS_SRC = resolve(join(import.meta.dirname, '..', 'workflows'));
+
+describe('API endpoints', () => {
+    let tempDir: string;
+    let workflowsDir: string;
+    let app: Hono;
+
+    beforeEach(async () => {
+        tempDir = await mkdtemp(join(tmpdir(), 'harmonia-api-test-'));
+        process.env.HARMONIA_DATA_DIR = tempDir;
+
+        // Copy workflows to temp
+        workflowsDir = join(tempDir, '.workflows');
+        await cp(WORKFLOWS_SRC, workflowsDir, { recursive: true });
+
+        app = createApp(workflowsDir);
+    });
+
+    afterEach(async () => {
+        delete process.env.HARMONIA_DATA_DIR;
+        await rm(tempDir, { recursive: true, force: true });
+    });
+
+    // ─── Health ───
+
+    describe('GET /health', () => {
+        it('should return ok', async () => {
+            const res = await app.request('/health');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.status).toBe('ok');
+        });
+    });
+
+    // ─── Projects ───
+
+    describe('GET /api/projects', () => {
+        it('should return empty list when no projects', async () => {
+            const res = await app.request('/api/projects');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.projects).toEqual([]);
+        });
+
+        it('should return registered projects', async () => {
+            await registerProject('test-app', join(tempDir, 'src'), 'dev');
+
+            const res = await app.request('/api/projects');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.projects).toHaveLength(1);
+            expect(body.projects[0].name).toBe('test-app');
+        });
+    });
+
+    describe('POST /api/projects', () => {
+        it('should create a new project', async () => {
+            const res = await app.request('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_name: 'my-app',
+                    project_dir: join(tempDir, 'src'),
+                    workflow: 'dev',
+                }),
+            });
+            expect(res.status).toBe(201);
+            const body = await res.json();
+            expect(body.projectName).toBe('my-app');
+            expect(body.alreadyRegistered).toBe(false);
+        });
+
+        it('should return 200 for already registered project', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+
+            const res = await app.request('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_name: 'my-app',
+                    project_dir: join(tempDir, 'src'),
+                    workflow: 'dev',
+                }),
+            });
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.alreadyRegistered).toBe(true);
+        });
+
+        it('should return 400 when missing required fields', async () => {
+            const res = await app.request('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project_name: 'my-app' }),
+            });
+            expect(res.status).toBe(400);
+        });
+    });
+
+    describe('GET /api/projects/:name/status', () => {
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/status');
+            expect(res.status).toBe(404);
+        });
+
+        it('should return status for registered project with active context', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            // Need to begin iteration to have an active context
+            const initRes = await app.request('/api/projects/my-app/iterations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            expect(initRes.status).toBe(201);
+
+            const res = await app.request('/api/projects/my-app/status');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.projectName).toBe('my-app');
+        });
+    });
+
+    // ─── Iterations ───
+
+    describe('POST /api/projects/:name/iterations', () => {
+        it('should create a new iteration', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+
+            const res = await app.request('/api/projects/my-app/iterations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            expect(res.status).toBe(201);
+            const body = await res.json();
+            expect(body.iteration).toBe(1);
+            expect(body.nextAction).toBeDefined();
+        });
+
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/iterations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            expect(res.status).toBe(404);
+        });
+    });
+
+    // ─── Patches ───
+
+    describe('POST /api/projects/:name/patches', () => {
+        it('should create a new patch', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            await startIteration('my-app');
+
+            const res = await app.request('/api/projects/my-app/patches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description: 'fix bug', issue_id: 'issue-1' }),
+            });
+            expect(res.status).toBe(201);
+            const body = await res.json();
+            expect(body.patchNumber).toBe(1);
+        });
+
+        it('should return error when no iterations exist', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+
+            const res = await app.request('/api/projects/my-app/patches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            expect(res.status).toBe(400);
+        });
+    });
+
+    // ─── Artifacts ───
+
+    describe('GET /api/projects/:name/artifacts', () => {
+        it('should list artifacts for active context', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            // Must begin iteration via API to initialize workflow state
+            await app.request('/api/projects/my-app/iterations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+
+            const res = await app.request('/api/projects/my-app/artifacts');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.artifacts).toBeDefined();
+        });
+    });
+
+    describe('POST /api/projects/:name/artifacts/:id', () => {
+        it('should return 400 when content is missing', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            await startIteration('my-app');
+
+            const res = await app.request('/api/projects/my-app/artifacts/prd', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            expect(res.status).toBe(400);
+            const body = await res.json();
+            expect(body.error).toContain('content is required');
+        });
+    });
+
+    // ─── Reviews ───
+
+    describe('GET /api/projects/:name/reviews', () => {
+        it('should return pending reviews', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            await startIteration('my-app');
+
+            const res = await app.request('/api/projects/my-app/reviews');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.pending).toBeDefined();
+        });
+    });
+
+    // ─── Issues ───
+
+    describe('POST /api/projects/:name/issues', () => {
+        it('should create an issue', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            await startIteration('my-app');
+
+            const res = await app.request('/api/projects/my-app/issues', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Test issue',
+                    description: 'Something broke',
+                    source: 'test',
+                    iteration: 1,
+                }),
+            });
+            expect(res.status).toBe(201);
+            const body = await res.json();
+            expect(body.title).toBe('Test issue');
+        });
+
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/issues', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Test',
+                    description: 'Test',
+                    source: 'test',
+                    iteration: 1,
+                }),
+            });
+            expect(res.status).toBe(404);
+        });
+
+        it('should return 400 when required fields missing', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+
+            const res = await app.request('/api/projects/my-app/issues', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: 'Test' }),
+            });
+            expect(res.status).toBe(400);
+        });
+    });
+
+    describe('GET /api/projects/:name/issues', () => {
+        it('should list issues', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+
+            const res = await app.request('/api/projects/my-app/issues');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.issues).toBeDefined();
+        });
+
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/issues');
+            expect(res.status).toBe(404);
+        });
+    });
+
+    // ─── Connect placeholders ───
+
+    describe('POST /connect', () => {
+        it('should return 501 not implemented', async () => {
+            const res = await app.request('/api/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            expect(res.status).toBe(501);
+        });
+    });
+
+    describe('GET /api/projects/:name/artifacts/:id/schema', () => {
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/artifacts/prd/schema');
+            expect(res.status).toBe(404);
+        });
+    });
+});

@@ -1,45 +1,29 @@
 /**
- * Tests for tools/patch-start.ts — patch_start MCP tool.
+ * Tests for core/operations.ts — beginPatch operation.
  *
  * Uses HARMONIA_DATA_DIR to redirect file I/O to a temp directory.
- * Tests the tool via MCP server/client transport (same pattern as sequential.test.ts).
+ * Tests beginPatch directly (replaces MCP server/client integration test).
+ *
+ * Migrated from tools/patch-start.ts tests. The operations version throws
+ * errors on failure and returns BeginPatchResult on success.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { registerProject, startIteration } from '../src/core/registry.js';
-import { registerPatchStart } from '../src/tools/patch-start.js';
+import { beginPatch } from '../src/core/operations.js';
 
 const PROJECT = 'test-project';
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
 
-describe('patch_start tool', () => {
+describe('beginPatch operation', () => {
     let harmoniaHome: string;
-    let client: Client;
-    let server: McpServer;
-
-    async function callTool(name: string, args: Record<string, unknown>) {
-        const result = await client.callTool({ name, arguments: args });
-        const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
-        return { text, isError: result.isError ?? false };
-    }
 
     beforeEach(async () => {
         harmoniaHome = await mkdtemp(join(tmpdir(), 'harmonia-patch-test-'));
         process.env.HARMONIA_DATA_DIR = harmoniaHome;
-
-        // Setup MCP server + client
-        server = new McpServer({ name: 'test', version: '0.0.1' });
-        registerPatchStart(server, WORKFLOWS_DIR);
-        client = new Client({ name: 'test-client', version: '0.0.1' });
-        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-        await server.connect(serverTransport);
-        await client.connect(clientTransport);
     });
 
     afterEach(async () => {
@@ -47,37 +31,33 @@ describe('patch_start tool', () => {
         await rm(harmoniaHome, { recursive: true, force: true });
     });
 
-    it('should reject when project is not registered', async () => {
-        const { text, isError } = await callTool('patch_start', { project_name: 'nonexistent' });
-        expect(isError).toBe(true);
-        expect(text).toContain('未注册');
+    it('should throw when project is not registered', async () => {
+        await expect(beginPatch(WORKFLOWS_DIR, 'nonexistent')).rejects.toThrow('未注册');
     });
 
-    it('should reject when no iterations exist', async () => {
-        // Register project but don't start any iteration
+    it('should throw when no iterations exist', async () => {
         await registerProject(PROJECT, join(harmoniaHome, 'src'), 'dev');
 
-        const { text, isError } = await callTool('patch_start', { project_name: PROJECT });
-        expect(isError).toBe(true);
-        expect(text).toContain('尚未有任何迭代');
+        await expect(beginPatch(WORKFLOWS_DIR, PROJECT)).rejects.toThrow('尚未有任何迭代');
     });
 
     it('should create a patch after first iteration exists', async () => {
         await registerProject(PROJECT, join(harmoniaHome, 'src'), 'dev');
         await startIteration(PROJECT);
 
-        const { text, isError } = await callTool('patch_start', { project_name: PROJECT });
-        expect(isError).toBeFalsy();
-        expect(text).toContain('patch-1');
-        // New architecture: patch_start returns nextAction info instead of scale/phases
-        expect(text).toContain('dev');
+        const result = await beginPatch(WORKFLOWS_DIR, PROJECT);
+
+        expect(result.patchNumber).toBe(1);
+        expect(result.projectName).toBe(PROJECT);
+        expect(result.workflowName).toBe('dev');
+        expect(result.nextAction).toBeDefined();
     });
 
     it('should create patch directory with state.json', async () => {
         await registerProject(PROJECT, join(harmoniaHome, 'src'), 'dev');
         await startIteration(PROJECT);
 
-        await callTool('patch_start', { project_name: PROJECT });
+        await beginPatch(WORKFLOWS_DIR, PROJECT);
 
         // Verify patch directory and state file exist
         const statePath = join(harmoniaHome, PROJECT, 'patch-1', 'state.json');
@@ -96,24 +76,20 @@ describe('patch_start tool', () => {
         await registerProject(PROJECT, join(harmoniaHome, 'src'), 'dev');
         await startIteration(PROJECT);
 
-        const r1 = await callTool('patch_start', { project_name: PROJECT });
-        expect(r1.text).toContain('patch-1');
+        const r1 = await beginPatch(WORKFLOWS_DIR, PROJECT);
+        expect(r1.patchNumber).toBe(1);
 
-        const r2 = await callTool('patch_start', { project_name: PROJECT });
-        expect(r2.text).toContain('patch-2');
+        const r2 = await beginPatch(WORKFLOWS_DIR, PROJECT);
+        expect(r2.patchNumber).toBe(2);
     });
 
-    it('should include description and issue_id in output when provided', async () => {
+    it('should include description and issue_id when provided', async () => {
         await registerProject(PROJECT, join(harmoniaHome, 'src'), 'dev');
         await startIteration(PROJECT);
 
-        const { text, isError } = await callTool('patch_start', {
-            project_name: PROJECT,
-            description: '修复登录问题',
-            issue_id: 'issue-1',
-        });
-        expect(isError).toBeFalsy();
-        expect(text).toContain('修复登录问题');
-        expect(text).toContain('issue-1');
+        const result = await beginPatch(WORKFLOWS_DIR, PROJECT, '修复登录问题', 'issue-1');
+
+        expect(result.description).toBe('修复登录问题');
+        expect(result.issueId).toBe('issue-1');
     });
 });

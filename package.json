@@ -1,7 +1,7 @@
 {
   "name": "@s_s/harmonia",
   "version": "1.4.0",
-  "description": "Multi-agent orchestration MCP server with pluggable workflows",
+  "description": "Multi-agent orchestration server with pluggable workflows",
   "type": "module",
   "main": "./build/index.js",
   "bin": {
@@ -24,7 +24,6 @@
     "prepare": "husky"
   },
   "keywords": [
-    "mcp",
     "agent",
     "orchestration",
     "workflow",
@@ -33,8 +32,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@hono/node-server": "^1.19.11",
     "@s_s/agent-kit": "^1.2.1",
+    "hono": "^4.12.9",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   },

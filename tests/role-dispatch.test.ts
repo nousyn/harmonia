@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getFormatExtension, resolveInputReference } from '../src/tools/role-dispatch.js';
-import type { InputReference } from '../src/tools/role-dispatch.js';
+import { getFormatExtension, resolveInputReference } from '../src/core/prompt-builder.js';
+import type { InputReference } from '../src/core/prompt-builder.js';
 import type { ArtifactIOContext } from '../src/core/artifacts.js';
 import type { WorkflowPlugin, ArtifactDefinition, WorkflowDefinition, RoleDefinition } from '../src/core/types.js';
 

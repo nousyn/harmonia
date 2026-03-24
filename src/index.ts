@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Harmonia — Multi-agent orchestration MCP server with pluggable workflows.
+ * Harmonia — Multi-agent orchestrator with pluggable workflows.
  *
- * Entry point with two modes:
- *   - `harmonia`         → Start MCP stdio server (for agent consumers)
- *   - `harmonia setup`   → CLI project setup (for humans)
+ * Entry point with modes:
+ *   - `harmonia` or `harmonia serve` → Start HTTP API server
+ *   - `harmonia setup`              → CLI project setup (for humans)
+ *   - `harmonia unregister <name>`  → Remove project from registry
  *
  * All project data is stored under the Harmonia data directory (platform-specific).
  * Project source directories contain code only — no Harmonia artifacts.
@@ -52,21 +53,26 @@ if (subcommand === 'setup') {
     }
 } else if (subcommand === '--help' || subcommand === '-h') {
     console.log(`
-Harmonia — Multi-agent orchestration MCP server
+Harmonia — Multi-agent orchestrator
 
 Usage:
-  harmonia                    Start MCP stdio server
-  harmonia setup              Inject coordinator prompt + install hooks in current directory
-  harmonia unregister <name>  Remove project from registry and delete data (default)
+  harmonia                    Start HTTP API server (default port: 4600)
+  harmonia serve              Same as above
+  harmonia serve --port 8080  Start on a custom port
+  harmonia setup <name>       Register a project in the Harmonia registry
+  harmonia unregister <name>  Remove project from registry and delete data
   harmonia unregister <name> --keep-data  Remove from registry but keep data files
   harmonia --help             Show this help message
+  harmonia --version          Show version
+
+Serve options:
+  --port <number>          Port to listen on (default: 4600)
+  --host <address>         Hostname to bind to (default: 127.0.0.1)
 
 Setup options:
-  --agent <type>           opencode | claude-code | codex | openclaw (default: auto-detect)
+  --dir <path>             Project source directory (default: cwd)
+  --workflow <name>        Workflow to use (default: dev)
 `);
-} else if (subcommand && subcommand !== '--version' && subcommand !== '-v') {
-    console.error(`Unknown command: ${subcommand}\nRun 'harmonia --help' for usage.`);
-    process.exit(1);
 } else if (subcommand === '--version' || subcommand === '-v') {
     // Read version from package.json
     const { readFile } = await import('node:fs/promises');
@@ -76,52 +82,54 @@ Setup options:
     } catch {
         console.log('unknown');
     }
-} else {
-    // Default: MCP stdio server mode
+} else if (!subcommand || subcommand === 'serve') {
+    // Default: HTTP API server mode
     const { readFile } = await import('node:fs/promises');
-    const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-    const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
-    const { getGlobalDir } = await import('./core/registry.js');
+    const { startServer } = await import('./server.js');
 
-    const { registerProjectInit } = await import('./tools/project-init.js');
-    const { registerIterationStart } = await import('./tools/iteration-start.js');
-    const { registerGetRolePrompt } = await import('./tools/get-role-prompt.js');
-    const { registerArtifactTools } = await import('./tools/artifact-tools.js');
-    const { registerGetProjectStatus } = await import('./tools/get-project-status.js');
-    const { registerApproveArtifact } = await import('./tools/artifact-approve.js');
-    const { registerDispatchRole } = await import('./tools/role-dispatch.js');
-    const { registerReportDispatch } = await import('./tools/dispatch-report.js');
-    const { registerPatchStart } = await import('./tools/patch-start.js');
-    const { registerIssueTools } = await import('./tools/issue-tools.js');
-    const { registerArtifactSchema } = await import('./tools/artifact-schema.js');
-    const { registerLoopDone } = await import('./tools/loop-done.js');
+    // Parse serve options
+    const args = process.argv.slice(subcommand === 'serve' ? 3 : 2);
+    let port: number | undefined;
+    let hostname: string | undefined;
 
-    // Read version from package.json (single source of truth)
-    const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        const next = args[i + 1];
+        if (arg === '--port' && next) {
+            port = parseInt(next, 10);
+            if (isNaN(port)) {
+                console.error(`Invalid port: ${next}`);
+                process.exit(1);
+            }
+            i++;
+        } else if (arg === '--host' && next) {
+            hostname = next;
+            i++;
+        }
+    }
 
-    // Workflows directory: <data_dir>/harmonia/.workflows
-    const WORKFLOWS_DIR = join(getGlobalDir(), '.workflows');
+    // Read version for banner
+    let version = 'unknown';
+    try {
+        const pkg = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
+        version = pkg.version;
+    } catch {
+        // ignore
+    }
 
-    const server = new McpServer({
-        name: 'harmonia',
-        version: pkg.version,
-    });
+    console.log(`\nHarmonia v${version}`);
+    console.log(`──────────────────────────────`);
 
-    // Register all tools
-    registerProjectInit(server, WORKFLOWS_DIR);
-    registerIterationStart(server, WORKFLOWS_DIR);
-    registerGetRolePrompt(server, WORKFLOWS_DIR);
-    registerArtifactTools(server, WORKFLOWS_DIR);
-    registerGetProjectStatus(server, WORKFLOWS_DIR);
-    registerApproveArtifact(server, WORKFLOWS_DIR);
-    registerDispatchRole(server, WORKFLOWS_DIR);
-    registerReportDispatch(server, WORKFLOWS_DIR);
-    registerPatchStart(server, WORKFLOWS_DIR);
-    registerIssueTools(server);
-    registerArtifactSchema(server, WORKFLOWS_DIR);
-    registerLoopDone(server, WORKFLOWS_DIR);
-
-    // Connect via stdio
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+    try {
+        const result = await startServer({ port, hostname });
+        console.log(`  HTTP server listening on http://${result.hostname}:${result.port}`);
+        console.log(`  Workflows: ${result.workflowsDir}`);
+        console.log();
+    } catch (err) {
+        console.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+    }
+} else {
+    console.error(`Unknown command: ${subcommand}\nRun 'harmonia --help' for usage.`);
+    process.exit(1);
 }

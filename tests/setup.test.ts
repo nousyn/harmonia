@@ -1,37 +1,55 @@
+/**
+ * Tests for cli/setup.ts — parseSetupArgs.
+ *
+ * The setup command now only registers a project in the registry.
+ * MCP prompt injection tests are no longer applicable.
+ */
+
 import { describe, it, expect } from 'vitest';
-import { generateCoordinatorPrompt } from '../src/setup/templates.js';
-import { HARMONIA_MARKER_START, HARMONIA_MARKER_END } from '../src/setup/inject.js';
+import { parseSetupArgs } from '../src/cli/setup.js';
 
-describe('setup', () => {
-    // ─── generateCoordinatorPrompt ───
-
-    it('should generate prompt with all required sections', () => {
-        const prompt = generateCoordinatorPrompt();
-
-        // Prompt content should NOT contain markers (managed by agent-kit)
-        expect(prompt).not.toContain(HARMONIA_MARKER_START);
-        expect(prompt).not.toContain(HARMONIA_MARKER_END);
-
-        // Should be project-agnostic — no hardcoded project names/dirs
-        // Should contain workflow guidance with new tool names
-        expect(prompt).toContain('role_dispatch');
-        expect(prompt).toContain('project_status');
-        expect(prompt).toContain('artifact_write');
-        expect(prompt).toContain('artifact_approve');
-        // nextAction-driven — no more project_set_scale
-        expect(prompt).toContain('nextAction');
+describe('cli/setup parseSetupArgs', () => {
+    it('should parse project name', () => {
+        const opts = parseSetupArgs(['my-app']);
+        expect(opts.projectName).toBe('my-app');
     });
 
-    it('should not contain project-specific information', () => {
-        const prompt = generateCoordinatorPrompt();
-        // No hardcoded project name, dir, or scale value
-        expect(prompt).not.toContain('projectName');
-        expect(prompt).not.toContain('projectDir');
+    it('should parse --dir option', () => {
+        const opts = parseSetupArgs(['my-app', '--dir', '/path/to/project']);
+        expect(opts.projectName).toBe('my-app');
+        expect(opts.dir).toBe('/path/to/project');
     });
 
-    it('should contain Getting Started section', () => {
-        const prompt = generateCoordinatorPrompt();
-        expect(prompt).toContain('Getting Started');
-        expect(prompt).toContain('project_init');
+    it('should parse --workflow option', () => {
+        const opts = parseSetupArgs(['my-app', '--workflow', 'custom']);
+        expect(opts.projectName).toBe('my-app');
+        expect(opts.workflow).toBe('custom');
+    });
+
+    it('should parse all options together', () => {
+        const opts = parseSetupArgs(['my-app', '--dir', '/src', '--workflow', 'dev']);
+        expect(opts.projectName).toBe('my-app');
+        expect(opts.dir).toBe('/src');
+        expect(opts.workflow).toBe('dev');
+    });
+
+    it('should throw when project name is missing', () => {
+        expect(() => parseSetupArgs([])).toThrow('Project name is required');
+    });
+
+    it('should throw on unknown option', () => {
+        expect(() => parseSetupArgs(['my-app', '--unknown'])).toThrow('Unknown option');
+    });
+
+    it('should throw on extra positional argument', () => {
+        expect(() => parseSetupArgs(['my-app', 'extra'])).toThrow('Unexpected argument');
+    });
+
+    it('should throw when --dir has no value', () => {
+        expect(() => parseSetupArgs(['my-app', '--dir'])).toThrow('--dir requires a value');
+    });
+
+    it('should throw when --workflow has no value', () => {
+        expect(() => parseSetupArgs(['my-app', '--workflow'])).toThrow('--workflow requires a value');
     });
 });

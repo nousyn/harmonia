@@ -1,41 +1,50 @@
 /**
  * Tests for CLI commands.
- * Focuses on parseSetupArgs (pure logic) and runSetup (integration with mocked deps).
+ * Focuses on parseSetupArgs (pure logic) and runSetup (integration).
+ *
+ * Updated for new architecture: setup now registers a project in the
+ * Harmonia registry instead of injecting MCP prompts.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, mkdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseSetupArgs, runSetup } from '../src/cli/setup.js';
+import { getProject } from '../src/core/registry.js';
+
+const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
 
 // ─── parseSetupArgs ───
 
 describe('parseSetupArgs', () => {
-    it('should return defaults with no args', () => {
-        const opts = parseSetupArgs([]);
-        expect(opts.agent).toBeUndefined();
+    it('should parse project name', () => {
+        const opts = parseSetupArgs(['my-app']);
+        expect(opts.projectName).toBe('my-app');
     });
 
-    it('should parse --agent', () => {
-        const opts = parseSetupArgs(['--agent', 'claude-code']);
-        expect(opts.agent).toBe('claude-code');
+    it('should parse --dir', () => {
+        const opts = parseSetupArgs(['my-app', '--dir', '/path/to/project']);
+        expect(opts.projectName).toBe('my-app');
+        expect(opts.dir).toBe('/path/to/project');
     });
 
-    it('should throw on invalid --agent', () => {
-        expect(() => parseSetupArgs(['--agent', 'vscode'])).toThrow('--agent must be one of');
+    it('should parse --workflow', () => {
+        const opts = parseSetupArgs(['my-app', '--workflow', 'custom']);
+        expect(opts.projectName).toBe('my-app');
+        expect(opts.workflow).toBe('custom');
+    });
+
+    it('should throw when project name is missing', () => {
+        expect(() => parseSetupArgs([])).toThrow('Project name is required');
     });
 
     it('should throw on unknown option', () => {
-        expect(() => parseSetupArgs(['--verbose'])).toThrow('Unknown option');
+        expect(() => parseSetupArgs(['my-app', '--verbose'])).toThrow('Unknown option');
     });
 
-    it('should throw on --name (removed)', () => {
-        expect(() => parseSetupArgs(['--name', 'foo'])).toThrow('Unknown option');
-    });
-
-    it('should throw on --workflow (removed)', () => {
-        expect(() => parseSetupArgs(['--workflow', 'dev'])).toThrow('Unknown option');
+    it('should throw on extra positional argument', () => {
+        expect(() => parseSetupArgs(['my-app', 'extra'])).toThrow('Unexpected argument');
     });
 });
 
@@ -47,7 +56,6 @@ describe('runSetup', () => {
     let consoleLogs: string[];
 
     let originalDataDir: string | undefined;
-    let originalHome: string | undefined;
 
     beforeEach(async () => {
         tempDir = await mkdtemp(join(tmpdir(), 'harmonia-cli-test-'));
@@ -58,12 +66,10 @@ describe('runSetup', () => {
         originalDataDir = process.env.HARMONIA_DATA_DIR;
         process.env.HARMONIA_DATA_DIR = tempDir;
 
-        // Override HOME so agent-kit's resolveConfigPath writes to tempDir
-        originalHome = process.env.HOME;
-        process.env.HOME = tempDir;
-
-        // Mock cwd to our temp project dir (for agent detection)
-        vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
+        // Copy built-in workflows to temp dir so loadWorkflow can find them
+        const { cp } = await import('node:fs/promises');
+        const workflowsDest = join(tempDir, '.workflows');
+        await cp(WORKFLOWS_DIR, workflowsDest, { recursive: true });
 
         // Capture console.log
         consoleLogs = [];
@@ -74,66 +80,58 @@ describe('runSetup', () => {
 
     afterEach(async () => {
         vi.restoreAllMocks();
-        // Restore env vars
         if (originalDataDir === undefined) {
             delete process.env.HARMONIA_DATA_DIR;
         } else {
             process.env.HARMONIA_DATA_DIR = originalDataDir;
         }
-        if (originalHome === undefined) {
-            delete process.env.HOME;
-        } else {
-            process.env.HOME = originalHome;
-        }
         await rm(tempDir, { recursive: true, force: true });
     });
 
-    it('should inject prompt to global config dir and install hooks', async () => {
+    it('should register project in the registry', async () => {
         await runSetup({
-            agent: 'opencode',
+            projectName: 'my-app',
+            dir: projectDir,
+            workflow: 'dev',
         });
 
-        // opencode global path: ~/.config/opencode/AGENTS.md → tempDir/.config/opencode/AGENTS.md
-        const agentsFile = await readFile(join(tempDir, '.config', 'opencode', 'AGENTS.md'), 'utf-8');
-        expect(agentsFile).toContain('harmonia');
+        const entry = await getProject('my-app');
+        expect(entry).not.toBeNull();
+        expect(entry!.dir).toBe(projectDir);
+        expect(entry!.workflow).toBe('dev');
 
-        // Check console output
         const output = consoleLogs.join('\n');
-        expect(output).toContain('[done]');
-        expect(output).toContain('Ready');
+        expect(output).toContain('Registered');
     });
 
-    it('should not create AGENTS.md in project directory', async () => {
-        await runSetup({
-            agent: 'opencode',
-        });
-
-        // No AGENTS.md should exist in the project directory
-        const projectAgentsFile = await readFile(join(projectDir, 'AGENTS.md'), 'utf-8').catch(() => null);
-        expect(projectAgentsFile).toBeNull();
-    });
-
-    it('should not register project or initialize state', async () => {
-        await runSetup({
-            agent: 'opencode',
-        });
-
-        // No state.json should exist — setup no longer initializes project
-        const stateExists = await readFile(join(tempDir, 'test-project', 'state.json'), 'utf-8').catch(() => null);
-        expect(stateExists).toBeNull();
-    });
-
-    it('should be idempotent (re-run updates prompt)', async () => {
+    it('should skip if project already registered', async () => {
         // First setup
-        await runSetup({ agent: 'opencode' });
-
+        await runSetup({ projectName: 'my-app', dir: projectDir, workflow: 'dev' });
         consoleLogs = [];
 
-        // Second setup — should update (replace) the prompt
-        await runSetup({ agent: 'opencode' });
+        // Second setup — should be a no-op
+        await runSetup({ projectName: 'my-app', dir: projectDir, workflow: 'dev' });
 
         const output = consoleLogs.join('\n');
-        expect(output).toContain('Updated');
-        expect(output).toContain('[done]');
+        expect(output).toContain('already registered');
+        expect(output).toContain('No changes made');
+    });
+
+    it('should use cwd as default project dir', async () => {
+        vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
+
+        await runSetup({ projectName: 'my-app' });
+
+        const entry = await getProject('my-app');
+        expect(entry).not.toBeNull();
+        expect(entry!.dir).toBe(projectDir);
+    });
+
+    it('should use dev as default workflow', async () => {
+        await runSetup({ projectName: 'my-app', dir: projectDir });
+
+        const entry = await getProject('my-app');
+        expect(entry).not.toBeNull();
+        expect(entry!.workflow).toBe('dev');
     });
 });
