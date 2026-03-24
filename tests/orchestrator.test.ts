@@ -11,14 +11,15 @@
  * - handleNodeCompleted/Failed drive workflow forward
  * - dispatchTask() assembles prompt and invokes adapter
  * - shutdown() cleans up resources
- * - PlaceholderAdapterRegistry register/get/list
+ * - DefaultAdapterRegistry register/get/list
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Orchestrator, PlaceholderAdapterRegistry } from '../src/core/orchestrator.js';
+import { Orchestrator } from '../src/core/orchestrator.js';
+import { DefaultAdapterRegistry } from '../src/adapters/registry.js';
 import type {
     AgentAdapter,
     AgentAdapterFactory,
@@ -113,7 +114,7 @@ async function createWorkflowFixture(
 
 function makeOrchestratorConfig(
     fixture: { workflowsDir: string; contextDir: string; projectDir: string },
-    registry?: PlaceholderAdapterRegistry,
+    registry?: DefaultAdapterRegistry,
 ): OrchestratorConfig {
     const context: ResolvedContext = {
         entry: {
@@ -293,7 +294,7 @@ describe('Orchestrator', () => {
         });
 
         it('should dispatch task through adapter when registered', async () => {
-            const registry = new PlaceholderAdapterRegistry();
+            const registry = new DefaultAdapterRegistry();
             registry.register('opencode', makeMockFactory({ status: 'completed', artifacts: ['prd'] }));
 
             // Need to set agent in role frontmatter — but the loaded plugin comes from disk.
@@ -312,7 +313,7 @@ describe('Orchestrator', () => {
         });
 
         it('should return failed when adapter throws', async () => {
-            const registry = new PlaceholderAdapterRegistry();
+            const registry = new DefaultAdapterRegistry();
             const failingFactory: AgentAdapterFactory = {
                 create: () => ({
                     dispatchTask: async () => {
@@ -351,11 +352,11 @@ describe('Orchestrator', () => {
     });
 });
 
-// ─── PlaceholderAdapterRegistry ───
+// ─── DefaultAdapterRegistry ───
 
-describe('PlaceholderAdapterRegistry', () => {
+describe('DefaultAdapterRegistry', () => {
     it('should register and retrieve a factory', () => {
-        const registry = new PlaceholderAdapterRegistry();
+        const registry = new DefaultAdapterRegistry();
         const factory = makeMockFactory();
 
         registry.register('opencode', factory);
@@ -364,12 +365,12 @@ describe('PlaceholderAdapterRegistry', () => {
     });
 
     it('should return undefined for unregistered type', () => {
-        const registry = new PlaceholderAdapterRegistry();
+        const registry = new DefaultAdapterRegistry();
         expect(registry.getFactory('unknown')).toBeUndefined();
     });
 
     it('should list registered types', () => {
-        const registry = new PlaceholderAdapterRegistry();
+        const registry = new DefaultAdapterRegistry();
         registry.register('opencode', makeMockFactory());
         registry.register('claude', makeMockFactory());
 
@@ -378,7 +379,7 @@ describe('PlaceholderAdapterRegistry', () => {
     });
 
     it('should allow overwriting a registered factory', () => {
-        const registry = new PlaceholderAdapterRegistry();
+        const registry = new DefaultAdapterRegistry();
         const factory1 = makeMockFactory();
         const factory2 = makeMockFactory();
 

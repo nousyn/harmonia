@@ -42,43 +42,12 @@ import type {
     NextAction,
 } from './types.js';
 
-// ─── Adapter Interfaces (Phase 2 placeholder) ───
+// ─── Adapter Interfaces (canonical definitions in src/adapters/types.ts) ───
 
-/**
- * Agent adapter interface — unified interface for all agent types.
- * Phase 1: type definition only, no implementations.
- * Phase 2: concrete implementations (OpenCode, OpenClaw, Claude Code, Codex).
- */
-export interface AgentAdapter {
-    /** Dispatch a task to the agent and wait for completion. */
-    dispatchTask(payload: TaskPayload): Promise<TaskResult>;
-    /** Push a message to the agent (optional — only some agents support this). */
-    pushMessage?(message: string): Promise<void>;
-    /** Check current agent status. */
-    checkStatus(): Promise<AgentStatus>;
-    /** Terminate the agent. */
-    terminate(): Promise<void>;
-}
+import type { AgentAdapter, AdapterConfig, AgentAdapterFactory, AdapterRegistry } from '../adapters/types.js';
 
-/** Configuration for creating an adapter instance. */
-export interface AdapterConfig {
-    [key: string]: unknown;
-}
-
-/** Factory for creating agent adapter instances. */
-export interface AgentAdapterFactory {
-    create(config: AdapterConfig): AgentAdapter;
-}
-
-/**
- * Registry of available agent adapter factories.
- * Phase 1: placeholder implementation. Phase 2: real adapters.
- */
-export interface AdapterRegistry {
-    register(agentType: string, factory: AgentAdapterFactory): void;
-    getFactory(agentType: string): AgentAdapterFactory | undefined;
-    listTypes(): string[];
-}
+// Re-export adapter types so existing imports from orchestrator.ts continue to work.
+export type { AgentAdapter, AdapterConfig, AgentAdapterFactory, AdapterRegistry };
 
 // ─── Connected Agent Tracking ───
 
@@ -138,21 +107,16 @@ class EventLogger {
     }
 }
 
-// ─── PlaceholderAdapterRegistry ───
+// ─── Adapter Registry re-export ───
 
-export class PlaceholderAdapterRegistry implements AdapterRegistry {
-    private readonly factories = new Map<string, AgentAdapterFactory>();
+import { DefaultAdapterRegistry } from '../adapters/registry.js';
+export { DefaultAdapterRegistry };
 
-    register(agentType: string, factory: AgentAdapterFactory): void {
-        this.factories.set(agentType, factory);
-    }
-    getFactory(agentType: string): AgentAdapterFactory | undefined {
-        return this.factories.get(agentType);
-    }
-    listTypes(): string[] {
-        return [...this.factories.keys()];
-    }
-}
+/**
+ * @deprecated Use `DefaultAdapterRegistry` from `adapters/registry.js` instead.
+ * Kept as alias for backward compatibility during migration.
+ */
+export const PlaceholderAdapterRegistry = DefaultAdapterRegistry;
 
 // ─── Orchestrator ───
 
