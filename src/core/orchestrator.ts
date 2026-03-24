@@ -526,7 +526,7 @@ export class Orchestrator {
     private setupDispatchTimeout(): void {
         this.dispatchManager.onTimeout(async (dispatchId, nodeId, elapsed) => {
             this.logger.warn('dispatch.timeout', { dispatchId, nodeId, elapsed });
-            // Phase 2: call adapter.checkStatus() here
+            // TODO: integrate adapter.checkStatus() to decide retry vs fail on timeout
         });
     }
 }

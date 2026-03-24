@@ -234,14 +234,19 @@ interface AgentAdapterFactory {
 
 - 按 agent type（字符串 key）注册/查找适配器工厂
 - 硬编码注册四个适配器，代码结构预留插拔空间
-- 提供 `getAdapter(agentType: string): AgentAdapterFactory` 方法
+- 提供 `getFactory(agentType: string): AgentAdapterFactory` 方法
+  > **实现偏离说明**: 计划原文为 `getAdapter()`，实际命名为 `getFactory()`，因为返回值是 Factory 而非 Adapter，`getFactory` 语义更准确。
 
 **涉及文件**: 新建 `src/adapters/registry.ts`
 
 ### 2.3 OpenCode 适配器
 
 - CLI 子进程模式：`spawn('opencode', [...])`
-- stdin 注入 prompt（TaskPayload 组装的完整 prompt）
+- **stdin 管道注入 prompt**（优于 003 原设计的位置参数方案）
+  > **实现改进说明**: 003 设计文档原文为 `opencode run "prompt" --format json`（prompt 作为位置参数），
+  > 实现改用 stdin 管道传入 prompt。原因：Harmonia 的 prompt 由 PromptBuilder 组装，
+  > 可能包含完整源码文件（Q5 决策 50,000 字符阈值），轻松超过 shell 参数长度限制
+  > （macOS ~256KB），stdin 管道无长度限制且无需 shell 转义，是更好的工程选择。
 - 等待进程退出，收取结果
 - `checkStatus()`：检查子进程是否存活
 - `terminate()`：kill 子进程

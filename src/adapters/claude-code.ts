@@ -27,8 +27,14 @@ export interface ClaudeCodeConfig extends CliAdapterConfig {
     maxTurns?: number;
     /** System prompt to prepend. */
     systemPrompt?: string;
-    /** Skip permission prompts (use with caution). */
+    /**
+     * Skip permission prompts.
+     * Defaults to `true` because Harmonia runs non-interactively — without this
+     * flag Claude Code would hang waiting for user confirmation.
+     */
     dangerouslySkipPermissions?: boolean;
+    /** Maximum budget in USD (e.g. 5.00). Passed as `--max-budget-usd`. */
+    maxBudgetUsd?: number;
 }
 
 // ─── Adapter ───
@@ -43,6 +49,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
     async dispatchTask(payload: TaskPayload): Promise<TaskResult> {
         const command = this.config.command ?? 'claude';
+        const skipPermissions = this.config.dangerouslySkipPermissions ?? true;
         const args = [
             '-p',
             payload.prompt,
@@ -50,7 +57,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
             'json',
             ...(this.config.maxTurns ? ['--max-turns', String(this.config.maxTurns)] : []),
             ...(this.config.systemPrompt ? ['--system-prompt', this.config.systemPrompt] : []),
-            ...(this.config.dangerouslySkipPermissions ? ['--dangerously-skip-permissions'] : []),
+            ...(skipPermissions ? ['--dangerously-skip-permissions'] : []),
+            ...(this.config.maxBudgetUsd != null ? ['--max-budget-usd', String(this.config.maxBudgetUsd)] : []),
             ...(this.config.extraArgs ?? []),
         ];
 

@@ -25,6 +25,8 @@ import type {
 export interface CodexConfig extends CliAdapterConfig {
     /** Sandbox mode: 'workspace-write' (default) or 'danger-full-access'. */
     sandbox?: 'workspace-write' | 'danger-full-access';
+    /** Path to a JSON schema file for structured output (`--output-schema`). */
+    outputSchema?: string;
 }
 
 // ─── Adapter ───
@@ -48,6 +50,7 @@ export class CodexAdapter implements AgentAdapter {
             '--full-auto',
             '--sandbox',
             sandbox,
+            ...(this.config.outputSchema ? ['--output-schema', this.config.outputSchema] : []),
             ...(this.config.extraArgs ?? []),
         ];
 

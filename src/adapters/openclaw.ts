@@ -37,6 +37,11 @@ export class OpenClawAdapter implements AgentAdapter {
         const command = this.config.command ?? 'openclaw';
         const spawnOpts = resolveSpawnOptions(this.config, payload.timeout);
 
+        // NOTE: prompt is passed via --message CLI argument. OpenClaw's CLI does not
+        // support stdin input (confirmed from source: --message is a requiredOption).
+        // macOS shell argument limit is ~256KB which should suffice for most prompts
+        // assembled by PromptBuilder. If this becomes a bottleneck, a future openclaw
+        // release with --stdin support would be needed.
         const args = [
             'agent',
             '--message',
