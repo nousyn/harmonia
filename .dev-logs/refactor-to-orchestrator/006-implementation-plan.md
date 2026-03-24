@@ -1,7 +1,7 @@
 # Harmonia 重构实施计划
 
 > 创建时间: 2026-03-24
-> 状态: 执行中 — Phase 1 已完成，Phase 2 待开始
+> 状态: 执行中 — Phase 1 & Phase 2 已完成，Phase 3 待开始
 
 基于 001-005 文档的设计讨论和 FAQ 决策，本文档是完整的实施计划。
 
@@ -187,7 +187,22 @@ Phase 1 (Core 改造)
 
 ---
 
-## Phase 2: 适配器层
+## Phase 2: 适配器层 ✅
+
+> **完成时间**: 2026-03-24
+> **提交**: `2e829cb` — feat: Phase 2 适配器层
+>
+> **实现清单**:
+>
+> - 2.1 AgentAdapter / AgentAdapterFactory / AdapterRegistry 接口 → `src/adapters/types.ts`
+> - 2.2 DefaultAdapterRegistry + `createDefaultRegistry()` → `src/adapters/registry.ts`
+> - 2.3 OpenCode 适配器 → `src/adapters/opencode.ts`
+> - 2.4 OpenClaw 适配器（含 pushMessage） → `src/adapters/openclaw.ts`
+> - 2.5 Claude Code 适配器 → `src/adapters/claude-code.ts`
+> - 2.6 Codex 适配器 → `src/adapters/codex.ts`
+> - 2.7 适配器测试: 38 个单元测试 + 7 个 cli-runner 集成测试 + 6 个 E2E 冒烟占位
+> - cli-runner 基础设施: `spawnCliProcess()` → `CliProcessHandle`（真实 checkStatus/terminate）
+> - PlaceholderAdapterRegistry → deprecated alias for DefaultAdapterRegistry
 
 **目标**: 实现统一的 AgentAdapter 接口 + 首批适配器（CLI 子进程模式）
 
