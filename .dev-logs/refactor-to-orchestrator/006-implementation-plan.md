@@ -1,7 +1,7 @@
 # Harmonia 重构实施计划
 
 > 创建时间: 2026-03-24
-> 状态: 执行中 — Phase 1 & Phase 2 已完成，Phase 3 待开始
+> 状态: 执行中 — Phase 1, 2, 3 已完成，Phase 4 待开始
 
 基于 001-005 文档的设计讨论和 FAQ 决策，本文档是完整的实施计划。
 
@@ -289,7 +289,7 @@ interface AgentAdapterFactory {
 
 ---
 
-## Phase 3: 入口重写 — MCP → HTTP 服务
+## Phase 3: 入口重写 — MCP → HTTP 服务 ✅ 完成
 
 **目标**: 替换 MCP Server 入口，建立 HTTP API 层
 
@@ -390,6 +390,30 @@ interface AgentAdapterFactory {
 - WebSocket 推送测试
 
 **涉及文件**: 新建测试文件
+
+> **Phase 3 执行记录** (2026-03-25)
+>
+> 提交: `30cd946` — feat: Phase 3 入口重写 — MCP → HTTP 服務
+>
+> 关键实现:
+>
+> - `src/server.ts` — Hono HTTP 服务入口 (createApp, ensureWorkflows, startServer)
+> - `src/api/routes.ts` — 全部 HTTP API 路由处理器 (286 行)
+> - `src/core/operations.ts` — 提取的业务逻辑层 (1333 行, transport-agnostic)
+> - `src/index.ts` — 重写 CLI 入口 (harmonia serve)
+> - `src/cli/setup.ts` — 重写为纯项目注册
+> - `tests/api.test.ts` — 22 个 API 集成测试
+>
+> 删除: `src/tools/` (14 文件, 3509 行), `src/setup/inject.ts`, `src/setup/templates.ts`, `@modelcontextprotocol/sdk`
+>
+> 测试: 576 passed, 6 skipped (E2E), tsc 零错误
+>
+> 偏离:
+>
+> - `artifact_write` 端点保留(006 标记为"不再暴露")——过渡期仍需外部写入能力,Phase 5 再决定去留
+> - `connect` 端点为 501 占位——依赖 Phase 4 Orchestrator 集成
+> - 额外端点: `GET /api/projects`, `GET /reviews`, `PATCH /issues/:id`——合理增补
+> - WebSocket 按计划推迟到 Phase 6
 
 ---
 
