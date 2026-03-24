@@ -1,7 +1,7 @@
 # Harmonia 重构实施计划
 
 > 创建时间: 2026-03-24
-> 状态: 已确认
+> 状态: 已确认（007 修正已应用）
 
 基于 001-005 文档的设计讨论和 FAQ 决策，本文档是完整的实施计划。
 
@@ -33,16 +33,18 @@ Phase 1 (Core 改造)
 
 - 创建 `EventBus` 类（typed EventEmitter，基于 Node.js 内置 EventEmitter）
 - 定义所有业务事件类型：
-  - `node.activated` — 节点被激活
-  - `node.completed` — 节点完成
-  - `node.failed` — 节点失败
-  - `task.dispatched` — 任务已派发给 agent
-  - `task.timeout` — 任务超时（定时器触发）
-  - `task.stalled` — agent 存活但无进展
-  - `artifact.written` — artifact 被写入
-  - `artifact.approved` — artifact 被审批通过
-  - `gate.evaluated` — gate 条件被评估
-  - `agent.unreachable` — agent 不可达
+  - Phase 1 立即实现（有生产者和消费者）：
+    - `node.activated` — 节点被激活
+    - `node.completed` — 节点完成
+    - `node.failed` — 节点失败
+    - `artifact.written` — artifact 被写入
+    - `artifact.approved` — artifact 被审批通过
+    - `gate.evaluated` — gate 条件被评估
+  - Phase 2+ 按需实现（依赖适配器，类型先定义，payload 和 handler 在有真实消费者时再实现）：
+    - `task.dispatched` — 任务已派发给 agent
+    - `task.timeout` — 任务超时（定时器触发）
+    - `task.stalled` — agent 存活但无进展
+    - `agent.unreachable` — agent 不可达
 - 当前 `WorkflowEvent` 类型（`node_completed`, `node_failed` 等）是事件的数据定义，EventBus 是其运行时承载
 - 现在这些事件由 coordinator 通过 MCP 工具调用"灌"进来，重构后由 Harmonia 内部产生和消费
 
@@ -51,7 +53,7 @@ Phase 1 (Core 改造)
 ### 1.2 扩展类型定义
 
 - 新增 `TaskPayload` 类型（派发给 agent 的任务包）：
-  - `nodeId`, `role`, `prompt`, `inputArtifacts`, `outputExpectations`, `constraints`, `timeout`
+  - `nodeId`, `role`, `prompt`（由 PromptBuilder [1.7] 组装的完整 prompt，包含角色指令 + 上下文 artifact + 产出要求；不同于 003 草案中的 `description`）, `inputArtifacts`, `outputExpectations`, `constraints`, `timeout`
 - 新增 `TaskResult` 类型（agent 返回的结果）：
   - `status`, `artifacts`, `error`, `metadata`
 - 新增 `AgentStatus` 类型：`running | idle | exited | unreachable`
@@ -64,6 +66,11 @@ Phase 1 (Core 改造)
   ```
 - `ArtifactDefinition` 中 `unmanaged?: boolean` 替换为 `validation?: ValidationConfig`
 - 保留所有现有类型不变（`WorkflowNode`, `WorkflowState`, `NextAction` 等）
+- `WorkflowDefinition.coordinator` 字段保留，但语义需要澄清：
+  - **旧架构**："流程驱动者"的 role ID（coordinator 通过 MCP 调用引擎推进流程）
+  - **新架构**："用户沟通桥梁"的 role ID（Orchestrator 接管流程驱动，coordinator 角色退化为用户交互的主要通道）
+  - Orchestrator 使用此字段识别哪个已连接 agent 是 coordinator，用于推送审批请求、状态通知等用户交互消息
+  - 字段名和类型不变（`coordinator: string`），仅语义调整，代码注释更新
 - `RoleFrontmatter` 中 `agent` 字段已存在，无需修改
 
 **涉及文件**: 修改 `src/core/types.ts`
@@ -80,11 +87,11 @@ Phase 1 (Core 改造)
 
 **涉及文件**: 修改 `src/core/workflow-engine.ts`
 
-### 1.4 改造 dispatch 模块
+### 1.4 扩展 dispatch 模块
 
-- 从"被动记录"变为"主动管理 agent 生命周期"
-- dispatch 创建时触发 `task.dispatched` 事件
-- 状态变更时触发对应事件（`node.completed` / `node.failed`）
+现有 `dispatch.ts`（290 行）已是功能完整的 CRUD + 状态机模块（`DISPATCH_TRANSITIONS`、`isValidTransition`、`isTerminalStatus`、`hasRunningDispatch` 等），**保留全部现有逻辑**，在此基础上扩展：
+
+- 接入 EventBus：dispatch 创建时触发 `task.dispatched` 事件，状态变更时触发 `node.completed` / `node.failed`
 - 增加超时定时器注册逻辑：
   - 派发任务时注册定时器（timeout 来自 `TaskNode.timeout` 或全局默认值）
   - 到期触发时通过适配器 `checkStatus()` 检查 agent 实际状态
@@ -92,7 +99,7 @@ Phase 1 (Core 改造)
 - Session 概念简化：Harmonia 控制 agent 生命周期，不再依赖 coordinator 创建 session
 - 现有 `SessionRecord` / `DispatchRecord` 类型保留，按需扩展
 
-**涉及文件**: 重写 `src/core/dispatch.ts`
+**涉及文件**: 扩展 `src/core/dispatch.ts`
 
 ### 1.5 改造 artifacts 模块
 
@@ -140,10 +147,10 @@ Phase 1 (Core 改造)
   - 上下文 artifact 内容（来自 `inputArtifacts`，按 Q5 默认传完整内容，大文件传路径）
   - 产出要求（期望的 artifact ID、格式、写入路径）
   - 校验规则说明（如果配了 schema/command，告知 agent 产出需要满足什么要求）
-- 复用现有 `plugin.ts` 中的角色加载 + `getRolePrompt` 逻辑
+- 复用现有 `workflow-engine.ts` 中 `EngineContext.getRolePrompt` 接口定义，以及 `engine-helpers.ts` 中 `buildEngineContext` 的内联实现（注：`getRolePrompt` 不在 `plugin.ts` 中，而是分散在 engine-helpers、iteration-start、patch-start 中的内联实现）
 - prompt 组装作为 Orchestrator 的内部方法或独立模块
 
-**涉及文件**: 可能修改 `src/core/plugin.ts`，或新建 `src/core/prompt-builder.ts`
+**涉及文件**: 新建 `src/core/prompt-builder.ts`（`getRolePrompt` 逻辑来自 engine-helpers.ts，不在 plugin.ts 中）
 
 ### 1.8 创建 Orchestrator
 
@@ -155,7 +162,9 @@ Phase 1 (Core 改造)
   - 组装 TaskPayload（调用 1.7 的 prompt 组装）
   - 调用适配器派发任务 / 推送消息
   - 管理超时定时器
-  - 收取 agent 产出并触发校验
+  - **管理已连接的 agent 信息**（agent type + session ID + 连接参数）——外部 agent（特别是 coordinator）通过 `connect` API 注册自身，Orchestrator 记录连接信息，推送消息时据此选择适配器和目标（参见 002 §4.2）
+  - **收取 agent 产出**：适配器 `dispatchTask()` resolve 后，根据节点的 `outputExpectations`（artifact 定义列表）到指定路径读取文件，调用 `validateArtifact` 校验（如配置了 validation），校验通过 → emit `artifact.written`，校验失败 → emit `node.failed` + 通知 coordinator
+  - EventBus 事件自动输出结构化日志（至少 console，开发阶段能在终端看到事件流即可）
 - Phase 1 中 AdapterRegistry 可以是占位接口，Phase 2 填充实现
 - 使用 1.6 迁移过来的 `processWorkflowEvent` 等逻辑作为内部实现
 
@@ -222,9 +231,13 @@ interface AgentAdapterFactory {
 
 ### 2.4 OpenClaw 适配器
 
-- CLI 子进程模式：`spawn('openclaw', [...])`
-- 类似 OpenCode 模式
-- 实现 `pushMessage()`（OpenClaw 支持消息推送）
+与其他三个适配器不同，OpenClaw 是唯一需要实现 `pushMessage()` 的适配器（Coordinator 推送路径的基础）：
+
+- 派发任务：CLI `openclaw agent --message "..." --timeout 300`
+- 推送消息：CLI `openclaw agent --session-id <id> --message "..." --deliver`（002 §4.4 的出站路径）
+- 实现 `pushMessage()` 方法——接收 Orchestrator 的推送请求（审批通知、状态变更等），通过 `--deliver` 注入到 coordinator 的活跃 session
+- `checkStatus()`：检查子进程或查询 session 状态
+- `terminate()`：kill 子进程
 
 **涉及文件**: 新建 `src/adapters/openclaw.ts`
 
@@ -267,6 +280,7 @@ interface AgentAdapterFactory {
 ### 3.2 创建 HTTP 服务入口
 
 - `harmonia serve` 命令启动 HTTP 服务
+- 检查并拷贝内置 workflow 到用户数据目录（从 setup 迁移至此，参见 3.7）
 - 创建 Orchestrator 实例
 - 挂载 API 路由
 - 启动 WebSocket 服务
@@ -284,26 +298,35 @@ interface AgentAdapterFactory {
 
 ### 3.4 实现核心 API 端点
 
-从现有 14 个 MCP 工具映射为 HTTP API：
+从新架构的需求出发设计 HTTP API，**不是 1:1 迁移 MCP 工具**。重构后部分 MCP 工具已变为引擎内部行为，不再需要外部端点。
 
-| MCP 工具             | HTTP 端点                                        | 方法                       |
-| -------------------- | ------------------------------------------------ | -------------------------- |
-| `project_init`       | `POST /api/projects`                             | 初始化项目                 |
-| `iteration_start`    | `POST /api/projects/:name/iterations`            | 开始新迭代                 |
-| `patch_start`        | `POST /api/projects/:name/patches`               | 开始新补丁                 |
-| `get_project_status` | `GET /api/projects/:name/status`                 | 查询项目状态               |
-| `get_role_prompt`    | `GET /api/projects/:name/roles/:role/prompt`     | 获取角色 prompt            |
-| `artifact_write`     | `POST /api/projects/:name/artifacts/:id`         | 写入 artifact              |
-| `artifact_read`      | `GET /api/projects/:name/artifacts/:id`          | 读取 artifact              |
-| `artifact_list`      | `GET /api/projects/:name/artifacts`              | 列出 artifacts             |
-| `artifact_approve`   | `POST /api/projects/:name/artifacts/:id/approve` | 审批 artifact              |
-| `artifact_schema`    | `GET /api/projects/:name/artifacts/:id/schema`   | 获取 artifact schema       |
-| `dispatch_role`      | `POST /api/projects/:name/dispatches`            | 派发角色（可能仅内部使用） |
-| `report_dispatch`    | `POST /api/projects/:name/dispatches/:id/report` | 汇报派发结果               |
-| `issue_*`            | `POST/GET /api/projects/:name/issues`            | Issue CRUD                 |
-| `loop_done`          | `POST /api/projects/:name/loops/:id/done`        | 标记循环结束               |
+#### 外部 API（coordinator / 管理操作需要）
 
-注意：部分工具在重构后语义变化（如 `dispatch_role` 变为引擎内部行为，API 端点可能仅供 coordinator 查询用途）。具体端点列表在实施时根据实际需求调整。
+| HTTP 端点                                        | 说明                                                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `POST /api/connect`                              | Agent 注册自身到 Harmonia（agent type + session ID + 连接参数），Coordinator 入站的基础（002 §4.2） |
+| `DELETE /api/connect/:id`                        | Agent 断开连接                                                                                      |
+| `POST /api/projects`                             | 初始化项目（原 `project_init`）                                                                     |
+| `POST /api/projects/:name/iterations`            | 开始新迭代（原 `iteration_start`）                                                                  |
+| `POST /api/projects/:name/patches`               | 开始新补丁（原 `patch_start`）                                                                      |
+| `GET /api/projects/:name/status`                 | 查询项目状态（原 `get_project_status`）                                                             |
+| `GET /api/projects/:name/artifacts/:id`          | 读取 artifact（原 `artifact_read`）                                                                 |
+| `GET /api/projects/:name/artifacts`              | 列出 artifacts（原 `artifact_list`）                                                                |
+| `POST /api/projects/:name/artifacts/:id/approve` | 审批 artifact（原 `artifact_approve`）                                                              |
+| `GET /api/projects/:name/artifacts/:id/schema`   | 获取 artifact schema（原 `artifact_schema`）                                                        |
+| `POST/GET /api/projects/:name/issues`            | Issue CRUD（原 `issue_*`）                                                                          |
+
+#### 不再暴露为外部 API（变为引擎内部行为）
+
+| 原 MCP 工具       | 理由                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `dispatch_role`   | 引擎根据 nextAction 自动调度，外部不应触发                    |
+| `report_dispatch` | Agent 通过适配器 `dispatchTask()` 返回结果，不再需要 API 上报 |
+| `artifact_write`  | Agent 直接写文件到指定位置，Harmonia 主动收取（Q13）          |
+| `get_role_prompt` | 引擎内部 PromptBuilder 组装完整 prompt，外部无理由单独调用    |
+| `loop_done`       | 引擎内部根据状态判断循环结束                                  |
+
+实施时逐个 MCP 工具文件对照，确保外部 API 覆盖了所有仍需暴露的业务逻辑（参数校验、错误处理、边角 case）。**3.6 删除 tools/ 前做一次全量对照确认**。
 
 **涉及文件**: 新建 `src/api/` 目录及路由文件
 
@@ -320,18 +343,20 @@ interface AgentAdapterFactory {
 
 ### 3.6 删除 MCP 相关代码
 
+- **前置条件**：3.4 的 API 端点已全量覆盖原 MCP 工具中仍需暴露的业务逻辑，逐个工具文件对照确认无遗漏
 - 删除 `src/tools/` 目录全部 14 个文件
 - 删除 `@modelcontextprotocol/sdk` 依赖
-- 删除 `src/tools/utils.ts` 和 `src/tools/engine-helpers.ts`（其中有用的辅助逻辑如有需要，提前迁移到 `src/core/` 或 `src/api/`）
+- `src/tools/engine-helpers.ts` 和 `src/tools/utils.ts` 中有用的逻辑已在 Phase 1.6 迁移到 `src/core/`
 
 **涉及文件**: 删除 `src/tools/*`，修改 `package.json`
 
 ### 3.7 重写 setup 逻辑
 
-- 旧 setup：注入 MCP 配置到 agent 的配置文件 + 注入 prompt
+- 旧 setup：注入 MCP 配置到 agent 的配置文件 + 注入 prompt + 拷贝内置 workflow
 - 新 setup：只做注册项目到 registry + 创建项目数据目录
 - agent 不再需要知道 Harmonia 的存在（Harmonia 主动调 agent，不是 agent 调 Harmonia）
 - `src/setup/inject.ts` 和 `src/setup/templates.ts` 中的 MCP 注入逻辑删除
+- 当前 `setup.ts` 中的内置 workflow 拷贝逻辑（将 `workflows/` 拷贝到用户数据目录）移到 `harmonia serve` 启动流程中（3.2），HTTP 服务启动时检查并确保 workflow 可用
 
 **涉及文件**: 重写 `src/cli/setup.ts`，重写或删除 `src/setup/*`
 
@@ -394,10 +419,11 @@ interface AgentAdapterFactory {
 
 **目标**: 移除遗留代码，完善细节
 
-### 5.1 移除 `@modelcontextprotocol/sdk` 依赖
+### 5.1 MCP 零残留确认
 
-- Phase 3.6 已删除代码引用，此步确认 `package.json` 中依赖已移除
-- 确认无残留 import
+- Phase 3.6 已删除代码和依赖，此步做最终扫描确认
+- 全局搜索 `@modelcontextprotocol`、`McpServer`、`ToolResult`、`StdioServerTransport` 等关键词
+- 确认 `package.json` 中依赖已移除，代码库中无残留 import
 
 **涉及文件**: `package.json`
 
@@ -511,9 +537,9 @@ interface AgentAdapterFactory {
 | ----------------------------- | --------------------------------------------------------------------------------- |
 | `src/core/types.ts`           | 新增 TaskPayload/TaskResult/AgentStatus/ValidationConfig，修改 ArtifactDefinition |
 | `src/core/workflow-engine.ts` | 新增 Engine 类包装现有纯函数，接入 EventBus                                       |
-| `src/core/dispatch.ts`        | 重写为主动管理模式，增加超时定时器                                                |
+| `src/core/dispatch.ts`        | 扩展：接入 EventBus 事件触发，新增超时定时器管理，Session 概念简化                |
 | `src/core/artifacts.ts`       | 新增 validateArtifact()，调整写入流程                                             |
-| `src/core/plugin.ts`          | 扩展 role 加载（确认 agent 字段），可能增加 prompt 组装逻辑                       |
+| `src/core/plugin.ts`          | 扩展 role 加载（确认 agent 字段）                                                 |
 | `src/core/overrides.ts`       | 移除 MCP 相关 override 类型                                                       |
 | `src/index.ts`                | 重写为 HTTP 服务入口                                                              |
 | `src/cli/setup.ts`            | 重写为纯项目注册                                                                  |
