@@ -340,6 +340,48 @@ describe('ClaudeCodeAdapter', () => {
         expect(args).toContain('You are helpful');
     });
 
+    it('should include --dangerously-skip-permissions by default', async () => {
+        mockSpawnCli.mockReturnValue(makeHandle(makeCliResult()));
+
+        const adapter = new ClaudeCodeAdapter({});
+        await adapter.dispatchTask(makePayload());
+
+        const args = mockSpawnCli.mock.calls[0][1];
+        expect(args).toContain('--dangerously-skip-permissions');
+    });
+
+    it('should exclude --dangerously-skip-permissions when explicitly false', async () => {
+        mockSpawnCli.mockReturnValue(makeHandle(makeCliResult()));
+
+        const adapter = new ClaudeCodeAdapter({ dangerouslySkipPermissions: false });
+        await adapter.dispatchTask(makePayload());
+
+        const args = mockSpawnCli.mock.calls[0][1];
+        expect(args).not.toContain('--dangerously-skip-permissions');
+    });
+
+    it('should include --max-budget-usd when configured', async () => {
+        mockSpawnCli.mockReturnValue(makeHandle(makeCliResult()));
+
+        const adapter = new ClaudeCodeAdapter({ maxBudgetUsd: 5.0 });
+        await adapter.dispatchTask(makePayload());
+
+        const args = mockSpawnCli.mock.calls[0][1];
+        expect(args).toContain('--max-budget-usd');
+        expect(args).toContain('5');
+    });
+
+    it('should include --max-budget-usd even when value is 0', async () => {
+        mockSpawnCli.mockReturnValue(makeHandle(makeCliResult()));
+
+        const adapter = new ClaudeCodeAdapter({ maxBudgetUsd: 0 });
+        await adapter.dispatchTask(makePayload());
+
+        const args = mockSpawnCli.mock.calls[0][1];
+        expect(args).toContain('--max-budget-usd');
+        expect(args).toContain('0');
+    });
+
     it('should return failed on non-zero exit', async () => {
         mockSpawnCli.mockReturnValue(makeHandle(makeCliResult({ exitCode: 2, stderr: 'rate limited' })));
 
@@ -396,6 +438,17 @@ describe('CodexAdapter', () => {
 
         const args = mockSpawnCli.mock.calls[0][1];
         expect(args).toContain('danger-full-access');
+    });
+
+    it('should include --output-schema when configured', async () => {
+        mockSpawnCli.mockReturnValue(makeHandle(makeCliResult()));
+
+        const adapter = new CodexAdapter({ outputSchema: 'schema.json' });
+        await adapter.dispatchTask(makePayload());
+
+        const args = mockSpawnCli.mock.calls[0][1];
+        expect(args).toContain('--output-schema');
+        expect(args).toContain('schema.json');
     });
 
     it('should return failed on non-zero exit', async () => {
