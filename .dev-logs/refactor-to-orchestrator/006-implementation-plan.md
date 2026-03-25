@@ -1,7 +1,7 @@
 # Harmonia 重构实施计划
 
 > 创建时间: 2026-03-24
-> 状态: 执行中 — Phase 1, 2, 3, 4 已完成，Phase 5 待开始
+> 状态: ✅ 完成 — Phase 1-5 全部完成
 
 基于 001-005 文档的设计讨论和 FAQ 决策，本文档是完整的实施计划。
 
@@ -474,7 +474,26 @@ interface AgentAdapterFactory {
 
 ---
 
-## Phase 5: 清理与打磨
+## Phase 5: 清理与打磨 ✅
+
+> **完成时间**: 2026-03-25
+> **提交**: `4cff845` (5.1-5.2), `79a8d56` (5.3-5.7), `ed8bf28` (review 修复),
+> `fd1363d` (审计修正 — 统一 artifact 模型), `48e2652` (角色 agent 字段)
+>
+> **执行记录**:
+>
+> - 5.1 MCP 零残留：全局扫描确认 `@modelcontextprotocol`、`McpServer`、`ToolResult` 等关键词已无残留
+> - 5.2 移除 `unmanaged`：初始实现替换为 `ArtifactManagement` 类型，后经审计修正彻底移除
+>   `ArtifactManagement`/`management`/`unmanaged`/`isAgentDirect` 概念，统一为 `output` + `validation` 模型
+> - 5.3 Override 评估：`OverrideToolType = 'skill' | 'mcp'` 经评估有意保留，`'mcp'` 是 prompt 层概念
+>   （指示 agent 使用哪个外部 MCP server 工具），与 Harmonia 自身是否是 MCP server 无关，已添加注释说明
+> - 5.4 dev workflow 更新：`workflow.json` code artifact 改为 `output: "{project}"`；
+>   4 个角色文件（coordinator/architect/developer/tester）均添加 `agent: opencode`
+> - 5.5 `@s_s/agent-kit` 评估：`getDataDir()` 仍在使用，保留依赖
+> - 5.6 package.json 更新：description 改为 orchestrator，确认依赖正确
+> - 5.7 全量测试：603 passed, 6 skipped (E2E), tsc 零错误
+>
+> **审计**: 完成两轮完整审计，所有偏离已修正，Phase 1-5 全部符合设计文档
 
 **目标**: 移除遗留代码，完善细节
 

@@ -21,7 +21,7 @@ import {
     WorkflowSelectionRequired,
     ValidationError,
     StepPrerequisiteError,
-} from '../core/operations.js';
+} from '../core/operations/index.js';
 import { getProject } from '../core/registry.js';
 import { createIssue, updateIssue, listIssues } from '../core/issues.js';
 import type { OrchestratorPool } from '../core/orchestrator-pool.js';

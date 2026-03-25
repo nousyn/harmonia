@@ -13,7 +13,7 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { registerProject, startIteration } from '../src/core/registry.js';
-import { beginPatch } from '../src/core/operations.js';
+import { beginPatch } from '../src/core/operations/index.js';
 
 const PROJECT = 'test-project';
 const WORKFLOWS_DIR = resolve(join(import.meta.dirname, '..', 'workflows'));
