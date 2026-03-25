@@ -305,9 +305,19 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
 
             const orch = await pool.getOrCreate(project_name);
 
-            // Resolve adapter from the pool's adapter registry
+            // Resolve adapter from the pool's adapter registry.
+            //
+            // DESIGN NOTE: The adapter created here is attached to connectedAgents
+            // and used exclusively for pushMessage() (e.g. coordinator notifications).
+            // dispatchTask() creates its OWN adapter instance per dispatch via
+            // registry.getFactory().create() — this is intentional because CLI
+            // dispatches are stateless one-shot executions, whereas the connected
+            // adapter represents a persistent session (e.g. OpenClaw's --deliver).
             const factory = pool.adapterRegistry.getFactory(agent);
-            const adapter = factory?.create(params ?? {});
+            if (!factory) {
+                return c.json({ error: `Unknown agent type: "${agent}"` }, 422);
+            }
+            const adapter = factory.create(params ?? {});
 
             const key = role ?? agent;
             orch.connectAgent({
