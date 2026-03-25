@@ -315,7 +315,7 @@ Gate 支持 3 种条件类型：
 { "type": "artifact_exists", "artifact": "prd" }
 ```
 
-检查指定产出是否已通过 `artifact_write` 写入。
+检查指定产出是否已写入。
 
 #### artifact_approved — 产出是否已审批
 
@@ -323,7 +323,7 @@ Gate 支持 3 种条件类型：
 { "type": "artifact_approved", "artifact": "prd" }
 ```
 
-检查指定产出是否已通过 `artifact_approve` 审批。只有 `review: true` 的产出才需要审批。
+检查指定产出是否已审批通过。只有 `review: true` 的产出才需要审批。
 
 #### artifact_field — 产出字段值判断
 
@@ -468,7 +468,7 @@ task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
 | `name`      | `string`                   | 是   | —       | 人类可读名称                                                   |
 | `format`    | `"md" \| "html" \| "json"` | 否   | `"md"`  | 文件格式                                                       |
 | `review`    | `boolean`                  | 否   | `false` | 写入后是否需要用户审批                                         |
-| `unmanaged` | `boolean`                  | 否   | `false` | 非托管产出（如代码），不经 `artifact_write` 管理               |
+| `unmanaged` | `boolean`                  | 否   | `false` | 非托管产出（如代码），不经 Harmonia 产出系统管理               |
 | `output`    | `string`                   | 否   | —       | 输出目录模板，支持 `{global}`、`{project}`、`{context}` 占位符 |
 | `steps`     | `ArtifactStep[]`           | 否   | —       | 分步写入定义                                                   |
 
@@ -483,7 +483,7 @@ task 节点可定义 `beforeDispatch` 和 `afterComplete` 钩子：
 
 **步骤执行规则：**
 
-- 定义了 `steps` 后，`artifact_write` 需要提供 `step` 参数
+- 定义了 `steps` 后，写入产出时需要提供 `step` 参数
 - 步骤按定义顺序执行
 - 重写已完成的步骤会自动清除后续步骤的完成记录（rollback）
 - 所有步骤完成后，还需写入最终产出
@@ -522,7 +522,7 @@ capabilities:
 ## 约束
 
 - 不要直接修改代码文件
-- 使用 Harmonia 工具进行任务交接
+- 使用 Harmonia 产出系统进行任务交接
 ```
 
 ### Frontmatter 字段
@@ -558,7 +558,7 @@ capabilities:
 
 ## 产出 Schema
 
-Schema 用于校验 `artifact_write` 写入的内容。如果不提供 Schema，写入时不做内容校验。
+Schema 用于校验写入的产出内容。如果不提供 Schema，写入时不做内容校验。
 
 ### 命名规则
 
@@ -619,7 +619,7 @@ Schema 文件位于 `schemas/` 目录，命名规则：
 
 > **校验语义说明：**
 >
-> - `required: true` — 该章节必须出现，缺少时 `artifact_write` 会拒绝写入并返回 `missing_section` 错误
+> - `required: true` — 该章节必须出现，缺少时产出写入会被拒绝并返回 `missing_section` 错误
 > - `required: false` — 该章节可有可无，不会校验其是否存在。定义它的意义在于通过 Schema guidance 提示 Agent 可以包含此章节
 > - Schema **不会限制额外章节** — Agent 可以自由添加 schema 中未定义的章节，校验只检查"必需章节是否缺失"
 > - Schema 内容会通过 PromptBuilder 以格式化文本注入 dispatch 数据包中（由 `formatSchemaGuidance()` 生成人类可读的写作指引），同时在产出写入时执行实际校验
@@ -864,15 +864,15 @@ Action 按声明顺序依次执行，每个 Action 返回的 `inject` 追加到�
 }
 ```
 
-| 字段                       | 类型               | 说明                                 |
-| -------------------------- | ------------------ | ------------------------------------ |
-| `agent`                    | `string`           | 覆盖该角色使用的 Agent 类型          |
-| `model`                    | `string`           | 覆盖该角色的模型级别                 |
-| `capabilities.<id>.type`   | `"skill" \| "mcp"` | 能力类型                             |
-| `capabilities.<id>.tool`   | `string`           | 工具名称                             |
-| `capabilities.<id>.server` | `string`           | MCP 服务器名称（type 为 mcp 时必填） |
-| `capabilities.<id>.params` | `object`           | 固定参数                             |
-| `capabilities.<id>.notes`  | `string`           | 附加说明（注入到提示词中）           |
+| 字段                       | 类型               | 说明                                                 |
+| -------------------------- | ------------------ | ---------------------------------------------------- |
+| `agent`                    | `string`           | 覆盖该角色使用的 Agent 类型                          |
+| `model`                    | `string`           | 覆盖该角色的模型级别                                 |
+| `capabilities.<id>.type`   | `"skill" \| "mcp"` | 能力类型（`mcp` 指示 Agent 使用外部 MCP 服务器工具） |
+| `capabilities.<id>.tool`   | `string`           | 工具名称                                             |
+| `capabilities.<id>.server` | `string`           | MCP 服务器名称（type 为 mcp 时必填）                 |
+| `capabilities.<id>.params` | `object`           | 固定参数                                             |
+| `capabilities.<id>.notes`  | `string`           | 附加说明（注入到提示词中）                           |
 
 ---
 
