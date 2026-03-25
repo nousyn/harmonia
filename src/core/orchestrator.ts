@@ -107,17 +107,6 @@ class EventLogger {
     }
 }
 
-// ─── Adapter Registry re-export ───
-
-import { DefaultAdapterRegistry } from '../adapters/registry.js';
-export { DefaultAdapterRegistry };
-
-/**
- * @deprecated Use `DefaultAdapterRegistry` from `adapters/registry.js` instead.
- * Kept as alias for backward compatibility during migration.
- */
-export const PlaceholderAdapterRegistry = DefaultAdapterRegistry;
-
 // ─── Orchestrator ───
 
 /**

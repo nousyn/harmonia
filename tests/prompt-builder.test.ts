@@ -357,7 +357,7 @@ describe('prompt-builder', () => {
                 workflowsDir,
             });
 
-            // developer role has 'code' capability (unmanaged)
+            // developer role has 'code' capability (agent_direct)
             expect(result.outputArtifacts).toHaveLength(1);
             expect(result.outputArtifacts[0].name).toBe('Source Code');
         });
