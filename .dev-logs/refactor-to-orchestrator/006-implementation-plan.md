@@ -1,7 +1,7 @@
 # Harmonia 重构实施计划
 
 > 创建时间: 2026-03-24
-> 状态: 执行中 — Phase 1, 2, 3 已完成，Phase 4 待开始
+> 状态: 执行中 — Phase 1, 2, 3, 4 已完成，Phase 5 待开始
 
 基于 001-005 文档的设计讨论和 FAQ 决策，本文档是完整的实施计划。
 
@@ -417,7 +417,18 @@ interface AgentAdapterFactory {
 
 ---
 
-## Phase 4: Coordinator 对接验证
+## Phase 4: Coordinator 对接验证 ✅
+
+> **完成时间**: 2026-03-25
+> **执行偏离**:
+>
+> - 006 计划中 4.1-4.4 设想用真实 agent 做集成验证。实际实施为集成测试（mock adapter），
+>   验证 Orchestrator 通过完整 workflow fixture 的 prompt 组装、pushMessage 链路、
+>   E2E 序列推进、以及所有错误路径。真实 agent E2E 验证留待 Phase 6。
+> - 增加 4.A（OrchestratorPool 集成到 server/routes）和 4.B（connect/disconnect 端点实现）
+>   作为前置步骤，替换 Phase 3 的 501 占位。
+>   **产出**: `src/core/orchestrator-pool.ts`, `tests/phase4-integration.test.ts`(20 tests),
+>   修改 `src/server.ts` + `src/api/routes.ts`
 
 **目标**: 端到端跑通一个完整工作流
 

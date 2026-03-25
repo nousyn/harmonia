@@ -3,6 +3,7 @@
  *
  * Delegates business logic to core/operations.ts.
  * Handles HTTP concerns: parameter extraction, error responses, status codes.
+ * Connect/disconnect endpoints delegate to OrchestratorPool when available.
  */
 
 import { Hono } from 'hono';
@@ -24,11 +25,16 @@ import {
 } from '../core/operations.js';
 import { getProject } from '../core/registry.js';
 import { createIssue, updateIssue, listIssues } from '../core/issues.js';
+import type { OrchestratorPool } from '../core/orchestrator-pool.js';
 
 /**
  * Create all API route handlers.
+ *
+ * @param workflowsDir — path to the workflows directory
+ * @param pool — optional OrchestratorPool for orchestration features.
+ *               When omitted, connect endpoints return 501.
  */
-export function createApiRoutes(workflowsDir: string): Hono {
+export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): Hono {
     const api = new Hono();
 
     // ─── Error handler helper ───
@@ -271,18 +277,93 @@ export function createApiRoutes(workflowsDir: string): Hono {
         }
     });
 
-    // ─── Agent Connection (placeholder for Phase 4+) ───
+    // ─── Agent Connection ───
 
-    /** POST /connect — Agent registration */
+    /**
+     * POST /connect — Agent registration (002 §4.2)
+     *
+     * Body: { project_name, agent, sessionId?, role?, ...params }
+     *
+     * - `project_name` — which project's Orchestrator to register with
+     * - `agent` — agent type string (e.g. "openclaw", "opencode")
+     * - `sessionId` — optional session identifier on the agent side
+     * - `role` — optional workflow role override (defaults to agent type)
+     * - extra fields are forwarded as `params`
+     *
+     * When `pool` is not provided, returns 501.
+     */
     api.post('/connect', async (c) => {
-        // TODO: Implement in Phase 4 (Orchestrator integration)
-        return c.json({ error: 'Not yet implemented' }, 501);
+        if (!pool) {
+            return c.json({ error: 'Orchestration not available' }, 501);
+        }
+        try {
+            const body = await c.req.json();
+            const { project_name, agent, sessionId, role, ...params } = body;
+            if (!project_name || !agent) {
+                return c.json({ error: 'project_name and agent are required' }, 400);
+            }
+
+            const orch = await pool.getOrCreate(project_name);
+
+            // Resolve adapter from the pool's adapter registry
+            const factory = pool.adapterRegistry.getFactory(agent);
+            const adapter = factory?.create(params ?? {});
+
+            const key = role ?? agent;
+            orch.connectAgent({
+                agentType: agent,
+                sessionId,
+                role,
+                adapter,
+                params,
+            });
+
+            return c.json(
+                {
+                    connected: true,
+                    key,
+                    agentType: agent,
+                    project: project_name,
+                },
+                200,
+            );
+        } catch (err) {
+            return handleError(c, err);
+        }
     });
 
-    /** DELETE /connect/:id — Agent disconnect */
+    /**
+     * DELETE /connect/:id — Agent disconnect
+     *
+     * Query: ?project_name=xxx
+     * Param: :id — the agent key (role or agentType used at connect time)
+     */
     api.delete('/connect/:id', async (c) => {
-        // TODO: Implement in Phase 4 (Orchestrator integration)
-        return c.json({ error: 'Not yet implemented' }, 501);
+        if (!pool) {
+            return c.json({ error: 'Orchestration not available' }, 501);
+        }
+        try {
+            const key = c.req.param('id');
+            const projectName = c.req.query('project_name');
+            if (!projectName) {
+                return c.json({ error: 'project_name query parameter is required' }, 400);
+            }
+
+            const orch = pool.get(projectName);
+            if (!orch) {
+                return c.json({ error: `No active orchestrator for project "${projectName}"` }, 404);
+            }
+
+            const agent = orch.getConnectedAgent(key);
+            if (!agent) {
+                return c.json({ error: `Agent "${key}" is not connected` }, 404);
+            }
+
+            orch.disconnectAgent(key);
+            return c.json({ disconnected: true, key, project: projectName }, 200);
+        } catch (err) {
+            return handleError(c, err);
+        }
     });
 
     return api;

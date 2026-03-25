@@ -4,6 +4,7 @@
  * Uses Hono framework with @hono/node-server for serving.
  * Responsible for:
  * - Creating the Hono app with API routes
+ * - Creating the OrchestratorPool for workflow orchestration
  * - Ensuring workflows are available
  * - Starting the HTTP listener
  */
@@ -15,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { cp, readdir, stat, mkdir } from 'node:fs/promises';
 import { getGlobalDir } from './core/registry.js';
 import { createApiRoutes } from './api/routes.js';
+import { OrchestratorPool } from './core/orchestrator-pool.js';
+import { createDefaultRegistry } from './adapters/registry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -69,15 +72,19 @@ async function ensureWorkflows(): Promise<{ workflowsDir: string; copied: number
 
 /**
  * Create and configure the Hono application.
+ *
+ * @param workflowsDir — path to the workflows directory
+ * @param pool — optional OrchestratorPool for orchestration features (connect, dispatch).
+ *               When omitted, connect endpoints remain 501 placeholders.
  */
-export function createApp(workflowsDir: string): Hono {
+export function createApp(workflowsDir: string, pool?: OrchestratorPool): Hono {
     const app = new Hono();
 
     // Health check
     app.get('/health', (c) => c.json({ status: 'ok' }));
 
     // Mount API routes
-    const api = createApiRoutes(workflowsDir);
+    const api = createApiRoutes(workflowsDir, pool);
     app.route('/api', api);
 
     return app;
@@ -95,6 +102,7 @@ export async function startServer(options: ServerOptions = {}): Promise<{
     port: number;
     hostname: string;
     workflowsDir: string;
+    pool: OrchestratorPool;
 }> {
     const port = options.port ?? 4600;
     const hostname = options.hostname ?? '127.0.0.1';
@@ -109,8 +117,14 @@ export async function startServer(options: ServerOptions = {}): Promise<{
         console.log(`  ${wfResult.skipped} workflow(s) already exist`);
     }
 
-    // Create app
-    const app = createApp(wfResult.workflowsDir);
+    // Create orchestrator pool with default adapter registry
+    const pool = new OrchestratorPool({
+        workflowsDir: wfResult.workflowsDir,
+        adapterRegistry: createDefaultRegistry(),
+    });
+
+    // Create app with pool
+    const app = createApp(wfResult.workflowsDir, pool);
 
     // Start server
     const server = serve({
@@ -119,5 +133,5 @@ export async function startServer(options: ServerOptions = {}): Promise<{
         hostname,
     });
 
-    return { server, port, hostname, workflowsDir: wfResult.workflowsDir };
+    return { server, port, hostname, workflowsDir: wfResult.workflowsDir, pool };
 }
