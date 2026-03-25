@@ -378,7 +378,7 @@ export class Orchestrator {
         );
 
         if (taskResult.status === 'completed') {
-            await this.collectAndValidateArtifacts(nodeId, role);
+            await this.collectAndValidateArtifacts(nodeId, payload.outputExpectations);
         }
 
         this.logger.info('task.completed', {
@@ -391,57 +391,56 @@ export class Orchestrator {
 
     // ─── Artifact Collection ───
 
-    private async collectAndValidateArtifacts(nodeId: string, role: string): Promise<void> {
-        const roleDef = this.wf.roles[role];
-        if (!roleDef?.frontmatter.capabilities) return;
+    private async collectAndValidateArtifacts(nodeId: string, outputExpectations: ArtifactDefinition[]): Promise<void> {
+        if (outputExpectations.length === 0) return;
 
-        for (const cap of roleDef.frontmatter.capabilities) {
-            if (!cap.artifact) continue;
-            const artifactDef = this.wf.artifactDefinitions[cap.artifact];
-            if (!artifactDef) continue;
+        for (const artifactDef of outputExpectations) {
+            // Find the artifact ID by matching the definition in workflow plugin
+            const artifactId = Object.entries(this.wf.artifactDefinitions).find(([, def]) => def === artifactDef)?.[0];
+            if (!artifactId) continue;
 
-            const exists = await artifactFileExists(cap.artifact, this.ioCtx, artifactDef);
+            const exists = await artifactFileExists(artifactId, this.ioCtx, artifactDef);
             if (!exists) {
-                this.logger.debug('artifact.notFound', { artifactId: cap.artifact, nodeId });
+                this.logger.debug('artifact.notFound', { artifactId, nodeId });
                 continue;
             }
 
             let content: string;
             try {
-                content = await readArtifact(cap.artifact, this.ioCtx, artifactDef);
+                content = await readArtifact(artifactId, this.ioCtx, artifactDef);
             } catch (err) {
                 this.logger.warn('artifact.readFailed', {
-                    artifactId: cap.artifact,
+                    artifactId,
                     error: err instanceof Error ? err.message : String(err),
                 });
                 continue;
             }
 
             const valConfig = artifactDef.validation ?? { type: 'none' as const };
-            const valResult = await validateArtifactContent(cap.artifact, content, valConfig, {
+            const valResult = await validateArtifactContent(artifactId, content, valConfig, {
                 workflowsDir: this.config.workflowsDir,
                 workflowName: this.wf.name,
                 artifactDef,
-                filePath: resolveArtifactDir(artifactDef.output, this.ioCtx) + '/' + cap.artifact,
+                filePath: resolveArtifactDir(artifactDef.output, this.ioCtx) + '/' + artifactId,
             });
 
             if (valResult.valid) {
                 this.bus.emit('artifact.written', {
-                    artifactId: cap.artifact,
+                    artifactId,
                     nodeId,
                     path: resolveArtifactDir(artifactDef.output, this.ioCtx),
                     ts: Date.now(),
                 });
-                this.logger.info('artifact.validated', { artifactId: cap.artifact, nodeId });
+                this.logger.info('artifact.validated', { artifactId, nodeId });
             } else {
                 this.logger.warn('artifact.validationFailed', {
-                    artifactId: cap.artifact,
+                    artifactId,
                     nodeId,
                     errors: valResult.errors,
                 });
                 await this.notifyCoordinator(
                     'Artifact "' +
-                        cap.artifact +
+                        artifactId +
                         '" validation failed:\n' +
                         valResult.errors.map((e) => '- ' + e).join('\n'),
                 );

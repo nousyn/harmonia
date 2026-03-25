@@ -6,11 +6,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, cp } from 'node:fs/promises';
+import { mkdtemp, rm, cp, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApp } from '../src/server.js';
 import { registerProject, startIteration, startPatch } from '../src/core/registry.js';
+import { submitForReview } from '../src/core/reviews.js';
 import type { Hono } from 'hono';
 
 const WORKFLOWS_SRC = resolve(join(import.meta.dirname, '..', 'workflows'));
@@ -220,19 +221,16 @@ describe('API endpoints', () => {
                 body: '{}',
             });
 
-            // Write an artifact first
+            // Write artifact directly to filesystem (agents write directly in new architecture)
             const userStoriesContent =
                 '## 用户故事\n\n' +
                 '作为用户，我想登录系统，以便访问受保护的资源。\n' +
                 '验收标准：用户输入正确的用户名和密码后，应跳转到首页。\n'.repeat(3);
-            const writeRes = await app.request('/api/projects/my-app/artifacts/user-stories', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: userStoriesContent }),
-            });
-            expect(writeRes.status).toBe(201);
+            const artifactDir = join(tempDir, 'my-app', 'iter-1', 'artifacts');
+            await mkdir(artifactDir, { recursive: true });
+            await writeFile(join(artifactDir, 'user-stories.md'), userStoriesContent, 'utf-8');
 
-            // Read it back
+            // Read it back via API
             const res = await app.request('/api/projects/my-app/artifacts/user-stories');
             expect(res.status).toBe(200);
             const body = await res.json();
@@ -246,21 +244,7 @@ describe('API endpoints', () => {
         });
     });
 
-    describe('POST /api/projects/:name/artifacts/:id', () => {
-        it('should return 400 when content is missing', async () => {
-            await registerProject('my-app', join(tempDir, 'src'), 'dev');
-            await startIteration('my-app');
-
-            const res = await app.request('/api/projects/my-app/artifacts/prd', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
-            });
-            expect(res.status).toBe(400);
-            const body = await res.json();
-            expect(body.error).toContain('content is required');
-        });
-    });
+    // POST /api/projects/:name/artifacts/:id — removed (agents write directly to filesystem)
 
     describe('POST /api/projects/:name/artifacts/:id/approve', () => {
         it('should approve an artifact pending review', async () => {
@@ -272,20 +256,18 @@ describe('API endpoints', () => {
                 body: '{}',
             });
 
-            // Write a reviewable artifact (prototype has review: true)
+            // Write a reviewable artifact directly to filesystem (prototype has review: true, format: html)
             const htmlContent =
                 '<html><head><title>Prototype</title></head><body>' +
                 '<h1>高保真原型</h1><p>页面布局和交互流程展示。</p>' +
                 '<div class="container"><p>内容区域</p></div>'.repeat(3) +
                 '</body></html>';
-            const writeRes = await app.request('/api/projects/my-app/artifacts/prototype', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: htmlContent }),
-            });
-            expect(writeRes.status).toBe(201);
-            const writeBody = await writeRes.json();
-            expect(writeBody.needsReview).toBe(true);
+            const artifactDir = join(tempDir, 'my-app', 'iter-1', 'artifacts');
+            await mkdir(artifactDir, { recursive: true });
+            await writeFile(join(artifactDir, 'prototype.html'), htmlContent, 'utf-8');
+
+            // Submit for review (in the new architecture, this is triggered by the orchestrator after validation)
+            await submitForReview('my-app', 1, 'prototype', join(tempDir, 'my-app', 'iter-1'));
 
             // Approve it
             const res = await app.request('/api/projects/my-app/artifacts/prototype/approve', {

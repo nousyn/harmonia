@@ -469,7 +469,7 @@ describe('workflow-validator', () => {
         it('should pass when artifact definitions have no output field', () => {
             const defs: Record<string, ArtifactDefinition> = {
                 spec: { name: 'Spec', format: 'md' },
-                code: { name: 'Code', format: 'json', management: 'agent_direct' },
+                code: { name: 'Code', format: 'json' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -586,7 +586,7 @@ describe('workflow-validator', () => {
         const sampleArtifacts: Record<string, ArtifactDefinition> = {
             prd: { name: 'PRD', format: 'md' },
             'user-stories': { name: 'User Stories', format: 'md' },
-            code: { name: 'Code', management: 'agent_direct' },
+            code: { name: 'Code' },
             'tech-design': { name: 'Tech Design', format: 'md' },
         };
 

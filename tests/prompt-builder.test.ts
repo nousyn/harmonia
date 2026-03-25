@@ -81,7 +81,7 @@ function makeWorkflowPlugin(overrides: Partial<WorkflowPlugin> = {}): WorkflowPl
         artifactSchemas: {},
         artifactDefinitions: {
             prd: { name: 'Product Requirements', format: 'md' },
-            code: { name: 'Source Code', management: 'agent_direct', output: 'project' },
+            code: { name: 'Source Code', output: '{project}' },
         },
         pluginDir: '/tmp/test-wf',
         ...overrides,
@@ -191,7 +191,7 @@ describe('prompt-builder', () => {
             expect(ref.path).toContain('prd.md');
         });
 
-        it('should resolve an agent-direct artifact reference', () => {
+        it('should resolve a project-output artifact reference', () => {
             const wf = makeWorkflowPlugin();
             const ioCtx: ArtifactIOContext = {
                 contextDir: '/data/test-project/iter-1',
@@ -204,8 +204,8 @@ describe('prompt-builder', () => {
 
             expect(ref.id).toBe('code');
             expect(ref.found).toBe(true);
-            // Unmanaged artifacts resolve to directory
-            expect(ref.path).not.toContain('.md');
+            // All artifacts resolve to full file path: dir + id + ext
+            expect(ref.path).toContain('code.md');
         });
 
         it('should return not-found for unknown artifact', () => {
@@ -357,7 +357,7 @@ describe('prompt-builder', () => {
                 workflowsDir,
             });
 
-            // developer role has 'code' capability (agent_direct)
+            // developer role has 'code' capability
             expect(result.outputArtifacts).toHaveLength(1);
             expect(result.outputArtifacts[0].name).toBe('Source Code');
         });

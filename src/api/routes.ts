@@ -11,7 +11,6 @@ import {
     initProject,
     beginIteration,
     beginPatch,
-    writeArtifactOrchestrated,
     readArtifactOrchestrated,
     listArtifactsOrchestrated,
     approveArtifactOrchestrated,
@@ -140,24 +139,6 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
             const context = c.req.query('context');
             const content = await readArtifactOrchestrated(workflowsDir, name, artifactId, context);
             return c.json({ artifactId, content });
-        } catch (err) {
-            return handleError(c, err);
-        }
-    });
-
-    /** POST /projects/:name/artifacts/:id — Write an artifact
-     *  TRANSITIONAL: 006 计划标记为"不再暴露"，但过渡期仍需外部写入能力。Phase 5 评估去留。
-     */
-    api.post('/projects/:name/artifacts/:id', async (c) => {
-        try {
-            const name = c.req.param('name');
-            const artifactId = c.req.param('id');
-            const body = await c.req.json();
-            if (!body.content) {
-                return c.json({ error: 'content is required' }, 400);
-            }
-            const result = await writeArtifactOrchestrated(workflowsDir, name, artifactId, body.content, body.step);
-            return c.json(result, 201);
         } catch (err) {
             return handleError(c, err);
         }

@@ -341,7 +341,7 @@
         },
         "code": {
             "name": "代码实现",
-            "management": "agent_direct"
+            "output": "{project}"
         }
     }
 }

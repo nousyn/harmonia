@@ -124,31 +124,31 @@ describe('role-dispatch helpers', () => {
             expect(ref.found).toBe(false);
         });
 
-        it('should resolve agent-direct artifact to directory path', () => {
+        it('should resolve artifact with {project} output to file path', () => {
             const wf = makePlugin({
-                code: { name: 'Code', management: 'agent_direct', output: '{project}' },
+                code: { name: 'Code', output: '{project}' },
             });
             const ioCtx = makeIOCtx();
-            const existing = new Set<string>();
+            const existing = new Set(['code']);
 
             const ref = resolveInputReference('code', wf, ioCtx, existing);
 
             expect(ref.id).toBe('code');
             expect(ref.name).toBe('Code');
-            expect(ref.path).toBe('/projects/my-app');
-            expect(ref.found).toBe(true); // agent-direct always "found"
+            expect(ref.path).toBe('/projects/my-app/code.md');
+            expect(ref.found).toBe(true);
         });
 
-        it('should resolve agent-direct artifact with default output to artifacts dir', () => {
+        it('should resolve artifact with default output to artifacts dir file path', () => {
             const wf = makePlugin({
-                code: { name: 'Code', management: 'agent_direct' },
+                code: { name: 'Code' },
             });
             const ioCtx = makeIOCtx();
-            const existing = new Set<string>();
+            const existing = new Set(['code']);
 
             const ref = resolveInputReference('code', wf, ioCtx, existing);
 
-            expect(ref.path).toBe('/data/my-app/iter-1/artifacts');
+            expect(ref.path).toBe('/data/my-app/iter-1/artifacts/code.md');
             expect(ref.found).toBe(true);
         });
 

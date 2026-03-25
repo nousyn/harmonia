@@ -27,20 +27,19 @@ import type { ProjectEntry } from './registry.js';
 import { initWorkflowState, readState, persistState } from './state.js';
 import { startWorkflow } from './workflow-engine.js';
 import type { EngineContext, GateContext } from './workflow-engine.js';
-import { writeArtifact, readArtifact, listArtifacts, writeStepArtifact } from './artifacts.js';
+import { readArtifact, listArtifacts } from './artifacts.js';
 import type { ArtifactIOContext } from './artifacts.js';
-import { loadArtifactSchema, validateArtifact, formatValidationErrors, formatSchemaGuidance } from './schema.js';
+import { loadArtifactSchema, formatSchemaGuidance } from './schema.js';
 import type { StepSchemaEntry } from './schema.js';
-import { getMergedOverrides, resolveArtifactReview } from './overrides.js';
-import { submitForReview, resolveReview, getPendingReviews, readReviews } from './reviews.js';
-import { getArtifactStepState, getCompletedStepIds, recordStepCompletion, markFinalized, readSteps } from './steps.js';
+import { getMergedOverrides } from './overrides.js';
+import { resolveReview, getPendingReviews, readReviews } from './reviews.js';
+import { getCompletedStepIds, readSteps } from './steps.js';
 import { readDispatches, readSessions } from './dispatch.js';
 import { readIssues } from './issues.js';
 import { resolveActive, processWorkflowEvent, loadWorkflowForContext, formatNextAction } from './engine-helpers.js';
 import type { ResolvedContext, EngineResult } from './engine-helpers.js';
 import type {
     ArtifactDefinition,
-    ArtifactStepDefinition,
     HookCreatorContext,
     WorkflowPlugin,
     WorkflowNode,
@@ -50,7 +49,6 @@ import type {
     SessionRecord,
     ArtifactStepState,
 } from './types.js';
-import { isAgentDirect } from './types.js';
 
 /** Shared kit instance for hook installation */
 const kit = createKit('harmonia');
@@ -99,21 +97,6 @@ export interface BeginPatchResult {
     description?: string;
     issueId?: string;
     nextAction: string;
-}
-
-export interface WriteArtifactResult {
-    artifactId: string;
-    filePath: string;
-    needsReview: boolean;
-    artifactName: string;
-    nextAction: string;
-    /** Sequential mode progress */
-    sequential?: {
-        stepId: string;
-        stepName: string;
-        isLastStep: boolean;
-        nextStep?: { id: string; description: string };
-    };
 }
 
 export interface ApproveArtifactResult {
@@ -464,274 +447,6 @@ export async function beginPatch(
         description,
         issueId,
         nextAction: formatNextAction(result.nextAction),
-    };
-}
-
-// ─── writeArtifactOrchestrated ───
-
-/**
- * Check if sequential mode is active for a given artifact definition.
- */
-function isSequentialActive(artifactDef: ArtifactDefinition): boolean {
-    return !!artifactDef.steps?.length;
-}
-
-/**
- * Write or update a project artifact with full orchestration.
- *
- * Extracted from: src/tools/artifact-tools.ts
- *
- * Handles:
- * - Artifact ID validation against workflow
- * - Schema validation
- * - Sequential mode (step prerequisites, step schema, final merge)
- * - Engine event triggers (artifact_written)
- * - Review flow (auto-submit if needed)
- */
-export async function writeArtifactOrchestrated(
-    workflowsDir: string,
-    projectName: string,
-    artifactId: string,
-    content: string,
-    step?: string,
-): Promise<WriteArtifactResult> {
-    const ctx = await resolveActive(projectName);
-    const { wf, state } = await loadWorkflowForContext(workflowsDir, projectName, ctx);
-    const artifactDef = wf.artifactDefinitions[artifactId];
-
-    // Guard: artifact_id must be defined in workflow
-    if (!artifactDef) {
-        const validIds = Object.keys(wf.artifactDefinitions)
-            .filter((id) => !isAgentDirect(wf.artifactDefinitions[id]))
-            .join(', ');
-        throw new ValidationError(`Artifact "${artifactId}" 未在工作流中定义。可用的 artifact 类型: ${validIds}`);
-    }
-
-    // Guard: reject agent-direct artifact types (not written via artifact_write)
-    if (isAgentDirect(artifactDef)) {
-        throw new ValidationError(`Artifact "${artifactId}" 是 agent-direct 产出类型，不应通过此接口写入。`);
-    }
-
-    // Guard: empty content
-    if (!content.trim()) {
-        throw new ValidationError('Artifact 内容为空，请提供实际内容后重新提交。');
-    }
-
-    // ─── Sequential Mode ───
-    if (isSequentialActive(artifactDef)) {
-        return handleSequentialWriteOp(
-            workflowsDir,
-            state.workflow,
-            projectName,
-            ctx,
-            artifactId,
-            content,
-            step,
-            artifactDef,
-        );
-    }
-
-    // ─── Normal Mode (no steps) ───
-    const isHtml = artifactDef.format === 'html';
-
-    // Schema validation
-    const schema = await loadArtifactSchema(workflowsDir, state.workflow, artifactId);
-    if (schema) {
-        const result = validateArtifact(content, schema, isHtml);
-        if (!result.valid) {
-            throw new ValidationError(formatValidationErrors(result.errors));
-        }
-    }
-
-    // Write the artifact
-    const writeIoCtx: ArtifactIOContext = {
-        contextDir: ctx.dir,
-        projectDir: ctx.entry.dir,
-        contextLabel: ctx.activeContext,
-    };
-    const filePath = await writeArtifact(artifactId, content, writeIoCtx, artifactDef);
-
-    // Trigger engine event
-    const engineResult = await processWorkflowEvent(workflowsDir, projectName, ctx, {
-        type: 'artifact_written',
-        artifactId,
-    });
-
-    // Check review
-    const overrides = await getMergedOverrides(projectName);
-    const needsReview = resolveArtifactReview(artifactId, artifactDef, overrides);
-
-    if (needsReview) {
-        await submitForReview(projectName, ctx.number, artifactId, ctx.dir);
-    }
-
-    return {
-        artifactId,
-        filePath,
-        needsReview,
-        artifactName: artifactDef.name ?? artifactId,
-        nextAction: formatNextAction(engineResult.nextAction),
-    };
-}
-
-/**
- * Handle sequential write — step-by-step artifact writing.
- */
-async function handleSequentialWriteOp(
-    workflowsDir: string,
-    workflowName: string,
-    projectName: string,
-    ctx: ResolvedContext,
-    artifactId: string,
-    content: string,
-    step: string | undefined,
-    artifactDef: ArtifactDefinition,
-): Promise<WriteArtifactResult> {
-    const steps = artifactDef.steps!;
-    const stepIds = steps.map((s) => s.id);
-    const stepNames = steps.map((s) => `${s.id} (${s.name})`).join(', ');
-
-    // Guard: step parameter is required in sequential mode
-    if (!step) {
-        throw new ValidationError(
-            `Artifact "${artifactId}" 需要分步写入。请指定 step 参数。可用的步骤: ${stepNames}\n\n` +
-                `步骤说明:\n` +
-                steps.map((s, i) => `  ${i + 1}. ${s.id} — ${s.description}`).join('\n'),
-        );
-    }
-
-    // Guard: step must be valid
-    const stepDef = steps.find((s) => s.id === step);
-    if (!stepDef) {
-        throw new ValidationError(`未知的步骤 "${step}"。可用的步骤: ${stepNames}`);
-    }
-
-    const stepIndex = stepIds.indexOf(step);
-    const stepState = await getArtifactStepState(projectName, ctx.number, artifactId, ctx.dir);
-    const completedIds = getCompletedStepIds(stepState);
-
-    // Guard: prerequisite steps must be completed
-    for (let i = 0; i < stepIndex; i++) {
-        if (!completedIds.has(stepIds[i])) {
-            const missingStep = steps[i];
-            throw new StepPrerequisiteError(step, missingStep.id, missingStep.name);
-        }
-    }
-
-    // Step schema validation
-    const isJson = stepDef.format === 'json';
-    const stepSchemaId = `${artifactId}.${step}`;
-    const stepSchema = await loadArtifactSchema(workflowsDir, workflowName, stepSchemaId);
-    if (stepSchema) {
-        const result = validateArtifact(content, stepSchema, false, isJson);
-        if (!result.valid) {
-            throw new ValidationError(formatValidationErrors(result.errors));
-        }
-    }
-
-    // Write the step artifact
-    const ioCtx: ArtifactIOContext = {
-        contextDir: ctx.dir,
-        projectDir: ctx.entry.dir,
-        contextLabel: ctx.activeContext,
-    };
-    const artifactPath = await writeStepArtifact(artifactId, step, content, stepDef.format, ioCtx, artifactDef);
-
-    // Record step completion
-    await recordStepCompletion(projectName, ctx.number, artifactId, step, artifactPath, stepIds, ctx.dir);
-
-    const isLastStep = stepIndex === steps.length - 1;
-
-    if (isLastStep) {
-        return handleFinalStepOp(
-            workflowsDir,
-            workflowName,
-            projectName,
-            ctx,
-            artifactId,
-            content,
-            artifactDef,
-            stepDef,
-            ioCtx,
-        );
-    }
-
-    // Not the last step
-    const nextStep = steps[stepIndex + 1];
-    return {
-        artifactId,
-        filePath: artifactPath,
-        needsReview: false,
-        artifactName: artifactDef.name ?? artifactId,
-        nextAction: '',
-        sequential: {
-            stepId: step,
-            stepName: stepDef.name,
-            isLastStep: false,
-            nextStep: { id: nextStep.id, description: nextStep.description },
-        },
-    };
-}
-
-/**
- * Handle the final step of sequential writing: validate, write formal artifact, trigger review.
- */
-async function handleFinalStepOp(
-    workflowsDir: string,
-    workflowName: string,
-    projectName: string,
-    ctx: ResolvedContext,
-    artifactId: string,
-    content: string,
-    artifactDef: ArtifactDefinition,
-    stepDef: ArtifactStepDefinition,
-    ioCtx: ArtifactIOContext,
-): Promise<WriteArtifactResult> {
-    const isHtml = artifactDef.format === 'html';
-
-    // Validate against final artifact schema
-    const finalSchema = await loadArtifactSchema(workflowsDir, workflowName, artifactId);
-    if (finalSchema) {
-        const isJson = artifactDef.format === 'json';
-        const result = validateArtifact(content, finalSchema, isHtml, isJson);
-        if (!result.valid) {
-            throw new ValidationError(
-                `最终 artifact 校验失败:\n${formatValidationErrors(result.errors)}\n\n请修正后重新提交步骤 "${stepDef.id}"。`,
-            );
-        }
-    }
-
-    // Write the formal artifact
-    const filePath = await writeArtifact(artifactId, content, ioCtx, artifactDef);
-
-    // Mark as finalized
-    await markFinalized(projectName, ctx.number, artifactId, ctx.dir);
-
-    // Trigger engine event
-    const engineResult = await processWorkflowEvent(workflowsDir, projectName, ctx, {
-        type: 'artifact_written',
-        artifactId,
-    });
-
-    // Check review
-    const overrides = await getMergedOverrides(projectName);
-    const needsReview = resolveArtifactReview(artifactId, artifactDef, overrides);
-
-    if (needsReview) {
-        await submitForReview(projectName, ctx.number, artifactId, ctx.dir);
-    }
-
-    return {
-        artifactId,
-        filePath,
-        needsReview,
-        artifactName: artifactDef.name ?? artifactId,
-        nextAction: formatNextAction(engineResult.nextAction),
-        sequential: {
-            stepId: stepDef.id,
-            stepName: stepDef.name,
-            isLastStep: true,
-        },
     };
 }
 
