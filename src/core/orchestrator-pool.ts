@@ -1,7 +1,7 @@
 /**
  * OrchestratorPool — manages Orchestrator instances across projects.
  *
- * Maintains a Map<key, Orchestrator> where key = "projectName:activeContext".
+ * Maintains a Map<key, Orchestrator> where key = "projectName::activeContext".
  * Instances are lazily created on first access and cached for the service lifetime.
  * When a project's activeContext changes (new iteration/patch), the old instance
  * is shut down and a new one is created.
@@ -20,10 +20,24 @@ export interface OrchestratorPoolConfig {
 }
 
 /**
- * Pool key: "projectName:activeContext" (e.g. "my-app:iter-1").
+ * Separator between project name and context in pool keys.
+ * Uses '::' (double colon) to avoid collisions with project names that contain ':'.
+ */
+const KEY_SEP = '::';
+
+/**
+ * Pool key: "projectName::activeContext" (e.g. "my-app::iter-1").
  */
 function poolKey(projectName: string, activeContext: string): string {
-    return `${projectName}:${activeContext}`;
+    return `${projectName}${KEY_SEP}${activeContext}`;
+}
+
+/**
+ * Extract project name from a pool key.
+ */
+function projectFromKey(key: string): string {
+    const sepIndex = key.indexOf(KEY_SEP);
+    return sepIndex === -1 ? key : key.substring(0, sepIndex);
 }
 
 export class OrchestratorPool {
@@ -58,7 +72,7 @@ export class OrchestratorPool {
 
         // Shut down any stale instance for the same project but different context
         for (const [k, orch] of this.instances) {
-            if (k.startsWith(projectName + ':')) {
+            if (k.startsWith(projectName + KEY_SEP)) {
                 orch.shutdown();
                 this.instances.delete(k);
             }
@@ -83,7 +97,7 @@ export class OrchestratorPool {
      */
     get(projectName: string): Orchestrator | undefined {
         for (const [key, orch] of this.instances) {
-            if (key.startsWith(projectName + ':')) {
+            if (key.startsWith(projectName + KEY_SEP)) {
                 return orch;
             }
         }
@@ -95,7 +109,7 @@ export class OrchestratorPool {
      */
     remove(projectName: string): void {
         for (const [key, orch] of this.instances) {
-            if (key.startsWith(projectName + ':')) {
+            if (key.startsWith(projectName + KEY_SEP)) {
                 orch.shutdown();
                 this.instances.delete(key);
             }
@@ -118,7 +132,7 @@ export class OrchestratorPool {
     listProjects(): string[] {
         const projects = new Set<string>();
         for (const key of this.instances.keys()) {
-            projects.add(key.split(':')[0]);
+            projects.add(projectFromKey(key));
         }
         return [...projects];
     }

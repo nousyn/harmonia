@@ -126,8 +126,9 @@ Setup options:
         console.log(`  Workflows: ${result.workflowsDir}`);
         console.log();
 
-        // Graceful shutdown — clean up orchestrator timers and event listeners
+        // Graceful shutdown — close HTTP server, clean up orchestrator timers and event listeners
         const shutdown = () => {
+            result.server.close();
             result.pool.shutdownAll();
             process.exit(0);
         };

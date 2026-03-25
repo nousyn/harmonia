@@ -1,7 +1,7 @@
 {
   "name": "@s_s/harmonia",
   "version": "1.4.0",
-  "description": "Multi-agent orchestration server with pluggable workflows",
+  "description": "Multi-agent orchestrator with pluggable workflows",
   "type": "module",
   "main": "./build/index.js",
   "bin": {

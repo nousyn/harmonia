@@ -218,6 +218,12 @@ export class Orchestrator {
     disconnectAgent(key: string): void {
         const agent = this.connectedAgents.get(key);
         if (agent) {
+            // Terminate the adapter if present (best-effort, don't block on failure)
+            if (agent.adapter) {
+                agent.adapter.terminate().catch((err) => {
+                    this.logger.warn('agent.terminate_failed', { key, error: String(err) });
+                });
+            }
             this.connectedAgents.delete(key);
             this.logger.info('agent.disconnected', { agentType: agent.agentType, role: agent.role });
         }

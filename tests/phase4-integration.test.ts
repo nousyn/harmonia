@@ -628,6 +628,68 @@ describe('Phase 4 Integration Tests', () => {
             orch.shutdown();
         });
 
+        it('should preserve node as active after dispatch failure (retry possible)', async () => {
+            const registry = new DefaultAdapterRegistry();
+            const crashingFactory: AgentAdapterFactory = {
+                create: () => ({
+                    dispatchTask: async () => {
+                        throw new Error('Unexpected EOF');
+                    },
+                    checkStatus: async () => 'unreachable' as AgentStatus,
+                    terminate: async () => {},
+                }),
+            };
+            registry.register('openclaw', crashingFactory);
+
+            const orch = await Orchestrator.create(makeConfig(fixture, registry));
+            orch.start();
+
+            const result = await orch.dispatchTask('clarify', 'Clarify');
+            expect(result.status).toBe('failed');
+
+            // Node should still be active — dispatch failure != node failure
+            expect(orch.getState().nodes['clarify'].status).toBe('active');
+
+            // Can still manually complete the node (e.g. after retry)
+            const action = await orch.handleNodeCompleted('clarify');
+            expect(action.type).toBe('dispatch');
+            expect(action.nodeId).toBe('write-prd');
+
+            orch.shutdown();
+        });
+
+        it('should use correct adapter per role (openclaw vs opencode)', async () => {
+            const adapterUsed: Record<string, string[]> = { openclaw: [], opencode: [] };
+            const registry = new DefaultAdapterRegistry();
+            registry.register('openclaw', {
+                create: () =>
+                    makeMockAdapter({ status: 'completed', artifacts: [] }, (p) =>
+                        adapterUsed['openclaw'].push(p.nodeId),
+                    ),
+            });
+            registry.register('opencode', {
+                create: () =>
+                    makeMockAdapter({ status: 'completed', artifacts: [] }, (p) =>
+                        adapterUsed['opencode'].push(p.nodeId),
+                    ),
+            });
+
+            const orch = await Orchestrator.create(makeConfig(fixture, registry));
+            orch.start();
+
+            await orch.dispatchTask('clarify', 'Clarify');
+            await orch.handleNodeCompleted('clarify');
+            await orch.dispatchTask('write-prd', 'Write PRD');
+            await orch.handleNodeCompleted('write-prd');
+            await orch.dispatchTask('implement', 'Code it');
+
+            // openclaw handled coordinator tasks, opencode handled developer task
+            expect(adapterUsed['openclaw']).toEqual(['clarify', 'write-prd']);
+            expect(adapterUsed['opencode']).toEqual(['implement']);
+
+            orch.shutdown();
+        });
+
         it('should handle handleNodeFailed for first node gracefully', async () => {
             const registry = new DefaultAdapterRegistry();
             registry.register('openclaw', makeMockFactory());

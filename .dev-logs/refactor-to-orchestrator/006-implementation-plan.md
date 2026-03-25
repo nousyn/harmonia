@@ -427,7 +427,7 @@ interface AgentAdapterFactory {
 >   E2E 序列推进、以及所有错误路径。真实 agent E2E 验证留待 Phase 6。
 > - 增加 4.A（OrchestratorPool 集成到 server/routes）和 4.B（connect/disconnect 端点实现）
 >   作为前置步骤，替换 Phase 3 的 501 占位。
->   **产出**: `src/core/orchestrator-pool.ts`, `tests/phase4-integration.test.ts`(20 tests),
+>   **产出**: `src/core/orchestrator-pool.ts`, `tests/phase4-integration.test.ts`(22 tests),
 >   修改 `src/server.ts` + `src/api/routes.ts`
 
 **目标**: 端到端跑通一个完整工作流

@@ -574,6 +574,14 @@ export interface DispatchRecord {
 
 // ─── Override Configuration (simplified to 2-layer) ───
 
+/**
+ * Override tool type — describes where the agent should find a tool.
+ * - `'skill'` — a built-in skill tool available to the agent
+ * - `'mcp'`   — a tool exposed by an MCP server the agent is connected to
+ *
+ * Note: This is a prompt-level concept — it tells the agent which tool to use.
+ * It does NOT imply that Harmonia itself is or acts as an MCP server.
+ */
 export type OverrideToolType = 'skill' | 'mcp';
 
 export interface CapabilityOverride {
