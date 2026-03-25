@@ -125,6 +125,14 @@ Setup options:
         console.log(`  HTTP server listening on http://${result.hostname}:${result.port}`);
         console.log(`  Workflows: ${result.workflowsDir}`);
         console.log();
+
+        // Graceful shutdown — clean up orchestrator timers and event listeners
+        const shutdown = () => {
+            result.pool.shutdownAll();
+            process.exit(0);
+        };
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
     } catch (err) {
         console.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);

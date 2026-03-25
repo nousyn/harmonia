@@ -298,9 +298,21 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
         }
         try {
             const body = await c.req.json();
-            const { project_name, agent, sessionId, role, ...params } = body;
+            const { project_name, agent, sessionId, role, ...rest } = body;
             if (!project_name || !agent) {
                 return c.json({ error: 'project_name and agent are required' }, 400);
+            }
+
+            // SECURITY: Whitelist safe adapter params only.
+            // CliAdapterConfig allows `command` and `extraArgs` which could be
+            // abused for arbitrary command injection if passed through from
+            // untrusted HTTP input. Only forward known-safe fields.
+            const SAFE_PARAMS = new Set(['timeout', 'cwd', 'env']);
+            const params: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(rest)) {
+                if (SAFE_PARAMS.has(k)) {
+                    params[k] = v;
+                }
             }
 
             const orch = await pool.getOrCreate(project_name);
