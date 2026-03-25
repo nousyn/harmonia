@@ -185,6 +185,13 @@ export interface ArtifactStepDefinition {
     description: string;
 }
 
+/**
+ * Artifact management mode — how the artifact is written.
+ * - `artifact_write` — Written via Harmonia's artifact_write interface (default)
+ * - `agent_direct`   — Agent writes directly to file system (e.g. code output)
+ */
+export type ArtifactManagement = 'artifact_write' | 'agent_direct';
+
 /** Artifact definition — metadata for an artifact type */
 export interface ArtifactDefinition {
     /** Human-readable name */
@@ -193,11 +200,21 @@ export interface ArtifactDefinition {
     format?: 'md' | 'html' | 'json';
     /** Whether this artifact requires user review/approval */
     review?: boolean;
-    /** Unmanaged output — not managed by artifact_write (e.g. code written directly by agent) */
+    /**
+     * Management mode — how this artifact is written.
+     * - `artifact_write` (default): written via Harmonia's artifact_write interface
+     * - `agent_direct`: agent writes directly to file system
+     *
+     * When undefined, defaults to `'artifact_write'`.
+     */
+    management?: ArtifactManagement;
+    /**
+     * @deprecated Use `management: 'agent_direct'` instead.
+     * Kept for backward compatibility with existing workflow definitions.
+     */
     unmanaged?: boolean;
     /**
      * Validation strategy for agent-produced artifacts.
-     * Replaces the binary `unmanaged` concept with a richer validation model.
      * When undefined, defaults to `{ type: 'none' }`.
      */
     validation?: ValidationConfig;
@@ -213,6 +230,14 @@ export interface ArtifactDefinition {
     output?: string;
     /** Sequential steps — when defined, artifact_write requires step parameter */
     steps?: ArtifactStepDefinition[];
+}
+
+/**
+ * Check if an artifact is agent-direct (not managed by artifact_write).
+ * Supports both new `management` field and legacy `unmanaged` boolean.
+ */
+export function isAgentDirect(def: ArtifactDefinition): boolean {
+    return def.management === 'agent_direct' || def.unmanaged === true;
 }
 
 // ─── Artifact Schema (loaded from workflows/<name>/schemas/*.json) ───

@@ -341,7 +341,7 @@
         },
         "code": {
             "name": "代码实现",
-            "unmanaged": true
+            "management": "agent_direct"
         }
     }
 }

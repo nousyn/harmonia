@@ -5,8 +5,7 @@
  * Produces the `TaskPayload.prompt` field: a ready-to-use prompt containing
  * role instructions + context artifacts + output expectations.
  *
- * Key differences from the old role_dispatch MCP tool:
- * - No MCP SDK dependency
+ * Key differences from the old role_dispatch tool:
  * - No dispatch tracking or session guidance (handled by Orchestrator)
  * - Focuses purely on prompt content assembly
  * - Supports Q5 strategy: default full content, large files get path reference
@@ -19,14 +18,15 @@ import { loadArtifactSchema, formatSchemaGuidance } from './schema.js';
 import type { StepSchemaEntry } from './schema.js';
 import { buildOverrideSection } from './engine-helpers.js';
 import { collectTaskNodes, findAncestorLoopId } from './tree-utils.js';
-import type {
-    TaskNode,
-    WorkflowPlugin,
-    WorkflowState,
-    ActionContext,
-    LoopNodeState,
-    ArtifactDefinition,
-    RoleDefinition,
+import {
+    isAgentDirect,
+    type TaskNode,
+    type WorkflowPlugin,
+    type WorkflowState,
+    type ActionContext,
+    type LoopNodeState,
+    type ArtifactDefinition,
+    type RoleDefinition,
 } from './types.js';
 
 // ─── Constants ───
@@ -45,7 +45,7 @@ export interface InputReference {
     id: string;
     /** Human-readable name from artifact definition */
     name: string;
-    /** Resolved file path (managed) or directory path (unmanaged) */
+    /** Resolved file path (artifact_write) or directory path (agent_direct) */
     path: string;
     /** Whether this artifact was found on disk */
     found: boolean;
@@ -132,8 +132,8 @@ export function findDispatchableNodes(wf: WorkflowPlugin, state: WorkflowState, 
 /**
  * Resolve an artifact ID to a name + path reference.
  *
- * - Managed artifacts: resolves to full file path via format → extension mapping
- * - Unmanaged artifacts: resolves to the output directory
+ * - Managed (artifact_write) artifacts: resolves to full file path via format → extension mapping
+ * - Agent-direct artifacts: resolves to the output directory
  * - Unknown artifacts: returns not-found
  */
 export function resolveInputReference(
@@ -152,7 +152,7 @@ export function resolveInputReference(
         };
     }
 
-    if (artifactDef.unmanaged) {
+    if (isAgentDirect(artifactDef)) {
         const dir = resolveArtifactDir(artifactDef.output, ioCtx);
         return {
             id: artifactId,
@@ -281,7 +281,7 @@ async function buildArtifactRequirements(
 
     for (const artifactId of roleArtifactIds) {
         const artifactDef = artifactDefs[artifactId];
-        if (!artifactDef || artifactDef.unmanaged) continue;
+        if (!artifactDef || isAgentDirect(artifactDef)) continue;
 
         // Load main schema
         const schema = await loadArtifactSchema(workflowsDir, workflowName, artifactId);
@@ -330,9 +330,9 @@ function collectRoleOutputArtifacts(
 }
 
 /**
- * Build unmanaged artifact output path hints for the prompt.
+ * Build agent-direct artifact output path hints for the prompt.
  */
-function buildUnmanagedOutputHints(
+function buildAgentDirectOutputHints(
     roleDef: RoleDefinition,
     artifactDefs: Record<string, ArtifactDefinition>,
     ioCtx: ArtifactIOContext,
@@ -341,7 +341,7 @@ function buildUnmanagedOutputHints(
     for (const cap of roleDef.frontmatter.capabilities ?? []) {
         if (!cap.artifact) continue;
         const def = artifactDefs[cap.artifact];
-        if (!def?.unmanaged) continue;
+        if (!def || !isAgentDirect(def)) continue;
         const outputDir = resolveArtifactDir(def.output, ioCtx);
         hints.push(`- **${cap.artifact}** (${def.name}): \`${outputDir}\``);
     }
@@ -361,7 +361,7 @@ function buildManagedOutputPaths(
     for (const cap of roleDef.frontmatter.capabilities ?? []) {
         if (!cap.artifact) continue;
         const def = artifactDefs[cap.artifact];
-        if (!def || def.unmanaged) continue;
+        if (!def || isAgentDirect(def)) continue;
         const dir = resolveArtifactDir(def.output, ioCtx);
         const ext = getFormatExtension(def.format);
         const filePath = `${dir}/${cap.artifact}${ext}`;
@@ -383,9 +383,9 @@ async function loadInputContent(
 ): Promise<InputReference> {
     if (!ref.found) return ref;
 
-    // Unmanaged artifacts — always path reference
+    // Agent-direct artifacts — always path reference
     const artifactDef = wf.artifactDefinitions[ref.id];
-    if (artifactDef?.unmanaged) return ref;
+    if (artifactDef && isAgentDirect(artifactDef)) return ref;
 
     try {
         const content = await readArtifact(ref.id, ioCtx, artifactDef);
@@ -514,7 +514,7 @@ export async function buildPrompt(options: PromptBuildOptions): Promise<PromptBu
                 sections.push('');
                 sections.push(ref.content);
             } else {
-                // Path reference only (Q5: large files or unmanaged)
+                // Path reference only (Q5: large files or agent-direct)
                 sections.push(`- **${ref.id}** (${ref.name}): \`${ref.path}\``);
             }
         }
@@ -536,13 +536,13 @@ export async function buildPrompt(options: PromptBuildOptions): Promise<PromptBu
         sections.push(...managedPaths);
     }
 
-    // Output paths — unmanaged artifacts
-    const unmanagedHints = buildUnmanagedOutputHints(roleDef, wf.artifactDefinitions, ioCtx);
-    if (unmanagedHints.length > 0) {
+    // Output paths — agent-direct artifacts
+    const agentDirectHints = buildAgentDirectOutputHints(roleDef, wf.artifactDefinitions, ioCtx);
+    if (agentDirectHints.length > 0) {
         sections.push('');
-        sections.push('## Unmanaged Artifact Output Paths');
+        sections.push('## Agent-Direct Artifact Output Paths');
         sections.push('The following artifacts should be written directly to the specified paths:');
-        sections.push(...unmanagedHints);
+        sections.push(...agentDirectHints);
     }
 
     // Artifact requirements (schema guidance)

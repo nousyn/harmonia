@@ -124,9 +124,9 @@ describe('role-dispatch helpers', () => {
             expect(ref.found).toBe(false);
         });
 
-        it('should resolve unmanaged artifact to directory path', () => {
+        it('should resolve agent-direct artifact to directory path', () => {
             const wf = makePlugin({
-                code: { name: 'Code', unmanaged: true, output: '{project}' },
+                code: { name: 'Code', management: 'agent_direct', output: '{project}' },
             });
             const ioCtx = makeIOCtx();
             const existing = new Set<string>();
@@ -136,12 +136,12 @@ describe('role-dispatch helpers', () => {
             expect(ref.id).toBe('code');
             expect(ref.name).toBe('Code');
             expect(ref.path).toBe('/projects/my-app');
-            expect(ref.found).toBe(true); // unmanaged always "found"
+            expect(ref.found).toBe(true); // agent-direct always "found"
         });
 
-        it('should resolve unmanaged artifact with default output to artifacts dir', () => {
+        it('should resolve agent-direct artifact with default output to artifacts dir', () => {
             const wf = makePlugin({
-                code: { name: 'Code', unmanaged: true },
+                code: { name: 'Code', management: 'agent_direct' },
             });
             const ioCtx = makeIOCtx();
             const existing = new Set<string>();

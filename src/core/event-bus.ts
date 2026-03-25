@@ -2,7 +2,7 @@
  * Event system for Harmonia orchestrator.
  *
  * Typed EventEmitter that carries all business events.
- * Replaces the MCP-driven "coordinator pushes events" model:
+ * Replaces the old "coordinator pushes events" model:
  * events are now produced and consumed internally by the orchestrator.
  *
  * Existing `WorkflowEvent` (types.ts) is the data definition for engine

@@ -2,7 +2,7 @@
  * Tests for core/operations.ts — beginPatch operation.
  *
  * Uses HARMONIA_DATA_DIR to redirect file I/O to a temp directory.
- * Tests beginPatch directly (replaces MCP server/client integration test).
+ * Tests beginPatch directly.
  *
  * Migrated from tools/patch-start.ts tests. The operations version throws
  * errors on failure and returns BeginPatchResult on success.

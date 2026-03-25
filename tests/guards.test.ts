@@ -2,9 +2,7 @@
  * Tests for P1 Tool Guard logic.
  *
  * Tests the pure-function guard helpers exported from core/dispatch.ts.
- * Tool-level guards (phase_update, role_dispatch, doc_write, dispatch_report)
- * are integration-tested via MCP tool calls — these unit tests cover the
- * extracted state machine logic that those guards depend on.
+ * These unit tests cover the extracted state machine logic.
  */
 
 import { describe, it, expect } from 'vitest';

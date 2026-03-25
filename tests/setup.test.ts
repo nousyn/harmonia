@@ -2,7 +2,6 @@
  * Tests for cli/setup.ts — parseSetupArgs.
  *
  * The setup command now only registers a project in the registry.
- * MCP prompt injection tests are no longer applicable.
  */
 
 import { describe, it, expect } from 'vitest';

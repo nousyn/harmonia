@@ -5,7 +5,7 @@
  * Tests resolveActive against real registry data (not mocks) to avoid ESM spy issues.
  *
  * Migrated from tools/utils.ts tests. The core version throws errors
- * instead of returning MCP ToolResult objects.
+ * on failure.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';

@@ -469,7 +469,7 @@ describe('workflow-validator', () => {
         it('should pass when artifact definitions have no output field', () => {
             const defs: Record<string, ArtifactDefinition> = {
                 spec: { name: 'Spec', format: 'md' },
-                code: { name: 'Code', format: 'json', unmanaged: true },
+                code: { name: 'Code', format: 'json', management: 'agent_direct' },
             };
             const errors = validateWorkflow(makeDefinition(), DEFAULT_ROLES, defs);
             expect(outputErrors(errors)).toHaveLength(0);
@@ -586,7 +586,7 @@ describe('workflow-validator', () => {
         const sampleArtifacts: Record<string, ArtifactDefinition> = {
             prd: { name: 'PRD', format: 'md' },
             'user-stories': { name: 'User Stories', format: 'md' },
-            code: { name: 'Code', unmanaged: true },
+            code: { name: 'Code', management: 'agent_direct' },
             'tech-design': { name: 'Tech Design', format: 'md' },
         };
 
@@ -610,7 +610,7 @@ describe('workflow-validator', () => {
             expect(inputErrors(errors)).toHaveLength(0);
         });
 
-        it('should pass when inputArtifacts reference unmanaged artifacts', () => {
+        it('should pass when inputArtifacts reference agent-direct artifacts', () => {
             const task: TaskNode = {
                 type: 'task',
                 id: 'test-task',

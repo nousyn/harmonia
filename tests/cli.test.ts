@@ -3,7 +3,7 @@
  * Focuses on parseSetupArgs (pure logic) and runSetup (integration).
  *
  * Updated for new architecture: setup now registers a project in the
- * Harmonia registry instead of injecting MCP prompts.
+ * Harmonia registry.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

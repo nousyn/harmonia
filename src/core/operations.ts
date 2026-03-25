@@ -2,7 +2,7 @@
  * Operations — orchestration-layer business functions extracted from src/tools/.
  *
  * These functions chain multiple core atomic operations into complete business
- * actions. They are transport-agnostic (no MCP ToolResult, no HTTP Response)
+ * actions. They are transport-agnostic (no HTTP Response dependency)
  * and throw errors on failure instead of returning error objects.
  *
  * Each function returns a plain data result that the transport layer (HTTP API,
@@ -50,6 +50,7 @@ import type {
     SessionRecord,
     ArtifactStepState,
 } from './types.js';
+import { isAgentDirect } from './types.js';
 
 /** Shared kit instance for hook installation */
 const kit = createKit('harmonia');
@@ -501,14 +502,14 @@ export async function writeArtifactOrchestrated(
     // Guard: artifact_id must be defined in workflow
     if (!artifactDef) {
         const validIds = Object.keys(wf.artifactDefinitions)
-            .filter((id) => !wf.artifactDefinitions[id].unmanaged)
+            .filter((id) => !isAgentDirect(wf.artifactDefinitions[id]))
             .join(', ');
         throw new ValidationError(`Artifact "${artifactId}" 未在工作流中定义。可用的 artifact 类型: ${validIds}`);
     }
 
-    // Guard: reject unmanaged artifact types
-    if (artifactDef.unmanaged) {
-        throw new ValidationError(`Artifact "${artifactId}" 是非托管（unmanaged）产出类型，不应通过此接口写入。`);
+    // Guard: reject agent-direct artifact types (not written via artifact_write)
+    if (isAgentDirect(artifactDef)) {
+        throw new ValidationError(`Artifact "${artifactId}" 是 agent-direct 产出类型，不应通过此接口写入。`);
     }
 
     // Guard: empty content

@@ -81,7 +81,7 @@ function makeWorkflowPlugin(overrides: Partial<WorkflowPlugin> = {}): WorkflowPl
         artifactSchemas: {},
         artifactDefinitions: {
             prd: { name: 'Product Requirements', format: 'md' },
-            code: { name: 'Source Code', unmanaged: true, output: 'project' },
+            code: { name: 'Source Code', management: 'agent_direct', output: 'project' },
         },
         pluginDir: '/tmp/test-wf',
         ...overrides,
@@ -191,7 +191,7 @@ describe('prompt-builder', () => {
             expect(ref.path).toContain('prd.md');
         });
 
-        it('should resolve an unmanaged artifact reference', () => {
+        it('should resolve an agent-direct artifact reference', () => {
             const wf = makeWorkflowPlugin();
             const ioCtx: ArtifactIOContext = {
                 contextDir: '/data/test-project/iter-1',

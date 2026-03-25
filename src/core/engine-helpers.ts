@@ -3,7 +3,7 @@
  * and src/tools/utils.ts for use by the Orchestrator and HTTP API layers.
  *
  * This module provides:
- * - ResolvedContext: project context resolution (without MCP ToolResult dependency)
+ * - ResolvedContext: project context resolution
  * - Gate/Engine context building
  * - Workflow event processing (state load → engine compute → persist)
  * - Utility functions (findTaskNode, formatNextAction, buildOverrideSection)
@@ -29,7 +29,7 @@ import { collectTaskNodes } from './tree-utils.js';
 import { getProject, resolveContextDir } from './registry.js';
 import type { ProjectEntry } from './registry.js';
 
-// ─── ResolvedContext (from tools/utils.ts, without MCP dependency) ───
+// ─── ResolvedContext (from tools/utils.ts) ───
 
 /** Resolved project context — iteration or patch. */
 export interface ResolvedContext {
@@ -46,7 +46,7 @@ export interface ResolvedContext {
 
 /**
  * Resolve the active context for a project.
- * Throws an error on failure (unlike the MCP tools version that returns ToolResult).
+ * Throws an error on failure.
  */
 export async function resolveActive(projectName: string): Promise<ResolvedContext> {
     const entry = await getProject(projectName);

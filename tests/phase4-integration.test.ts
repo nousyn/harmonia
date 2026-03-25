@@ -80,7 +80,7 @@ async function createMultiRoleFixture(
             },
             code: {
                 name: 'Source Code',
-                unmanaged: true,
+                management: 'agent_direct',
                 output: '{project}',
             },
         },

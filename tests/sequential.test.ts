@@ -2,8 +2,7 @@
  * Tests for sequential mode validation.
  * JSON validation in schema.ts (isJson path) — validateArtifact
  *
- * Note: MCP integration tests for artifact_write sequential mode were removed
- * as they depend on old state format infrastructure. They will be rewritten
+ * Note: Integration tests for artifact_write sequential mode will be added
  * when proper integration test infrastructure is available.
  */
 

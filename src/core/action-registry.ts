@@ -6,7 +6,7 @@
  * and afterComplete hooks).
  *
  * Actions cannot require agent behavior — only data operations and external
- * API calls. They execute within the MCP server context.
+ * API calls. They execute within the Harmonia server context.
  */
 
 import type { ActionHandler, ActionContext, ActionResult } from './types.js';
