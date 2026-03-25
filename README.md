@@ -10,7 +10,7 @@ Harmonia 作为独立进程运行（`harmonia serve`），主动向 agent 派发
 
 - **主动编排** — Harmonia 主动 dispatch 任务到 agent，通过 adapter 管理 agent 生命周期，而非被动等待 MCP 调用
 - **节点树驱动** — 工作流定义为节点树（sequence / parallel / task / gate / loop），支持条件分支、循环迭代、失败重试、并行执行
-- **角色分离** — Coordinator、架构师、开发者、测试各司其职，通过产出（artifact）交接而非直接对话
+- **角色分离** — 工作流中的各角色各司其职，通过产出（artifact）交接而非直接对话
 - **可插拔工作流** — 工作流以插件形式存在，包含节点树定义、角色提示词、产出 Schema、钩子脚本
 - **适配器架构** — 统一的 AgentAdapter 接口抽象不同 agent CLI 的差异，支持 opencode / claude-code / openclaw / codex
 
@@ -55,7 +55,7 @@ Harmonia 作为独立进程运行（`harmonia serve`），主动向 agent 派发
 - **节点树工作流** — 5 种节点类型（task / sequence / parallel / gate / loop），声明式定义复杂工作流
 - **Agent Adapter** — 统一接口适配 4 种 agent CLI，支持 dispatchTask、pushMessage、checkStatus、terminate
 - **Gate 条件引擎** — 支持 `artifact_exists`、`artifact_approved`、`artifact_field` 三种条件，自动评估
-- **产出系统** — 通用的读写 / 审批机制，Schema 校验，逐步写入支持
+- **产出系统** — Agent 直接写入文件系统，Harmonia 事后扫描校验（Schema 校验 + 审批机制 + 逐步写入支持）
 - **PromptBuilder** — 自动组装角色 prompt + 任务上下文 + 输入产出引用 + Schema 指引
 - **Dispatch 管理** — 派发追踪、会话复用、超时管理、状态机转换
 - **迭代管理** — 同一项目支持多次迭代，每次迭代独立的状态和产出
