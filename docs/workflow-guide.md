@@ -189,7 +189,7 @@ Harmonia 支持 5 种节点类型：
 
 **inputArtifacts 合并机制：**
 
-`inputArtifacts` 声明的是节点级别的静态输入依赖。在运行时，`role_dispatch` 工具还接受一个 `input_artifact_ids` 参数，由 Coordinator 动态传入补充的产出 ID。两者会自动去重合并（`[...new Set([...nodeInputIds, ...paramInputIds])]`），解析为产出名称 + 文件路径引用注入给角色（仅提供路径引用，不注入内容）。
+`inputArtifacts` 声明的是节点级别的静态输入依赖。在运行时，Orchestrator 的 `dispatchTask` 还接受额外的 `additionalInputIds` 参数，用于动态补充产出 ID。两者会自动去重合并（`[...new Set([...nodeInputIds, ...additionalInputIds])]`），解析为产出名称 + 文件路径引用注入给角色（仅提供路径引用，不注入内容）。
 
 #### sequence — 顺序执行
 
@@ -301,7 +301,7 @@ Harmonia 支持 5 种节点类型：
 
 **终止机制：**
 
-- **正常终止** — body 内的角色通过 `dispatch_report` 触发 `loop_done` 事件，标记当前迭代为最后一轮。当前迭代正常完成后 loop 标记为 `completed`
+- **正常终止** — body 内的角色通过 Orchestrator 的 `handleLoopDone` 触发 `loop_done` 事件，标记当前迭代为最后一轮。当前迭代正常完成后 loop 标记为 `completed`
 - **达到上限** — 如果迭代次数达到 `maxIterations` 且未收到 `loop_done`，loop 标记为 `failed`（可被 `onFailed` 捕获）
 - **body 失败** — body 内节点失败且无法自行处理时，失败冒泡到 loop 节点
 
@@ -527,15 +527,15 @@ capabilities:
 
 ### Frontmatter 字段
 
-> **定位说明：** `model`、`session`、`parallel`、`agent` 由 Harmonia Core 在 `role_dispatch` 中强制执行。Core 根据这些值决定是否查找可复用 session、是否强制新会话、以及在 Session Guidance 中给出何种指示。Coordinator 收到的 dispatch 数据包中已包含基于这些字段计算出的操作指引。
+> **定位说明：** `model`、`session`、`parallel`、`agent` 由 Orchestrator 在派发任务时强制执行。Orchestrator 根据这些值决定是否查找可复用 session、是否强制新会话、以及在 Session Guidance 中给出何种指示。派发数据包（TaskPayload）中已包含基于这些字段计算出的操作指引。
 
-| 字段           | 类型                                   | 必需 | 默认值   | 说明                                                                                                                                                                                                                                             |
-| -------------- | -------------------------------------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `model`        | `string`                               | 否   | —        | 拉起该角色 agent 时使用的模型。应填写具体模型名称（如 `claude-sonnet-4`、`claude-opus-4`）。未指定时不输出模型建议，由宿主工具使用其默认模型。可被 `overrides.json` 中的 `roles.<role>.model` 覆盖                                               |
-| `agent`        | `string`                               | 否   | —        | 推荐使用的 agent 类型（如 `opencode`、`claude-code`、`openclaw`、`codex`）。未指定时不输出 agent 建议。可被 `overrides.json` 中的 `roles.<role>.agent` 覆盖                                                                                      |
-| `session`      | `"none" \| "persistent" \| "optional"` | 否   | `"none"` | 会话复用模式，Core 强制执行：`none` — 不查找空闲 session，始终指示启动新会话；`persistent` — 查找空闲 session，找到则指示 Coordinator 复用（含 `--resume` 命令）；`optional` — 查找空闲 session，找到则以建议性语气呈现，由 Coordinator 自行决定 |
-| `parallel`     | `boolean`                              | 否   | `false`  | 是否支持并行调度，Core 强制执行：`true` 且同角色已有运行中的 dispatch 时，跳过空闲 session 查找，强制启动新会话；`true` 但无运行中的 dispatch 时，按 `session` 字段正常处理；`false` 时无特殊处理                                                |
-| `capabilities` | `RoleCapability[]`                     | 否   | —        | 角色能力列表                                                                                                                                                                                                                                     |
+| 字段           | 类型                                   | 必需 | 默认值   | 说明                                                                                                                                                                                                      |
+| -------------- | -------------------------------------- | ---- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`        | `string`                               | 否   | —        | 拉起该角色 agent 时使用的模型。应填写具体模型名称（如 `claude-sonnet-4`、`claude-opus-4`）。未指定时不输出模型建议，由宿主工具使用其默认模型。可被 `overrides.json` 中的 `roles.<role>.model` 覆盖        |
+| `agent`        | `string`                               | 否   | —        | 推荐使用的 agent 类型（如 `opencode`、`claude-code`、`openclaw`、`codex`）。未指定时不输出 agent 建议。可被 `overrides.json` 中的 `roles.<role>.agent` 覆盖                                               |
+| `session`      | `"none" \| "persistent" \| "optional"` | 否   | `"none"` | 会话复用模式，Orchestrator 强制执行：`none` — 不查找空闲 session，始终启动新会话；`persistent` — 查找空闲 session，找到则复用；`optional` — 查找空闲 session，找到则以建议性语气呈现                      |
+| `parallel`     | `boolean`                              | 否   | `false`  | 是否支持并行调度，Orchestrator 强制执行：`true` 且同角色已有运行中的 dispatch 时，跳过空闲 session 查找，强制启动新会话；`true` 但无运行中的 dispatch 时，按 `session` 字段正常处理；`false` 时无特殊处理 |
+| `capabilities` | `RoleCapability[]`                     | 否   | —        | 角色能力列表                                                                                                                                                                                              |
 
 **Capability 字段：**
 
@@ -622,7 +622,7 @@ Schema 文件位于 `schemas/` 目录，命名规则：
 > - `required: true` — 该章节必须出现，缺少时 `artifact_write` 会拒绝写入并返回 `missing_section` 错误
 > - `required: false` — 该章节可有可无，不会校验其是否存在。定义它的意义在于通过 Schema guidance 提示 Agent 可以包含此章节
 > - Schema **不会限制额外章节** — Agent 可以自由添加 schema 中未定义的章节，校验只检查"必需章节是否缺失"
-> - Schema 内容会通过 `role_dispatch` 以格式化文本注入 dispatch 数据包中（由 `formatSchemaGuidance()` 生成人类可读的写作指引），同时在 `artifact_write` 时执行实际校验
+> - Schema 内容会通过 PromptBuilder 以格式化文本注入 dispatch 数据包中（由 `formatSchemaGuidance()` 生成人类可读的写作指引），同时在产出写入时执行实际校验
 
 ### JSON Schema
 
@@ -657,7 +657,7 @@ Schema 文件位于 `schemas/` 目录，命名规则：
 - **产出 Schema**（`prd.json`）→ 校验最终合成产出
 - **步骤 Schema**（`prd.requirements.json`）→ 校验单个步骤的中间产出
 
-在角色调度时，Core 会将产出 Schema 和所有步骤 Schema 合并为一份写作指引，自动注入到 dispatch 数据包中。Agent 无需手动查询 Schema。
+在角色调度时，Orchestrator 会通过 PromptBuilder 将产出 Schema 和所有步骤 Schema 合并为一份写作指引，自动注入到 dispatch 数据包（TaskPayload）中。Agent 无需手动查询 Schema。
 
 ---
 
@@ -682,7 +682,7 @@ export function createHooks(agentType, context) {
 }
 ```
 
-此函数在 `project_init` 时被调用，由 Core 传入 `agentType` 和 `context`。
+此函数在项目初始化时被调用，由 Orchestrator 传入 `agentType` 和 `context`。
 
 ### 上下文参数
 
@@ -694,7 +694,7 @@ export function createHooks(agentType, context) {
 | `dataDir`     | `string`   | Harmonia 数据目录路径                                              |
 | `projectName` | `string`   | 项目名称                                                           |
 
-> **重要：** `defineHooks` 由 Core 通过依赖注入传入，工作流插件**不应直接 import `@s_s/agent-kit`**。
+> **重要：** `defineHooks` 由 Orchestrator 通过依赖注入传入，工作流插件**不应直接 import `@s_s/agent-kit`**。
 
 ### 各 Agent 的 Hook 格式
 
@@ -936,8 +936,8 @@ Harmonia 从 `<data_dir>/harmonia/.workflows/<name>/workflow.json` 查找工作�
 
 ### 工作流选择
 
-- 只有一个可用工作流时：`project_init` 自动选中
-- 多个可用工作流时：需在 `project_init` 中指定 `workflow` 参数
+- 只有一个可用工作流时：初始化项目时自动选中
+- 多个可用工作流时：需在初始化项目时指定 `workflow` 参数
 
 ---
 
