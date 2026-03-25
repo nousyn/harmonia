@@ -1,5 +1,6 @@
 ---
 model: claude-opus-4
+agent: opencode
 session: persistent
 parallel: false
 capabilities:

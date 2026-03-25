@@ -1,5 +1,6 @@
 ---
 model: claude-sonnet-4
+agent: opencode
 session: none
 parallel: false
 capabilities:
