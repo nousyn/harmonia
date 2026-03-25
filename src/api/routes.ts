@@ -18,11 +18,6 @@ import {
     getArtifactSchemaInfo,
     getProjectStatus,
     getProjectList,
-    formatArtifactsSummary,
-    formatInProgressArtifacts,
-    formatDispatch,
-    formatSession,
-    statusIcon,
     WorkflowSelectionRequired,
     ValidationError,
     StepPrerequisiteError,
@@ -144,7 +139,9 @@ export function createApiRoutes(workflowsDir: string): Hono {
         }
     });
 
-    /** POST /projects/:name/artifacts/:id — Write an artifact */
+    /** POST /projects/:name/artifacts/:id — Write an artifact
+     *  TRANSITIONAL: 006 计划标记为"不再暴露"，但过渡期仍需外部写入能力。Phase 5 评估去留。
+     */
     api.post('/projects/:name/artifacts/:id', async (c) => {
         try {
             const name = c.req.param('name');

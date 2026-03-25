@@ -210,6 +210,42 @@ describe('API endpoints', () => {
         });
     });
 
+    describe('GET /api/projects/:name/artifacts/:id', () => {
+        it('should read a written artifact', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            // Start iteration via API to init workflow state
+            await app.request('/api/projects/my-app/iterations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+
+            // Write an artifact first
+            const userStoriesContent =
+                '## 用户故事\n\n' +
+                '作为用户，我想登录系统，以便访问受保护的资源。\n' +
+                '验收标准：用户输入正确的用户名和密码后，应跳转到首页。\n'.repeat(3);
+            const writeRes = await app.request('/api/projects/my-app/artifacts/user-stories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: userStoriesContent }),
+            });
+            expect(writeRes.status).toBe(201);
+
+            // Read it back
+            const res = await app.request('/api/projects/my-app/artifacts/user-stories');
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.artifactId).toBe('user-stories');
+            expect(body.content).toContain('用户故事');
+        });
+
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/artifacts/prd');
+            expect(res.status).toBe(404);
+        });
+    });
+
     describe('POST /api/projects/:name/artifacts/:id', () => {
         it('should return 400 when content is missing', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
@@ -223,6 +259,59 @@ describe('API endpoints', () => {
             expect(res.status).toBe(400);
             const body = await res.json();
             expect(body.error).toContain('content is required');
+        });
+    });
+
+    describe('POST /api/projects/:name/artifacts/:id/approve', () => {
+        it('should approve an artifact pending review', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            // Start iteration via API
+            await app.request('/api/projects/my-app/iterations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+
+            // Write a reviewable artifact (prototype has review: true)
+            const htmlContent =
+                '<html><head><title>Prototype</title></head><body>' +
+                '<h1>高保真原型</h1><p>页面布局和交互流程展示。</p>' +
+                '<div class="container"><p>内容区域</p></div>'.repeat(3) +
+                '</body></html>';
+            const writeRes = await app.request('/api/projects/my-app/artifacts/prototype', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: htmlContent }),
+            });
+            expect(writeRes.status).toBe(201);
+            const writeBody = await writeRes.json();
+            expect(writeBody.needsReview).toBe(true);
+
+            // Approve it
+            const res = await app.request('/api/projects/my-app/artifacts/prototype/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ approved: true, comment: 'Looks good' }),
+            });
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.artifactId).toBe('prototype');
+            expect(body.approved).toBe(true);
+            expect(body.comment).toBe('Looks good');
+        });
+
+        it('should return 400 when approved field is missing', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            await startIteration('my-app');
+
+            const res = await app.request('/api/projects/my-app/artifacts/prototype/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            expect(res.status).toBe(400);
+            const body = await res.json();
+            expect(body.error).toContain('approved');
         });
     });
 
@@ -300,6 +389,47 @@ describe('API endpoints', () => {
 
         it('should return 404 for unknown project', async () => {
             const res = await app.request('/api/projects/nonexistent/issues');
+            expect(res.status).toBe(404);
+        });
+    });
+
+    describe('PATCH /api/projects/:name/issues/:id', () => {
+        it('should update an existing issue', async () => {
+            await registerProject('my-app', join(tempDir, 'src'), 'dev');
+            await startIteration('my-app');
+
+            // Create an issue first
+            const createRes = await app.request('/api/projects/my-app/issues', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Bug to fix',
+                    description: 'Something is broken',
+                    source: 'test',
+                    iteration: 1,
+                }),
+            });
+            expect(createRes.status).toBe(201);
+            const created = await createRes.json();
+            const issueId = created.id;
+
+            // Update it
+            const res = await app.request(`/api/projects/my-app/issues/${issueId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'closed' }),
+            });
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.status).toBe('closed');
+        });
+
+        it('should return 404 for unknown project', async () => {
+            const res = await app.request('/api/projects/nonexistent/issues/some-id', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'closed' }),
+            });
             expect(res.status).toBe(404);
         });
     });
