@@ -304,10 +304,12 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
             }
 
             // SECURITY: Whitelist safe adapter params only.
-            // CliAdapterConfig allows `command` and `extraArgs` which could be
-            // abused for arbitrary command injection if passed through from
-            // untrusted HTTP input. Only forward known-safe fields.
-            const SAFE_PARAMS = new Set(['timeout', 'cwd', 'env']);
+            // CliAdapterConfig allows `command`, `extraArgs`, and `env` which
+            // could be abused for arbitrary command injection if passed through
+            // from untrusted HTTP input. `env` is also dangerous because
+            // overriding PATH/LD_PRELOAD/NODE_OPTIONS enables indirect code
+            // execution. Only forward known-safe fields.
+            const SAFE_PARAMS = new Set(['timeout', 'cwd']);
             const params: Record<string, unknown> = {};
             for (const [k, v] of Object.entries(rest)) {
                 if (SAFE_PARAMS.has(k)) {
