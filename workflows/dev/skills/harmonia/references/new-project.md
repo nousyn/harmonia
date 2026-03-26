@@ -5,7 +5,7 @@ Complete these steps in order. Each step depends on the previous one.
 ## 1. Register the project
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects \
+curl -X POST http://127.0.0.1:4600/api/projects \
   -H "Content-Type: application/json" \
   -d '{"project_name": "{project}", "project_dir": "/path/to/project"}'
 ```
@@ -21,7 +21,7 @@ curl -X POST http://127.0.0.1:4600/projects \
 ## 2. Start the first iteration
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects/{project}/iterations \
+curl -X POST http://127.0.0.1:4600/api/projects/{project}/iterations \
   -H "Content-Type: application/json" -d '{}'
 ```
 
@@ -30,7 +30,7 @@ Initializes workflow state and activates the first node.
 ## 3. Connect
 
 ```bash
-curl -X POST http://127.0.0.1:4600/connect \
+curl -X POST http://127.0.0.1:4600/api/connect \
   -H "Content-Type: application/json" \
   -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
 ```
@@ -47,7 +47,7 @@ Connecting enables notifications — it does **not** start any task.
 ## 4. Check status
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/api/projects/{project}/status
 ```
 
 The `nextAction` field tells you what the workflow expects next.

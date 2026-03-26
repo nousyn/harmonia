@@ -8,16 +8,16 @@ All request bodies use `Content-Type: application/json`. All responses are JSON.
 
 ## Projects
 
-### GET /projects
+### GET /api/projects
 
 List all registered projects.
 
-### POST /projects
+### POST /api/projects
 
 Initialize a new project.
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects \
+curl -X POST http://127.0.0.1:4600/api/projects \
   -H "Content-Type: application/json" \
   -d '{"project_name": "my-app", "project_dir": "/path/to/project"}'
 ```
@@ -30,7 +30,7 @@ curl -X POST http://127.0.0.1:4600/projects \
 
 **Status codes:** `201` created, `200` already registered, `409` multiple workflows available but `workflow` not specified.
 
-### GET /projects/:name/status
+### GET /api/projects/:name/status
 
 Get project workflow status. The most important endpoint — always start here.
 
@@ -47,7 +47,7 @@ Get project workflow status. The most important endpoint — always start here.
 
 ## Artifacts
 
-### GET /projects/:name/artifacts
+### GET /api/projects/:name/artifacts
 
 List project artifacts.
 
@@ -55,17 +55,17 @@ List project artifacts.
 | ----------- | ------ | ------------------------ |
 | `context`   | string | Iteration context filter |
 
-### GET /projects/:name/artifacts/:id
+### GET /api/projects/:name/artifacts/:id
 
 Read artifact content.
 
 ```bash
-curl http://127.0.0.1:4600/projects/my-app/artifacts/prd
+curl http://127.0.0.1:4600/api/projects/my-app/artifacts/prd
 ```
 
 **Response:** `{"artifactId": "prd", "content": "..."}`
 
-### GET /projects/:name/artifacts/:id/schema
+### GET /api/projects/:name/artifacts/:id/schema
 
 Get artifact schema and writing guidance. Query this before writing any artifact.
 
@@ -79,18 +79,18 @@ Get artifact schema and writing guidance. Query this before writing any artifact
 - `sections` — required Markdown sections (for `.md` artifacts)
 - `jsonFields` — required JSON fields (for `.json` artifacts)
 
-### POST /projects/:name/artifacts/:id/approve
+### POST /api/projects/:name/artifacts/:id/approve
 
 Approve or reject an artifact.
 
 ```bash
 # Approve
-curl -X POST http://127.0.0.1:4600/projects/my-app/artifacts/prd/approve \
+curl -X POST http://127.0.0.1:4600/api/projects/my-app/artifacts/prd/approve \
   -H "Content-Type: application/json" \
   -d '{"approved": true, "comment": "Looks good"}'
 
 # Reject
-curl -X POST http://127.0.0.1:4600/projects/my-app/artifacts/prd/approve \
+curl -X POST http://127.0.0.1:4600/api/projects/my-app/artifacts/prd/approve \
   -H "Content-Type: application/json" \
   -d '{"approved": false, "comment": "Missing acceptance criteria"}'
 ```
@@ -100,7 +100,7 @@ curl -X POST http://127.0.0.1:4600/projects/my-app/artifacts/prd/approve \
 | `approved` | boolean | yes      | `true` = approve, `false` = reject |
 | `comment`  | string  | no       | Review comment                     |
 
-### GET /projects/:name/reviews
+### GET /api/projects/:name/reviews
 
 List artifacts pending review.
 
@@ -110,7 +110,7 @@ List artifacts pending review.
 
 ## Issues
 
-### GET /projects/:name/issues
+### GET /api/projects/:name/issues
 
 List issues with optional filters.
 
@@ -120,12 +120,12 @@ List issues with optional filters.
 | `source`    | string | `test` or `user-feedback`  |
 | `iteration` | number | Filter by iteration number |
 
-### POST /projects/:name/issues
+### POST /api/projects/:name/issues
 
 Create an issue.
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects/my-app/issues \
+curl -X POST http://127.0.0.1:4600/api/projects/my-app/issues \
   -H "Content-Type: application/json" \
   -d '{"title": "Login fails on empty password", "description": "Steps to reproduce...", "source": "test", "iteration": 1}'
 ```
@@ -137,12 +137,12 @@ curl -X POST http://127.0.0.1:4600/projects/my-app/issues \
 | `source`      | string | yes      | `test` or `user-feedback`        |
 | `iteration`   | number | yes      | Iteration number this belongs to |
 
-### PATCH /projects/:name/issues/:id
+### PATCH /api/projects/:name/issues/:id
 
 Update an issue.
 
 ```bash
-curl -X PATCH http://127.0.0.1:4600/projects/my-app/issues/abc123 \
+curl -X PATCH http://127.0.0.1:4600/api/projects/my-app/issues/abc123 \
   -H "Content-Type: application/json" \
   -d '{"status": "resolved", "resolved_by_type": "commit", "resolved_by_number": "a1b2c3d"}'
 ```
@@ -159,12 +159,12 @@ curl -X PATCH http://127.0.0.1:4600/projects/my-app/issues/abc123 \
 
 ## Iterations
 
-### POST /projects/:name/iterations
+### POST /api/projects/:name/iterations
 
 Start a new iteration.
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects/my-app/iterations \
+curl -X POST http://127.0.0.1:4600/api/projects/my-app/iterations \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -173,12 +173,12 @@ curl -X POST http://127.0.0.1:4600/projects/my-app/iterations \
 | ------- | ------- | -------- | -------------------------------------- |
 | `force` | boolean | no       | Force start even if current incomplete |
 
-### POST /projects/:name/patches
+### POST /api/projects/:name/patches
 
 Start a hotfix patch.
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects/my-app/patches \
+curl -X POST http://127.0.0.1:4600/api/projects/my-app/patches \
   -H "Content-Type: application/json" \
   -d '{"description": "Fix login timeout"}'
 ```
@@ -192,12 +192,12 @@ curl -X POST http://127.0.0.1:4600/projects/my-app/patches \
 
 ## Agent Connection
 
-### POST /connect
+### POST /api/connect
 
 Register an agent connection.
 
 ```bash
-curl -X POST http://127.0.0.1:4600/connect \
+curl -X POST http://127.0.0.1:4600/api/connect \
   -H "Content-Type: application/json" \
   -d '{"project_name": "my-app", "agent": "openclaw", "role": "developer"}'
 ```
@@ -211,7 +211,7 @@ curl -X POST http://127.0.0.1:4600/connect \
 
 **Status codes:** `200` connected, `422` unknown agent type, `501` orchestration not available.
 
-### DELETE /connect/:key
+### DELETE /api/connect/:key
 
 Disconnect an agent.
 
