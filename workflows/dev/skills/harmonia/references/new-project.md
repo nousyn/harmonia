@@ -1,23 +1,8 @@
-# Getting Started with Harmonia
+# New Project Setup
 
-## Determine project state
+Complete these steps in order. Each step depends on the previous one.
 
-Check whether the project already exists:
-
-```bash
-curl http://127.0.0.1:4600/projects/{project}/status
-```
-
-- **Got a response with `nextAction`?** → Project is live. Go to [Connect](#connect).
-- **Got 404 or "not registered"?** → Go to [First-time setup](#first-time-setup).
-
----
-
-## First-time setup
-
-Only needed once per project. These two steps must run **in this order**:
-
-### 1. Register the project
+## 1. Register the project
 
 ```bash
 curl -X POST http://127.0.0.1:4600/projects \
@@ -33,22 +18,16 @@ curl -X POST http://127.0.0.1:4600/projects \
 
 **Status codes:** `201` created, `200` already registered, `409` multiple workflows — specify `workflow`.
 
-### 2. Start the first iteration
+## 2. Start the first iteration
 
 ```bash
 curl -X POST http://127.0.0.1:4600/projects/{project}/iterations \
   -H "Content-Type: application/json" -d '{}'
 ```
 
-This initializes the workflow state and activates the first node.
+Initializes workflow state and activates the first node.
 
-Then proceed to [Connect](#connect).
-
----
-
-## Connect
-
-Every agent session must register with Harmonia. This is the only step needed on every session start.
+## 3. Connect
 
 ```bash
 curl -X POST http://127.0.0.1:4600/connect \
@@ -63,9 +42,12 @@ curl -X POST http://127.0.0.1:4600/connect \
 | `sessionId`    | string | no       | Agent-side session ID                                                   |
 | `role`         | string | no       | Workflow role (e.g. `coordinator`, `developer`). Defaults to agent type |
 
-Key points:
+Connecting enables notifications — it does **not** start any task.
 
-- Connecting enables Harmonia to send you notifications (e.g. artifact needs review, task failed). It does **not** start any task — tasks are dispatched separately.
-- Disconnect when done: `DELETE /connect/{key}?project_name={project}`
+## 4. Check status
 
-After connecting, check status (`GET /projects/{project}/status`) to see what the workflow expects next.
+```bash
+curl http://127.0.0.1:4600/projects/{project}/status
+```
+
+The `nextAction` field tells you what the workflow expects next.

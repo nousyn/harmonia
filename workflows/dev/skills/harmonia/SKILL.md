@@ -25,10 +25,11 @@ Base URL: `http://127.0.0.1:4600`
 
 ## Getting started
 
-**Existing project?** → `POST /connect` to register your session, then check status.
-**New project?** → Register the project (`POST /projects`), start the first iteration (`POST /projects/{project}/iterations`), then connect.
+- **New project?** → Read [{baseDir}/references/new-project.md]({baseDir}/references/new-project.md)
+- **Existing project, new iteration?** → Read [{baseDir}/references/new-iteration.md]({baseDir}/references/new-iteration.md)
+- **Existing project, hotfix?** → Read [{baseDir}/references/new-patch.md]({baseDir}/references/new-patch.md)
 
-Read [references/getting-started.md](references/getting-started.md) for full setup steps and parameters.
+Every scenario ends with `POST /connect` + `GET /projects/{project}/status`.
 
 ## Check status
 
@@ -73,7 +74,7 @@ If you're unsure what to do at any point, check status again — `nextAction` is
 | Register agent connection  | `POST /connect`                                   |
 | Disconnect agent           | `DELETE /connect/{key}?project_name={project}`    |
 
-Read [references/api-reference.md](references/api-reference.md) for full request/response details when you need exact parameter names, body formats, or status codes.
+Read [{baseDir}/references/api-reference.md]({baseDir}/references/api-reference.md) for full request/response details when you need exact parameter names, body formats, or status codes.
 
 ## Writing artifacts
 
@@ -105,5 +106,5 @@ A rejected artifact means the author needs to revise and rewrite it.
 - **Artifacts are filesystem-first.** You write files; Harmonia reads them. There is no upload API. If you try to POST artifact content to Harmonia, it won't work.
 - **Schema is your writing contract.** If you skip the schema query and write an artifact without following the required structure, validation will fail and you'll have to redo the work.
 - **Approval blocks are real.** A `review: true` artifact that isn't approved will prevent the entire workflow from advancing past its gate. Don't wait silently — prompt the user.
-- **Issue `resolvedBy` format matters.** When updating an issue to resolved status, provide `resolved_by_type` and `resolved_by_number` (not `resolvedBy` as a plain string). Read [references/api-reference.md](references/api-reference.md) if unsure about the exact format.
+- **Issue `resolvedBy` format matters.** When updating an issue to resolved status, provide `resolved_by_type` and `resolved_by_number` (not `resolvedBy` as a plain string). Read [{baseDir}/references/api-reference.md]({baseDir}/references/api-reference.md) if unsure about the exact format.
 - **Connect ≠ dispatch.** Registering an agent via `/connect` makes it available for notifications but does not start a task. Tasks are dispatched separately by Harmonia.
