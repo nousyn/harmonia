@@ -25,49 +25,10 @@ Base URL: `http://127.0.0.1:4600`
 
 ## Getting started
 
-Start by checking whether the project already exists:
+**Existing project?** → `POST /connect` to register your session, then check status.
+**New project?** → Register the project (`POST /projects`), start the first iteration (`POST /projects/{project}/iterations`), then connect.
 
-```bash
-curl http://127.0.0.1:4600/projects/{project}/status
-```
-
-- **Got a status response with `nextAction`?** → The project is live. Skip to [Connect](#connect) below.
-- **Got a 404 or "not registered" error?** → The project needs [First-time setup](#first-time-setup) first.
-
-### Connect
-
-Every agent session must register with Harmonia. This is the only step you always need:
-
-```bash
-curl -X POST http://127.0.0.1:4600/connect \
-  -H "Content-Type: application/json" \
-  -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
-```
-
-- `agent` — your agent type: `opencode`, `claude-code`, `openclaw`, or `codex`
-- `role` — your workflow role (e.g. `coordinator`, `architect`, `developer`, `tester`). Defaults to agent type if omitted.
-- Connecting lets Harmonia send you notifications (e.g. when an artifact needs review or a task fails). It does **not** start any task — tasks are dispatched separately by Harmonia.
-- Disconnect when done: `DELETE /connect/{key}?project_name={project}`
-
-After connecting, check status to see what the workflow expects next.
-
-### First-time setup
-
-Only needed when the project has never been registered with Harmonia. These two steps must run **in this order**:
-
-1. **Register the project** — bind a project directory to a workflow:
-   ```bash
-   curl -X POST http://127.0.0.1:4600/projects \
-     -H "Content-Type: application/json" \
-     -d '{"project_name": "{project}", "project_dir": "/path/to/project"}'
-   ```
-2. **Start the first iteration** — initialize workflow state and activate the first node:
-   ```bash
-   curl -X POST http://127.0.0.1:4600/projects/{project}/iterations \
-     -H "Content-Type: application/json" -d '{}'
-   ```
-
-Then go to [Connect](#connect) above.
+Read [references/getting-started.md](references/getting-started.md) for full setup steps and parameters.
 
 ## Check status
 
