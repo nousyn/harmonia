@@ -5,7 +5,7 @@ Use this when the project is already registered and has at least one completed i
 ## 1. Start the patch
 
 ```bash
-curl -X POST http://127.0.0.1:4600/api/projects/{project}/patches \
+curl -X POST http://127.0.0.1:4600/projects/{project}/patches \
   -H "Content-Type: application/json" \
   -d '{"description": "Fix login timeout", "issue_id": "abc123"}'
 ```
@@ -20,7 +20,7 @@ curl -X POST http://127.0.0.1:4600/api/projects/{project}/patches \
 ## 2. Connect (if not already connected)
 
 ```bash
-curl -X POST http://127.0.0.1:4600/api/connect \
+curl -X POST http://127.0.0.1:4600/connect \
   -H "Content-Type: application/json" \
   -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
 ```
@@ -36,7 +36,7 @@ Skip this step if your session is already connected.
 ## 3. Check status
 
 ```bash
-curl http://127.0.0.1:4600/api/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project}/status
 ```
 
 The `nextAction` field tells you what the patch workflow expects next.

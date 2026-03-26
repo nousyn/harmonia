@@ -5,7 +5,7 @@ Use this when the project is already registered and the current iteration's work
 ## 1. Start the iteration
 
 ```bash
-curl -X POST http://127.0.0.1:4600/api/projects/{project}/iterations \
+curl -X POST http://127.0.0.1:4600/projects/{project}/iterations \
   -H "Content-Type: application/json" -d '{}'
 ```
 
@@ -18,7 +18,7 @@ If the current iteration has unfinished nodes, the request fails unless `force: 
 ## 2. Connect (if not already connected)
 
 ```bash
-curl -X POST http://127.0.0.1:4600/api/connect \
+curl -X POST http://127.0.0.1:4600/connect \
   -H "Content-Type: application/json" \
   -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
 ```
@@ -34,7 +34,7 @@ Skip this step if your session is already connected from the previous iteration.
 ## 3. Check status
 
 ```bash
-curl http://127.0.0.1:4600/api/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project}/status
 ```
 
 The `nextAction` field tells you what the new iteration's workflow expects next.

@@ -83,9 +83,11 @@ export function createApp(workflowsDir: string, pool?: OrchestratorPool): Hono {
     // Health check
     app.get('/health', (c) => c.json({ status: 'ok' }));
 
-    // Mount API routes
+    // Mount API routes at root — agents are the primary consumer,
+    // so paths should be as short as possible (e.g. /projects, /connect).
+    // Future Web UI will use a /ui prefix instead.
     const api = createApiRoutes(workflowsDir, pool);
-    app.route('/api', api);
+    app.route('/', api);
 
     return app;
 }

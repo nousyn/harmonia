@@ -118,12 +118,12 @@ harmonia --version                 显示版本号
 
 ```bash
 # 1. 注册项目 — 绑定项目目录和工作流
-curl -X POST http://127.0.0.1:4600/api/projects \
+curl -X POST http://127.0.0.1:4600/projects \
   -H "Content-Type: application/json" \
   -d '{"project_name": "my-app", "project_dir": "/path/to/project"}'
 
 # 2. 开始第一轮迭代 — 初始化工作流状态，激活第一个节点
-curl -X POST http://127.0.0.1:4600/api/projects/my-app/iterations \
+curl -X POST http://127.0.0.1:4600/projects/my-app/iterations \
   -H "Content-Type: application/json" -d '{}'
 ```
 
@@ -135,12 +135,12 @@ curl -X POST http://127.0.0.1:4600/api/projects/my-app/iterations \
 
 ```bash
 # Agent 连接 — 每次会话都需要
-curl -X POST http://127.0.0.1:4600/api/connect \
+curl -X POST http://127.0.0.1:4600/connect \
   -H "Content-Type: application/json" \
   -d '{"project_name": "my-app", "agent": "opencode", "role": "coordinator"}'
 
 # 查看当前状态
-curl http://127.0.0.1:4600/api/projects/my-app/status
+curl http://127.0.0.1:4600/projects/my-app/status
 ```
 
 `nextAction` 字段告诉你工作流当前期望的操作。
@@ -149,38 +149,38 @@ curl http://127.0.0.1:4600/api/projects/my-app/status
 
 ### 项目管理
 
-| 方法   | 路径                             | 说明                                                              |
-| ------ | -------------------------------- | ----------------------------------------------------------------- |
-| `GET`  | `/api/projects`                  | 列出所有已注册项目                                                |
-| `POST` | `/api/projects`                  | 初始化新项目（需 `project_name`, `project_dir`, 可选 `workflow`） |
-| `GET`  | `/api/projects/:name/status`     | 获取项目状态（当前迭代、工作流进度、nextAction）                  |
-| `POST` | `/api/projects/:name/iterations` | 开始新迭代（可选 `force`）                                        |
-| `POST` | `/api/projects/:name/patches`    | 开始热修复（需 `description`, 可选 `issue_id`）                   |
+| 方法   | 路径                         | 说明                                                              |
+| ------ | ---------------------------- | ----------------------------------------------------------------- |
+| `GET`  | `/projects`                  | 列出所有已注册项目                                                |
+| `POST` | `/projects`                  | 初始化新项目（需 `project_name`, `project_dir`, 可选 `workflow`） |
+| `GET`  | `/projects/:name/status`     | 获取项目状态（当前迭代、工作流进度、nextAction）                  |
+| `POST` | `/projects/:name/iterations` | 开始新迭代（可选 `force`）                                        |
+| `POST` | `/projects/:name/patches`    | 开始热修复（需 `description`, 可选 `issue_id`）                   |
 
 ### 产出与审批
 
-| 方法   | 路径                                        | 说明                                           |
-| ------ | ------------------------------------------- | ---------------------------------------------- |
-| `GET`  | `/api/projects/:name/artifacts`             | 列出产出（可选 `context` 查询参数）            |
-| `GET`  | `/api/projects/:name/artifacts/:id`         | 读取指定产出内容                               |
-| `POST` | `/api/projects/:name/artifacts/:id/approve` | 审批/拒绝产出（需 `approved`，可选 `comment`） |
-| `GET`  | `/api/projects/:name/artifacts/:id/schema`  | 获取产出 Schema 信息                           |
-| `GET`  | `/api/projects/:name/reviews`               | 列出待审批产出                                 |
+| 方法   | 路径                                    | 说明                                           |
+| ------ | --------------------------------------- | ---------------------------------------------- |
+| `GET`  | `/projects/:name/artifacts`             | 列出产出（可选 `context` 查询参数）            |
+| `GET`  | `/projects/:name/artifacts/:id`         | 读取指定产出内容                               |
+| `POST` | `/projects/:name/artifacts/:id/approve` | 审批/拒绝产出（需 `approved`，可选 `comment`） |
+| `GET`  | `/projects/:name/artifacts/:id/schema`  | 获取产出 Schema 信息                           |
+| `GET`  | `/projects/:name/reviews`               | 列出待审批产出                                 |
 
 ### Issue 追踪
 
-| 方法    | 路径                             | 说明                                                           |
-| ------- | -------------------------------- | -------------------------------------------------------------- |
-| `GET`   | `/api/projects/:name/issues`     | 列出 Issue（可选过滤：`status`, `source`, `iteration`）        |
-| `POST`  | `/api/projects/:name/issues`     | 创建 Issue（需 `title`, `description`, `source`, `iteration`） |
-| `PATCH` | `/api/projects/:name/issues/:id` | 更新 Issue 状态                                                |
+| 方法    | 路径                         | 说明                                                           |
+| ------- | ---------------------------- | -------------------------------------------------------------- |
+| `GET`   | `/projects/:name/issues`     | 列出 Issue（可选过滤：`status`, `source`, `iteration`）        |
+| `POST`  | `/projects/:name/issues`     | 创建 Issue（需 `title`, `description`, `source`, `iteration`） |
+| `PATCH` | `/projects/:name/issues/:id` | 更新 Issue 状态                                                |
 
 ### Agent 连接
 
-| 方法     | 路径               | 说明                                                                   |
-| -------- | ------------------ | ---------------------------------------------------------------------- |
-| `POST`   | `/api/connect`     | Agent 注册连接（需 `project_name`, `agent`；可选 `sessionId`, `role`） |
-| `DELETE` | `/api/connect/:id` | Agent 断开连接（需 `project_name` 查询参数）                           |
+| 方法     | 路径           | 说明                                                                   |
+| -------- | -------------- | ---------------------------------------------------------------------- |
+| `POST`   | `/connect`     | Agent 注册连接（需 `project_name`, `agent`；可选 `sessionId`, `role`） |
+| `DELETE` | `/connect/:id` | Agent 断开连接（需 `project_name` 查询参数）                           |
 
 ## 工作流系统
 

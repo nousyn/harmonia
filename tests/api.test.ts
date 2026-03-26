@@ -50,9 +50,9 @@ describe('API endpoints', () => {
 
     // ─── Projects ───
 
-    describe('GET /api/projects', () => {
+    describe('GET /projects', () => {
         it('should return empty list when no projects', async () => {
-            const res = await app.request('/api/projects');
+            const res = await app.request('/projects');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.projects).toEqual([]);
@@ -61,7 +61,7 @@ describe('API endpoints', () => {
         it('should return registered projects', async () => {
             await registerProject('test-app', join(tempDir, 'src'), 'dev');
 
-            const res = await app.request('/api/projects');
+            const res = await app.request('/projects');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.projects).toHaveLength(1);
@@ -69,9 +69,9 @@ describe('API endpoints', () => {
         });
     });
 
-    describe('POST /api/projects', () => {
+    describe('POST /projects', () => {
         it('should create a new project', async () => {
-            const res = await app.request('/api/projects', {
+            const res = await app.request('/projects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -89,7 +89,7 @@ describe('API endpoints', () => {
         it('should return 200 for already registered project', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
 
-            const res = await app.request('/api/projects', {
+            const res = await app.request('/projects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -104,7 +104,7 @@ describe('API endpoints', () => {
         });
 
         it('should return 400 when missing required fields', async () => {
-            const res = await app.request('/api/projects', {
+            const res = await app.request('/projects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ project_name: 'my-app' }),
@@ -113,23 +113,23 @@ describe('API endpoints', () => {
         });
     });
 
-    describe('GET /api/projects/:name/status', () => {
+    describe('GET /projects/:name/status', () => {
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/status');
+            const res = await app.request('/projects/nonexistent/status');
             expect(res.status).toBe(404);
         });
 
         it('should return status for registered project with active context', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             // Need to begin iteration to have an active context
-            const initRes = await app.request('/api/projects/my-app/iterations', {
+            const initRes = await app.request('/projects/my-app/iterations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
             });
             expect(initRes.status).toBe(201);
 
-            const res = await app.request('/api/projects/my-app/status');
+            const res = await app.request('/projects/my-app/status');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.projectName).toBe('my-app');
@@ -138,11 +138,11 @@ describe('API endpoints', () => {
 
     // ─── Iterations ───
 
-    describe('POST /api/projects/:name/iterations', () => {
+    describe('POST /projects/:name/iterations', () => {
         it('should create a new iteration', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
 
-            const res = await app.request('/api/projects/my-app/iterations', {
+            const res = await app.request('/projects/my-app/iterations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
@@ -154,7 +154,7 @@ describe('API endpoints', () => {
         });
 
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/iterations', {
+            const res = await app.request('/projects/nonexistent/iterations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
@@ -165,12 +165,12 @@ describe('API endpoints', () => {
 
     // ─── Patches ───
 
-    describe('POST /api/projects/:name/patches', () => {
+    describe('POST /projects/:name/patches', () => {
         it('should create a new patch', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             await startIteration('my-app');
 
-            const res = await app.request('/api/projects/my-app/patches', {
+            const res = await app.request('/projects/my-app/patches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ description: 'fix bug', issue_id: 'issue-1' }),
@@ -183,7 +183,7 @@ describe('API endpoints', () => {
         it('should return error when no iterations exist', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
 
-            const res = await app.request('/api/projects/my-app/patches', {
+            const res = await app.request('/projects/my-app/patches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
@@ -194,28 +194,28 @@ describe('API endpoints', () => {
 
     // ─── Artifacts ───
 
-    describe('GET /api/projects/:name/artifacts', () => {
+    describe('GET /projects/:name/artifacts', () => {
         it('should list artifacts for active context', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             // Must begin iteration via API to initialize workflow state
-            await app.request('/api/projects/my-app/iterations', {
+            await app.request('/projects/my-app/iterations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
             });
 
-            const res = await app.request('/api/projects/my-app/artifacts');
+            const res = await app.request('/projects/my-app/artifacts');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.artifacts).toBeDefined();
         });
     });
 
-    describe('GET /api/projects/:name/artifacts/:id', () => {
+    describe('GET /projects/:name/artifacts/:id', () => {
         it('should read a written artifact', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             // Start iteration via API to init workflow state
-            await app.request('/api/projects/my-app/iterations', {
+            await app.request('/projects/my-app/iterations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
@@ -231,7 +231,7 @@ describe('API endpoints', () => {
             await writeFile(join(artifactDir, 'user-stories.md'), userStoriesContent, 'utf-8');
 
             // Read it back via API
-            const res = await app.request('/api/projects/my-app/artifacts/user-stories');
+            const res = await app.request('/projects/my-app/artifacts/user-stories');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.artifactId).toBe('user-stories');
@@ -239,18 +239,18 @@ describe('API endpoints', () => {
         });
 
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/artifacts/prd');
+            const res = await app.request('/projects/nonexistent/artifacts/prd');
             expect(res.status).toBe(404);
         });
     });
 
-    // POST /api/projects/:name/artifacts/:id — removed (agents write directly to filesystem)
+    // POST /projects/:name/artifacts/:id — removed (agents write directly to filesystem)
 
-    describe('POST /api/projects/:name/artifacts/:id/approve', () => {
+    describe('POST /projects/:name/artifacts/:id/approve', () => {
         it('should approve an artifact pending review', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             // Start iteration via API
-            await app.request('/api/projects/my-app/iterations', {
+            await app.request('/projects/my-app/iterations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
@@ -270,7 +270,7 @@ describe('API endpoints', () => {
             await submitForReview('my-app', 1, 'prototype', join(tempDir, 'my-app', 'iter-1'));
 
             // Approve it
-            const res = await app.request('/api/projects/my-app/artifacts/prototype/approve', {
+            const res = await app.request('/projects/my-app/artifacts/prototype/approve', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ approved: true, comment: 'Looks good' }),
@@ -286,7 +286,7 @@ describe('API endpoints', () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             await startIteration('my-app');
 
-            const res = await app.request('/api/projects/my-app/artifacts/prototype/approve', {
+            const res = await app.request('/projects/my-app/artifacts/prototype/approve', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
@@ -299,12 +299,12 @@ describe('API endpoints', () => {
 
     // ─── Reviews ───
 
-    describe('GET /api/projects/:name/reviews', () => {
+    describe('GET /projects/:name/reviews', () => {
         it('should return pending reviews', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             await startIteration('my-app');
 
-            const res = await app.request('/api/projects/my-app/reviews');
+            const res = await app.request('/projects/my-app/reviews');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.pending).toBeDefined();
@@ -313,12 +313,12 @@ describe('API endpoints', () => {
 
     // ─── Issues ───
 
-    describe('POST /api/projects/:name/issues', () => {
+    describe('POST /projects/:name/issues', () => {
         it('should create an issue', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             await startIteration('my-app');
 
-            const res = await app.request('/api/projects/my-app/issues', {
+            const res = await app.request('/projects/my-app/issues', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -334,7 +334,7 @@ describe('API endpoints', () => {
         });
 
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/issues', {
+            const res = await app.request('/projects/nonexistent/issues', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -350,7 +350,7 @@ describe('API endpoints', () => {
         it('should return 400 when required fields missing', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
 
-            const res = await app.request('/api/projects/my-app/issues', {
+            const res = await app.request('/projects/my-app/issues', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title: 'Test' }),
@@ -359,29 +359,29 @@ describe('API endpoints', () => {
         });
     });
 
-    describe('GET /api/projects/:name/issues', () => {
+    describe('GET /projects/:name/issues', () => {
         it('should list issues', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
 
-            const res = await app.request('/api/projects/my-app/issues');
+            const res = await app.request('/projects/my-app/issues');
             expect(res.status).toBe(200);
             const body = await res.json();
             expect(body.issues).toBeDefined();
         });
 
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/issues');
+            const res = await app.request('/projects/nonexistent/issues');
             expect(res.status).toBe(404);
         });
     });
 
-    describe('PATCH /api/projects/:name/issues/:id', () => {
+    describe('PATCH /projects/:name/issues/:id', () => {
         it('should update an existing issue', async () => {
             await registerProject('my-app', join(tempDir, 'src'), 'dev');
             await startIteration('my-app');
 
             // Create an issue first
-            const createRes = await app.request('/api/projects/my-app/issues', {
+            const createRes = await app.request('/projects/my-app/issues', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -396,7 +396,7 @@ describe('API endpoints', () => {
             const issueId = created.id;
 
             // Update it
-            const res = await app.request(`/api/projects/my-app/issues/${issueId}`, {
+            const res = await app.request(`/projects/my-app/issues/${issueId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'closed' }),
@@ -407,7 +407,7 @@ describe('API endpoints', () => {
         });
 
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/issues/some-id', {
+            const res = await app.request('/projects/nonexistent/issues/some-id', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'closed' }),
@@ -420,7 +420,7 @@ describe('API endpoints', () => {
 
     describe('POST /connect', () => {
         it('should return 501 not implemented', async () => {
-            const res = await app.request('/api/connect', {
+            const res = await app.request('/connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',
@@ -429,9 +429,9 @@ describe('API endpoints', () => {
         });
     });
 
-    describe('GET /api/projects/:name/artifacts/:id/schema', () => {
+    describe('GET /projects/:name/artifacts/:id/schema', () => {
         it('should return 404 for unknown project', async () => {
-            const res = await app.request('/api/projects/nonexistent/artifacts/prd/schema');
+            const res = await app.request('/projects/nonexistent/artifacts/prd/schema');
             expect(res.status).toBe(404);
         });
     });

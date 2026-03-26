@@ -2,7 +2,7 @@
  * CLI command: harmonia setup
  *
  * Registers a project in the Harmonia registry and creates the project data directory.
- * In the new architecture (HTTP API-based), this is the CLI equivalent of POST /api/projects.
+ * In the new architecture (HTTP API-based), this is the CLI equivalent of POST /projects.
  *
  * Usage:
  *   harmonia setup <project_name> [options]

@@ -34,7 +34,7 @@ Base URL: `http://127.0.0.1:4600`
 Check the project status to understand what the workflow expects next:
 
 ```bash
-curl http://127.0.0.1:4600/api/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project}/status
 ```
 
 The `nextAction` field in the response tells you exactly what to do:
@@ -55,22 +55,22 @@ If you're unsure what to do at any point, check status again — `nextAction` is
 
 ## Quick task reference
 
-| I need to...               | API call                                              |
-| -------------------------- | ----------------------------------------------------- |
-| Register a new project     | `POST /api/projects`                                  |
-| Check workflow progress    | `GET /api/projects/{project}/status`                  |
-| Read an artifact           | `GET /api/projects/{project}/artifacts/{id}`          |
-| List all artifacts         | `GET /api/projects/{project}/artifacts`               |
-| Get writing guidance       | `GET /api/projects/{project}/artifacts/{id}/schema`   |
-| Approve/reject an artifact | `POST /api/projects/{project}/artifacts/{id}/approve` |
-| See pending reviews        | `GET /api/projects/{project}/reviews`                 |
-| Create an issue            | `POST /api/projects/{project}/issues`                 |
-| List/filter issues         | `GET /api/projects/{project}/issues`                  |
-| Update an issue            | `PATCH /api/projects/{project}/issues/{id}`           |
-| Start a new iteration      | `POST /api/projects/{project}/iterations`             |
-| Start a hotfix patch       | `POST /api/projects/{project}/patches`                |
-| Register agent connection  | `POST /api/connect`                                   |
-| Disconnect agent           | `DELETE /api/connect/{key}?project_name={project}`    |
+| I need to...               | API call                                          |
+| -------------------------- | ------------------------------------------------- |
+| Register a new project     | `POST /projects`                                  |
+| Check workflow progress    | `GET /projects/{project}/status`                  |
+| Read an artifact           | `GET /projects/{project}/artifacts/{id}`          |
+| List all artifacts         | `GET /projects/{project}/artifacts`               |
+| Get writing guidance       | `GET /projects/{project}/artifacts/{id}/schema`   |
+| Approve/reject an artifact | `POST /projects/{project}/artifacts/{id}/approve` |
+| See pending reviews        | `GET /projects/{project}/reviews`                 |
+| Create an issue            | `POST /projects/{project}/issues`                 |
+| List/filter issues         | `GET /projects/{project}/issues`                  |
+| Update an issue            | `PATCH /projects/{project}/issues/{id}`           |
+| Start a new iteration      | `POST /projects/{project}/iterations`             |
+| Start a hotfix patch       | `POST /projects/{project}/patches`                |
+| Register agent connection  | `POST /connect`                                   |
+| Disconnect agent           | `DELETE /connect/{key}?project_name={project}`    |
 
 See `{baseDir}/references/api-reference.md` for full request/response details when you need exact parameter names, body formats, or status codes.
 
@@ -80,7 +80,7 @@ Artifacts are written directly to the filesystem by you, not uploaded via API. H
 
 ### Workflow
 
-1. **Get schema first** — `GET /api/projects/{project}/artifacts/{id}/schema` returns `guidance` (writing instructions), plus `sections` (for Markdown) or `jsonFields` (for JSON) defining the required structure.
+1. **Get schema first** — `GET /projects/{project}/artifacts/{id}/schema` returns `guidance` (writing instructions), plus `sections` (for Markdown) or `jsonFields` (for JSON) defining the required structure.
 2. **Write the file** to the path provided in your dispatch prompt (the `## Output Paths` section lists the full absolute path for each artifact you need to produce). Do not try to construct paths yourself.
 3. **Harmonia validates automatically** — if validation fails, you'll receive an error describing what's wrong. Fix and rewrite.
 
@@ -92,8 +92,8 @@ Some artifacts have `steps` — you write intermediate files for each step befor
 
 Artifacts marked with `review: true` block the workflow until approved. The approval flow:
 
-1. Check pending reviews: `GET /api/projects/{project}/reviews`
-2. Submit decision: `POST /api/projects/{project}/artifacts/{id}/approve` with `{"approved": true/false, "comment": "..."}`
+1. Check pending reviews: `GET /projects/{project}/reviews`
+2. Submit decision: `POST /projects/{project}/artifacts/{id}/approve` with `{"approved": true/false, "comment": "..."}`
 
 A rejected artifact means the author needs to revise and rewrite it.
 
@@ -105,4 +105,4 @@ A rejected artifact means the author needs to revise and rewrite it.
 - **Schema is your writing contract.** If you skip the schema query and write an artifact without following the required structure, validation will fail and you'll have to redo the work.
 - **Approval blocks are real.** A `review: true` artifact that isn't approved will prevent the entire workflow from advancing past its gate. Don't wait silently — prompt the user.
 - **Issue `resolvedBy` format matters.** When updating an issue to resolved status, provide `resolved_by_type` and `resolved_by_number` (not `resolvedBy` as a plain string). See `{baseDir}/references/api-reference.md` for the exact format.
-- **Connect ≠ dispatch.** Registering an agent via `/api/connect` makes it available for notifications but does not start a task. Tasks are dispatched separately by Harmonia.
+- **Connect ≠ dispatch.** Registering an agent via `/connect` makes it available for notifications but does not start a task. Tasks are dispatched separately by Harmonia.
