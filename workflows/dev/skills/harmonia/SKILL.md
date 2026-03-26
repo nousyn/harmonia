@@ -1,14 +1,17 @@
 ---
 name: harmonia
 description: >
-  Interact with the Harmonia orchestrator through its HTTP API.
-  TRIGGER when: the task involves checking workflow or project status,
-  reading/writing artifacts, handling approvals or reviews, managing issues,
-  controlling iterations or patches, or connecting agents — even if the user
-  simply says "check progress", "what's next", or "submit for review" without
-  mentioning Harmonia by name.
-  DO NOT TRIGGER for general coding, file editing, or git operations that
-  don't involve the Harmonia workflow.
+  Interact with the Harmonia orchestrator during software development workflows.
+  TRIGGER when: initializing a new project into Harmonia, checking what the
+  next development phase is (requirements, design, coding, testing), reading
+  or writing workflow artifacts (PRD, tech-design, task-breakdown, test-plan,
+  etc.), submitting artifacts for review, handling approvals, reporting or
+  tracking issues, starting new iterations or hotfix patches — even if the
+  user simply says "start a new project", "what's next", "check progress",
+  or "submit for review" without mentioning Harmonia.
+  DO NOT TRIGGER when: the task is unrelated to software development workflows,
+  or the user explicitly asks to skip Harmonia (e.g. "just do it directly",
+  "skip the workflow").
 metadata:
   author: cc_cat
   version: '2.0.0'
