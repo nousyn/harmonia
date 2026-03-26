@@ -90,6 +90,23 @@ Artifacts marked with `review: true` block the workflow until approved. The appr
 
 A rejected artifact means the author needs to revise and rewrite it.
 
+## Agent connection
+
+Before participating in a workflow, register yourself with Harmonia so it knows you're available:
+
+```bash
+curl -X POST http://127.0.0.1:4600/connect \
+  -H "Content-Type: application/json" \
+  -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
+```
+
+- `agent` — your agent type: `opencode`, `claude-code`, `openclaw`, or `codex`
+- `role` — your workflow role (e.g. `coordinator`, `architect`, `developer`, `tester`). Defaults to agent type if omitted.
+
+Connecting lets Harmonia send you notifications (e.g. when an artifact needs review or a task fails). It does **not** start any task — tasks are dispatched separately by Harmonia.
+
+Disconnect when done: `DELETE /connect/{key}?project_name={project}`
+
 ## Gotchas
 
 - **Always check status before acting.** Don't guess what the workflow needs — `nextAction` tells you. Skipping this step leads to wasted work on the wrong task.
