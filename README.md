@@ -112,7 +112,25 @@ harmonia --version                 显示版本号
 
 ### 使用流程
 
-服务启动后，以下三步必须**按顺序执行**，否则后续步骤会报错：
+#### 已有项目（日常操作）
+
+如果项目已注册且有活跃迭代，只需连接 agent 即可开始工作：
+
+```bash
+# Agent 连接 — 每次会话都需要
+curl -X POST http://127.0.0.1:4600/connect \
+  -H "Content-Type: application/json" \
+  -d '{"project_name": "my-app", "agent": "opencode", "role": "coordinator"}'
+
+# 查看当前状态
+curl http://127.0.0.1:4600/projects/my-app/status
+```
+
+`nextAction` 字段告诉你工作流当前期望的操作。
+
+#### 新项目（首次初始化）
+
+首次使用时需先注册项目并开始第一轮迭代，这两步必须**按顺序执行**：
 
 ```bash
 # 1. 注册项目 — 绑定项目目录和工作流
@@ -123,14 +141,9 @@ curl -X POST http://127.0.0.1:4600/projects \
 # 2. 开始第一轮迭代 — 初始化工作流状态，激活第一个节点
 curl -X POST http://127.0.0.1:4600/projects/my-app/iterations \
   -H "Content-Type: application/json" -d '{}'
-
-# 3. Agent 连接 — 注册 agent 到该项目，接收通知
-curl -X POST http://127.0.0.1:4600/connect \
-  -H "Content-Type: application/json" \
-  -d '{"project_name": "my-app", "agent": "opencode", "role": "coordinator"}'
 ```
 
-完成后通过 `GET /projects/my-app/status` 查看 `nextAction`，了解工作流当前期望的操作。
+然后按上方"已有项目"步骤连接 agent。
 
 ## HTTP API
 
