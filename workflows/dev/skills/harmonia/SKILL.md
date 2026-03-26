@@ -25,9 +25,9 @@ Base URL: `http://127.0.0.1:4600`
 
 ## Getting started
 
-- **New project?** → `{baseDir}/references/new-project.md`
-- **Existing project, new iteration?** → `{baseDir}/references/new-iteration.md`
-- **Existing project, hotfix?** → `{baseDir}/references/new-patch.md`
+- **New project?** → See `{baseDir}/references/new-project.md`
+- **Existing project, new iteration?** → See `{baseDir}/references/new-iteration.md`
+- **Existing project, hotfix?** → See `{baseDir}/references/new-patch.md`
 
 ## Check status
 
