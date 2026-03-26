@@ -1,5 +1,5 @@
 ---
-model: claude-sonnet-4
+model: github-copilot/claude-opus-4.6
 agent: opencode
 session: persistent
 parallel: true

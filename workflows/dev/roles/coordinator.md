@@ -1,7 +1,5 @@
 ---
-model: claude-sonnet-4
-agent: opencode
-session: none
+session: persistent
 parallel: false
 capabilities:
   - id: clarify-requirements
