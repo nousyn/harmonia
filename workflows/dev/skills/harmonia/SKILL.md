@@ -23,9 +23,33 @@ Harmonia is a standalone multi-agent orchestrator. You interact with it exclusiv
 
 Base URL: `http://127.0.0.1:4600`
 
-## Start here: check status
+## Getting started
 
-Always begin by checking the project status to understand what the workflow expects next:
+Three steps must happen in this order before the workflow can run. Skipping or reordering will cause errors.
+
+1. **Register the project** — tell Harmonia which project directory and workflow to use:
+   ```bash
+   curl -X POST http://127.0.0.1:4600/projects \
+     -H "Content-Type: application/json" \
+     -d '{"project_name": "{project}", "project_dir": "/path/to/project"}'
+   ```
+2. **Start the first iteration** — initializes workflow state and activates the first node:
+   ```bash
+   curl -X POST http://127.0.0.1:4600/projects/{project}/iterations \
+     -H "Content-Type: application/json" -d '{}'
+   ```
+3. **Connect as an agent** — register yourself so Harmonia can send you notifications:
+   ```bash
+   curl -X POST http://127.0.0.1:4600/connect \
+     -H "Content-Type: application/json" \
+     -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
+   ```
+
+If the project is already registered and has an active iteration, skip to step 3.
+
+## Check status
+
+Always check the project status to understand what the workflow expects next:
 
 ```bash
 curl http://127.0.0.1:4600/projects/{project}/status
@@ -51,6 +75,7 @@ If you're unsure what to do at any point, check status again — `nextAction` is
 
 | I need to...               | API call                                          |
 | -------------------------- | ------------------------------------------------- |
+| Register a new project     | `POST /projects`                                  |
 | Check workflow progress    | `GET /projects/{project}/status`                  |
 | Read an artifact           | `GET /projects/{project}/artifacts/{id}`          |
 | List all artifacts         | `GET /projects/{project}/artifacts`               |
@@ -92,20 +117,12 @@ A rejected artifact means the author needs to revise and rewrite it.
 
 ## Agent connection
 
-Before participating in a workflow, register yourself with Harmonia so it knows you're available:
-
-```bash
-curl -X POST http://127.0.0.1:4600/connect \
-  -H "Content-Type: application/json" \
-  -d '{"project_name": "{project}", "agent": "{agent_type}", "role": "{role}"}'
-```
+See step 3 in "Getting started" above for how to connect. Key points:
 
 - `agent` — your agent type: `opencode`, `claude-code`, `openclaw`, or `codex`
 - `role` — your workflow role (e.g. `coordinator`, `architect`, `developer`, `tester`). Defaults to agent type if omitted.
-
-Connecting lets Harmonia send you notifications (e.g. when an artifact needs review or a task fails). It does **not** start any task — tasks are dispatched separately by Harmonia.
-
-Disconnect when done: `DELETE /connect/{key}?project_name={project}`
+- Connecting lets Harmonia send you notifications (e.g. when an artifact needs review or a task fails). It does **not** start any task — tasks are dispatched separately by Harmonia.
+- Disconnect when done: `DELETE /connect/{key}?project_name={project}`
 
 ## Gotchas
 

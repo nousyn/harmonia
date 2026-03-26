@@ -110,6 +110,28 @@ harmonia --version                 显示版本号
 | `setup`      | `--dir <path>`, `--workflow <name>` | 项目目录和工作流名称                                     |
 | `unregister` | `--keep-data`                       | 仅移除注册表条目，保留项目数据目录。默认同时删除数据目录 |
 
+### 使用流程
+
+服务启动后，以下三步必须**按顺序执行**，否则后续步骤会报错：
+
+```bash
+# 1. 注册项目 — 绑定项目目录和工作流
+curl -X POST http://127.0.0.1:4600/projects \
+  -H "Content-Type: application/json" \
+  -d '{"project_name": "my-app", "project_dir": "/path/to/project"}'
+
+# 2. 开始第一轮迭代 — 初始化工作流状态，激活第一个节点
+curl -X POST http://127.0.0.1:4600/projects/my-app/iterations \
+  -H "Content-Type: application/json" -d '{}'
+
+# 3. Agent 连接 — 注册 agent 到该项目，接收通知
+curl -X POST http://127.0.0.1:4600/connect \
+  -H "Content-Type: application/json" \
+  -d '{"project_name": "my-app", "agent": "opencode", "role": "coordinator"}'
+```
+
+完成后通过 `GET /projects/my-app/status` 查看 `nextAction`，了解工作流当前期望的操作。
+
 ## HTTP API
 
 ### 项目管理
