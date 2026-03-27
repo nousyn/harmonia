@@ -1,61 +1,90 @@
 ---
 name: harmonia
 description: >
-  Interact with the Harmonia orchestrator during software development workflows.
-  TRIGGER when: initializing a new project into Harmonia, checking what the
-  next development phase is (requirements, design, coding, testing), reading
-  or writing workflow artifacts (PRD, tech-design, task-breakdown, test-plan,
-  etc.), submitting artifacts for review, handling approvals, reporting or
-  tracking issues, starting new iterations or hotfix patches — even if the
-  user simply says "start a new project", "what's next", "check progress",
-  or "submit for review" without mentioning Harmonia.
-  DO NOT TRIGGER when: the task is unrelated to software development workflows,
-  or the user explicitly asks to skip Harmonia (e.g. "just do it directly",
-  "skip the workflow").
+  Interact with Harmonia orchestrator during software development workflows.
+  Routes to scene-specific reference documents for detailed workflows.
 metadata:
   author: cc_cat
-  version: '2.0.0'
+  version: '1.0.0'
 ---
 
 # Harmonia Workflow Operations
 
-Harmonia is a standalone multi-agent orchestrator. You interact with it exclusively through HTTP API calls (`curl` with JSON). Harmonia coordinates the workflow; you execute the work.
+Harmonia is a standalone multi-agent orchestrator. You interact with it exclusively through HTTP API calls. Harmonia coordinates workflow; you execute work.
 
 Base URL: `http://127.0.0.1:4600`
 
-## Getting started
+## Purpose
 
-- **New project?** → See `{baseDir}/references/new-project.md`
-- **Existing project, new iteration?** → See `{baseDir}/references/new-iteration.md`
-- **Existing project, hotfix?** → See `{baseDir}/references/new-patch.md`
+This is the root routing skill. It directs you to scene-specific reference documents based on your current task context.
 
-## Check status
+**Core principle: Check status first, then follow the routed workflow.** The `nextAction` field tells you exactly what Harmonia expects next.
 
-Check the project status to understand what the workflow expects next:
+## Scene Routing Rules
 
-```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+Use these trigger keywords to determine which reference document to read:
+
+| Trigger Keywords                                                        | Scene    | Reference Document                             |
+| ----------------------------------------------------------------------- | -------- | ---------------------------------------------- |
+| "新建项目"、"启动项目"、"从零开始"、"init project"、"start new project" | 新项目   | See `{baseDir}/references/new-project.md`      |
+| "新迭代"、"下一轮"、"继续开发"、"start iteration"、"next iteration"     | 新迭代   | See `{baseDir}/references/new-iteration.md`    |
+| "热修复"、"修复 bug"、"紧急修复"、"hotfix"、"fix bug"                   | 热修复   | See `{baseDir}/references/new-patch.md`        |
+| "进度"、"状态"、"检查"、"check progress"、"status"                      | 查询状态 | See `{baseDir}/references/workflow-states.md`  |
+| "写产出"、"保存"、"提交"、"write artifact"、"save artifact"             | 产出写入 | See `{baseDir}/references/artifact-writing.md` |
+| "审批"、"批准"、"拒绝"、"approve"、"reject"                             | 审批     | See `{baseDir}/references/review-flow.md`      |
+
+**Ambiguity handling:**
+
+When trigger keywords are insufficient or context is unclear:
+
+1. Ask one short clarification question: "是新项目、新迭代、热修复，还是查询进度？"
+2. If no reply is provided, default to checking status.
+
+### Scene Transition Matrix
+
+After initial scene selection, use workflow state and user intent to determine the next scene:
+
+| Current Scene | Workflow State (nextAction) | User Intent | Next Scene       |
+| ------------- | --------------------------- | ----------- | ---------------- |
+| new-project   | `completed`                 | "继续"      | new-iteration    |
+| new-project   | `failed`                    | "修复"      | error-handling   |
+| new-iteration | `completed`                 | "下一轮"    | new-iteration    |
+| new-iteration | `completed`                 | "修复 bug"  | new-patch        |
+| new-iteration | `write_artifact`            | "写产出"    | artifact-writing |
+| new-iteration | `approve_artifact`          | "审批"      | review-flow      |
+| new-patch     | `completed`                 | "继续"      | new-iteration    |
+| new-patch     | `failed`                    | "重试"      | new-patch        |
+| Any scene     | `failed`                    | "查看错误"  | error-handling   |
+| Any scene     | User: "进度"                | —           | workflow-states  |
+
+**Transition rules:**
+
+1. **Status-first routing**: Always check `nextAction` before deciding on scene transition
+2. **User intent overrides**: If user explicitly states intent, follow their direction
+3. **State-driven defaults**: When intent unclear, use workflow state to determine logical next step
+4. **Error priority**: If `nextAction = failed`, always route to error-handling first
+
+## Quick Reference
+
+### nextAction State Machine
+
+For quick lookup, see `{baseDir}/references/workflow-states.md` for detailed state machine documentation.
+
+```
+nextAction.type    What it means         Your action
+───────────────────────────────────────────────────────────────
+dispatch          Task ready to assign   Wait for Harmonia to dispatch
+write_artifact    Artifact needed         Write it (see artifact-writing.md)
+approve_artifact  Artifact awaits review   Prompt user for approval decision
+evaluate_gate     Gate check in progress   No action needed, automatic
+wait              Task executing          Wait for completion
+completed         Workflow finished         Done
+failed            Workflow failed         Diagnose via status response
 ```
 
-The `nextAction` field in the response tells you exactly what to do:
+### Common API Calls
 
-```
-nextAction.type ──► What it means ──► Your action
-─────────────────────────────────────────────────
-dispatch         → Task ready to assign   → Wait for Harmonia to dispatch
-write_artifact   → Artifact needed        → Write it (see "Writing artifacts" below)
-approve_artifact → Artifact awaits review → Prompt user for approval decision
-evaluate_gate    → Gate check in progress → No action needed, automatic
-wait             → Task executing         → Wait for completion
-completed        → Workflow finished      → Done
-failed           → Workflow failed        → Diagnose via status response
-```
-
-If you're unsure what to do at any point, check status again — `nextAction` is always the source of truth.
-
-## Quick task reference
-
-| I need to...               | API call                                          |
+| Need to...                 | API call                                          |
 | -------------------------- | ------------------------------------------------- |
 | Register a new project     | `POST /projects`                                  |
 | Check workflow progress    | `GET /projects/{project}/status`                  |
@@ -64,45 +93,48 @@ If you're unsure what to do at any point, check status again — `nextAction` is
 | Get writing guidance       | `GET /projects/{project}/artifacts/{id}/schema`   |
 | Approve/reject an artifact | `POST /projects/{project}/artifacts/{id}/approve` |
 | See pending reviews        | `GET /projects/{project}/reviews`                 |
-| Create an issue            | `POST /projects/{project}/issues`                 |
-| List/filter issues         | `GET /projects/{project}/issues`                  |
-| Update an issue            | `PATCH /projects/{project}/issues/{id}`           |
-| Start a new iteration      | `POST /projects/{project}/iterations`             |
-| Start a hotfix patch       | `POST /projects/{project}/patches`                |
-| Register agent connection  | `POST /connect`                                   |
-| Disconnect agent           | `DELETE /connect/{key}?project_name={project}`    |
+
+**API Reference**: See `{baseDir}/references/api-reference.md` for full request/response details.
+| Create an issue | `POST /projects/{project}/issues` |
+| List/filter issues | `GET /projects/{project}/issues` |
+| Update an issue | `PATCH /projects/{project}/issues/{id}` |
+| Start a new iteration | `POST /projects/{project}/iterations` |
+| Start a hotfix patch | `POST /projects/{project}/patches` |
+| Register agent connection | `POST /connect` |
+| Disconnect agent | `DELETE /connect/{key}?project_name={project}` |
 
 See `{baseDir}/references/api-reference.md` for full request/response details when you need exact parameter names, body formats, or status codes.
 
-## Writing artifacts
+## Output Format Schema
 
-Artifacts are written directly to the filesystem by you, not uploaded via API. Harmonia validates them after the fact.
+For artifact writing, always follow the schema returned by:
 
-### Workflow
+```bash
+curl http://127.0.0.1:4600/projects/{project}/artifacts/{id}/schema
+```
 
-1. **Get schema first** — `GET /projects/{project}/artifacts/{id}/schema` returns `guidance` (writing instructions), plus `sections` (for Markdown) or `jsonFields` (for JSON) defining the required structure.
-2. **Write the file** to the path provided in your dispatch prompt (the `## Output Paths` section lists the full absolute path for each artifact you need to produce). Do not try to construct paths yourself.
-3. **Harmonia validates automatically** — if validation fails, you'll receive an error describing what's wrong. Fix and rewrite.
+See `{baseDir}/references/output-formats.md` for complete schema definitions for each artifact type (PRD, tech-design, task-breakdown, etc.).
 
-### Stepped artifacts
+## Key Principles
 
-Some artifacts have `steps` — you write intermediate files for each step before producing the final artifact. The dispatch prompt provides paths for both step files and the final file.
+1. **Status is source of truth** — Always check status before acting. `nextAction` tells you exactly what to do.
+2. **Paths are provided** — The dispatch prompt's `## Output Paths` section gives you exact absolute paths. Use them directly.
+3. **Schema is contract** — Follow the schema structure. Validation failures will be reported by Harmonia.
+4. **Approval blocks are real** — A `review: true` artifact blocks workflow progress. Don't wait silently.
+5. **Refine cycle exists** — See `{baseDir}/references/iteration-cycle.md` for feedback loop handling.
 
-## Approvals
+## Error Handling
 
-Artifacts marked with `review: true` block the workflow until approved. The approval flow:
+When Harmonia returns an error, follow the degradation strategy:
 
-1. Check pending reviews: `GET /projects/{project}/reviews`
-2. Submit decision: `POST /projects/{project}/artifacts/{id}/approve` with `{"approved": true/false, "comment": "..."}`
+- L1: Retry with simplified parameters
+- L2: Retry with minimal parameters
+- L3: Report to user with actionable guidance
 
-A rejected artifact means the author needs to revise and rewrite it.
+See `{baseDir}/references/error-handling.md` for detailed error handling procedures.
 
-## Gotchas
+## Do NOT Trigger
 
-- **Always check status before acting.** Don't guess what the workflow needs — `nextAction` tells you. Skipping this step leads to wasted work on the wrong task.
-- **Don't construct artifact paths yourself.** The dispatch prompt's `## Output Paths` section gives you the exact absolute path for each artifact. Use those paths directly — the underlying directory structure (`dataDir`, iteration directories) is internal to Harmonia and not exposed via API.
-- **Artifacts are filesystem-first.** You write files; Harmonia reads them. There is no upload API. If you try to POST artifact content to Harmonia, it won't work.
-- **Schema is your writing contract.** If you skip the schema query and write an artifact without following the required structure, validation will fail and you'll have to redo the work.
-- **Approval blocks are real.** A `review: true` artifact that isn't approved will prevent the entire workflow from advancing past its gate. Don't wait silently — prompt the user.
-- **Issue `resolvedBy` format matters.** When updating an issue to resolved status, provide `resolved_by_type` and `resolved_by_number` (not `resolvedBy` as a plain string). See `{baseDir}/references/api-reference.md` for the exact format.
-- **Connect ≠ dispatch.** Registering an agent via `/connect` makes it available for notifications but does not start a task. Tasks are dispatched separately by Harmonia.
+- When task is unrelated to software development workflows
+- When user explicitly asks to skip Harmonia (e.g. "just do it directly", "skip workflow")
+- When task can be completed without Harmonia coordination
