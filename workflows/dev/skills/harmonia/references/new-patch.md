@@ -56,7 +56,7 @@ curl -X POST http://127.0.0.1:4600/projects/{project_name}/patches \
 
 ```json
 {
-  "project_name": "{project_name}",
+  "projectName": "{project_name}",
   "iteration": "patch-1",
   "type": "patch",
   "status": "active",
@@ -105,7 +105,7 @@ curl http://127.0.0.1:4600/projects/{project_name}/status?patch=1
 
 ```json
 {
-  "project_name": "{project_name}",
+  "projectName": "{project_name}",
   "workflow": "dev",
   "iteration": "patch-1",
   "type": "patch",
@@ -198,7 +198,7 @@ Hotfix approval process:
 | **Workflow**      | Direct path to fix                       | Complete requirements → design → coding → testing |
 | **Tracking**      | Often linked to `issue_id`               | Independent delivery                              |
 | **Entry point**   | `hotfix-coding` or `hotfix-testing` node | `collect-requirements` → ...                      |
-| **Context param** | `?context=patch-N`                       | `?context=iter-N`                                 |
+| **Context param** | `?patch=N`                               | `?iteration=N`                                    |
 
 ---
 

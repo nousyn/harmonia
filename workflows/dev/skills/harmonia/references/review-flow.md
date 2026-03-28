@@ -35,7 +35,7 @@ curl http://127.0.0.1:4600/projects/{project_name}/reviews
 
 ```json
 {
-  "project_name": "{project_name}",
+  "projectName": "{project_name}",
   "reviews": [
     {
       "artifactId": "prd",
