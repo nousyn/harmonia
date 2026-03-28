@@ -244,7 +244,7 @@ When Harmonia dispatches a task requiring artifact writing:
 1. **Query schema first**:
 
    ```bash
-   curl http://127.0.0.1:4600/projects/{project}/artifacts/{id}/schema
+   curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{id}/schema
    ```
 
    Response contains `guidance`, `sections` (for Markdown) or `jsonFields` (for JSON).

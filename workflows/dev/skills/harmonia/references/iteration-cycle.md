@@ -172,7 +172,7 @@ Round 4: Escalation (if needed)
 1. **Via status response** — Check artifact-specific iteration count:
 
    ```bash
-   curl http://127.0.0.1:4600/projects/{project}/status
+   curl http://127.0.0.1:4600/projects/{project_name}/status
    ```
 
    Look for `workflowState.artifacts.{artifactId}.refinementCount`:
@@ -194,7 +194,7 @@ Round 4: Escalation (if needed)
 2. **Via artifact schema query** — Schema includes count constraints:
 
    ```bash
-   curl http://127.0.0.1:4600/projects/{project}/artifacts/{id}/schema
+   curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{id}/schema
    ```
 
    Schema response shows:
@@ -278,7 +278,7 @@ If after 3 refinement rounds, artifact is still not approved:
 
 1. Submit approval to Harmonia:
    ```bash
-   curl -X POST /projects/{project}/artifacts/{id}/approve \
+   curl -X POST /projects/{project_name}/artifacts/{id}/approve \
      -d '{"approved": true, "comment": "Approved."}'
    ```
 2. Check status for new `nextAction`
@@ -292,7 +292,7 @@ If after 3 refinement rounds, artifact is still not approved:
 
 1. Submit rejection to Harmonia:
    ```bash
-   curl -X POST /projects/{project}/artifacts/{id}/approve \
+   curl -X POST /projects/{project_name}/artifacts/{id}/approve \
      -d '{"approved": false, "comment": "Needs revisions."}'
    ```
 2. Next `nextAction` will be `write_artifact` for same artifact

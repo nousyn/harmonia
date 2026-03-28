@@ -26,7 +26,7 @@ Use this protocol when `nextAction.type = "write_artifact"`.
 First, query the artifact schema to understand the required structure.
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}/schema
+curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/schema
 ```
 
 ### Request Parameters
@@ -213,7 +213,7 @@ Proceed to Step 5 (when validation result received).
 After waiting a moment, check status for validation result.
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project_name}/status
 ```
 
 ### Check for Errors
@@ -257,7 +257,7 @@ echo "{corrected content}" > /absolute/path/to/artifact.md
 After rewriting, check status again:
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project_name}/status
 ```
 
 Follow the new `nextAction` (should be `write_artifact` again or proceed).
@@ -266,56 +266,108 @@ Follow the new `nextAction` (should be `write_artifact` again or proceed).
 
 ## Stepped Artifacts
 
-Some artifacts have multiple steps (draft, analysis, final).
+Some artifacts (e.g., `prd`, `tech-design`, `task-breakdown`) have multiple sequential steps. Each step must be completed in order before moving to the next.
 
-### Stepped Artifact Schema
+### How to Know What Step to Do
 
-When querying schema for a stepped artifact, include the `step` parameter:
-
-```bash
-# Query schema for a specific step
-curl http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}/schema?step=draft
-```
-
-### Schema Response for Steps
+Call `GET /projects/{project_name}/status`. The response includes:
 
 ```json
 {
-  "artifactId": "tech-design",
-  "stepId": "draft",
-  "format": "md",
-  "guidance": "技术分析阶段：收集信息、分析现有代码、识别技术债务。",
-  "sections": [
-    {
-      "heading": "## 技术分析",
-      "required": true,
-      "aliases": ["## Technical Analysis"]
-    }
-  ]
+  "stepGuidance": {
+    "artifactId": "prd",
+    "artifactName": "PRD",
+    "completedSteps": [],
+    "totalSteps": 3,
+    "nextStep": {
+      "id": "requirements",
+      "name": "Requirements",
+      "format": "json",
+      "description": "将需求整理为结构化 JSON",
+      "outputPath": "/path/to/prd.requirements.json"
+    },
+    "progressText": "[ ] Requirements → [ ] Completeness Check → [ ] Draft",
+    "finalPath": "/path/to/prd.md",
+    "finalized": false
+  },
+  "stepGuidances": [{ "artifactId": "prd", "...": "..." }]
 }
 ```
 
-### Writing Each Step
+- **`stepGuidance`** — primary stepped artifact (active node's artifact)
+- **`stepGuidances[]`** — all in-progress stepped artifacts (useful when multiple are active in parallel)
 
-For stepped artifacts, write each intermediate step before the final artifact:
+Use `stepGuidance.nextStep` to determine which step to write next.
+
+### Step Workflow
+
+For each step:
+
+#### 1. Query schema for the step
 
 ```bash
-# Step 1: Draft
-echo "## 技术分析
-
-{analysis content}
-" > /absolute/path/to/project/data/iter-1/tech-design.draft.md
-
-# Step 2: Final (after analysis)
-echo "## 架构概述
-## 技术选型
-{final content}
-" > /absolute/path/to/project/data/iter-1/tech-design.md
+curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/schema?step={step_id}
 ```
 
-### Final Artifact
+The `step_id` comes from `stepGuidance.nextStep.id`.
 
-After all steps complete, the final artifact is what Harmonia tracks for workflow progression.
+#### 2. Write the step file
+
+Write to the path from `stepGuidance.nextStep.outputPath`:
+
+```bash
+# Example: write prd.requirements.json
+echo '{"features": [...], "constraints": [...]}' > /path/to/prd.requirements.json
+```
+
+#### 3. Notify Harmonia the step is complete
+
+```bash
+curl -X POST http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/steps/{step_id}/complete \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+- `artifact_id` = `stepGuidance.artifactId`
+- `step_id` = `stepGuidance.nextStep.id`
+- `path` is optional (auto-inferred from artifact definition)
+
+**Response** tells you the next step:
+
+```json
+{
+  "success": true,
+  "progress": {
+    "completedSteps": ["requirements"],
+    "totalSteps": 3,
+    "nextStep": { "id": "completeness-check", "name": "Completeness Check", "format": "json" }
+  }
+}
+```
+
+Repeat steps 1-3 for each subsequent step.
+
+#### 4. Write the final artifact
+
+After all steps are completed, write the final artifact file:
+
+```bash
+echo "# PRD\n\n## 项目概述\n..." > /path/to/prd.md
+```
+
+### Recovery After Disconnect
+
+If the agent disconnects and reconnects:
+
+1. Call `GET /projects/{project_name}/status`
+2. Harmonia **automatically detects** completed step files on disk and syncs the state
+3. `stepGuidance` reflects the current progress — the agent knows exactly where to continue
+
+No manual recovery needed. The `progressText` shows a clear status like:
+
+```
+[✓] Requirements → [✓] Completeness Check → [→] Draft
+```
 
 ---
 

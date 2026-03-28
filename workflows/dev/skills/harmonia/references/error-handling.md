@@ -120,7 +120,7 @@ Complete error handling and degradation strategies for Harmonia workflows.
 
 **Recovery**:
 
-1. Check agent status: `GET /projects/{project}/status`
+1. Check agent status: `GET /projects/{project_name}/status`
 2. Identify failure cause from error message
 3. Retry dispatch or adjust approach
 4. If persistent, try different agent
@@ -351,7 +351,7 @@ When encountering unexpected errors:
 
 1. **Check status**:
    ```bash
-   curl http://127.0.0.1:4600/projects/{project}/status
+   curl http://127.0.0.1:4600/projects/{project_name}/status
    ```
 2. **Analyze nextAction**: What does Harmonia expect?
 3. **Review workflow state**: Which nodes are failed/pending?

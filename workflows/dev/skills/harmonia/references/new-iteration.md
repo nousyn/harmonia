@@ -55,12 +55,12 @@ curl -X POST http://127.0.0.1:4600/projects/{project_name}/iterations \
 
 ```json
 {
-  "project_name": "{project_name}",
   "iteration": 2,
-  "type": "iteration",
-  "status": "active",
-  "created_at": "2026-03-27T12:00:00Z",
-  "workflow": "dev"
+  "projectName": "{project_name}",
+  "projectDir": "/path/to/project",
+  "workflowName": "dev",
+  "availableRoles": ["coordinator", "architect", "developer", "reviewer"],
+  "nextAction": "Workflow started. Active node: collect-requirements (task, coordinator)"
 }
 ```
 
@@ -68,8 +68,7 @@ curl -X POST http://127.0.0.1:4600/projects/{project_name}/iterations \
 
 ```json
 {
-  "error": "IterationAlreadyActive",
-  "message": "Iteration {iteration_number} is still active. Use force=true to override."
+  "error": "迭代 1 仍在进行中。使用 force=true 强制开始新迭代。"
 }
 ```
 
@@ -101,36 +100,58 @@ curl http://127.0.0.1:4600/projects/{project_name}/status
 
 ```json
 {
-  "project_name": "{project_name}",
+  "projectName": "my-app",
+  "projectDir": "/path/to/project",
   "workflow": "dev",
-  "iteration": 2,
-  "type": "iteration",
-  "activeNodeId": "node-id-here",
-  "nextAction": {
-    "type": "dispatch",
-    "nodeId": "node-id-here",
-    "role": "role-name",
-    "instructions": "What to do next",
-    "rolePrompt": "[Full prompt assembled by Harmonia]"
+  "activeContext": "iter-2",
+  "contextType": "iteration",
+  "contextNumber": 2,
+  "currentIteration": 2,
+  "totalIterations": 2,
+  "currentPatch": 0,
+  "totalPatches": 0,
+  "activeNodeId": "collect-requirements",
+  "createdAt": "2026-03-27T12:00:00Z",
+  "updatedAt": "2026-03-28T08:30:00Z",
+  "treeLines": ["● collect-requirements (task, coordinator) — active", "  ○ write-prd (task, coordinator) — pending"],
+  "artifactIds": [],
+  "artifactDefs": { "prd": { "name": "PRD", "format": "md", "review": true } },
+  "reviews": {},
+  "stepsData": {},
+  "dispatches": [],
+  "sessions": [],
+  "issues": [],
+  "nextAction": "Active: collect-requirements (task, coordinator). Next: dispatch to coordinator role.",
+  "stepGuidance": {
+    "artifactId": "prd",
+    "artifactName": "PRD",
+    "completedSteps": [],
+    "totalSteps": 3,
+    "nextStep": {
+      "id": "requirements",
+      "name": "Requirements",
+      "format": "json",
+      "description": "将需求整理为结构化 JSON",
+      "outputPath": "/path/to/prd.requirements.json"
+    },
+    "progressText": "[ ] Requirements → [ ] Completeness Check → [ ] Draft",
+    "finalPath": "/path/to/prd.md",
+    "finalized": false
   },
-  "workflowState": {
-    "nodes": {
-      "node-id": {
-        "id": "node-id",
-        "status": "active",
-        "retryCount": 0
-      }
-    }
-  },
-  "connectedAgents": {
-    "coordinator": {
-      "agentType": "claude-code",
-      "sessionId": "...",
-      "connectedAt": 1234567890
-    }
-  }
+  "stepGuidances": [{ "artifactId": "prd", "completedSteps": [], "totalSteps": 3, "nextStep": { "...": "..." } }]
 }
 ```
+
+### Interpreting stepGuidance
+
+When `stepGuidance` is present, the agent should follow the stepped artifact workflow:
+
+1. **`nextStep`** — the step to write next (null if all done)
+2. **`progressText`** — quick status summary (e.g. `[✓] Analysis → [→] Research → [ ] Draft`)
+3. **`completedSteps[]`** — previously done steps with file paths (agent can read these for context)
+4. **`stepGuidances[]`** — when multiple stepped artifacts are in progress (e.g., parallel node)
+
+See [artifact-writing.md](artifact-writing.md#stepped-artifacts) for the full stepped artifact workflow.
 
 ### Interpreting nextAction
 
@@ -175,14 +196,26 @@ Follow the workflow by executing the active task.
 3. **Write to provided path** — Use the exact path from the dispatch prompt
 4. **Await validation** — Harmonia will validate automatically
 
-**Stepped Artifacts**: Some artifacts (like tech-design) have intermediate steps (draft, analysis, final). The dispatch prompt provides paths for both step files and final file. For stepped artifacts:
+**Stepped Artifacts**: Some artifacts (like `prd`, `tech-design`) have intermediate steps. The status response's `stepGuidance` field tells the agent which step to do next:
 
-1. **Query schema for each step**:
+1. **Check `stepGuidance`** in the status response:
+   - `nextStep.id` → which step to write
+   - `nextStep.outputPath` → where to write it
+   - `progressText` → current progress summary
+2. **Query schema for the step**:
    ```bash
    curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/schema?step={step_id}
    ```
-2. **Write each intermediate step** before the final artifact
-3. **Final artifact** — Harmonia tracks the final artifact for workflow progression
+3. **Write the step file** to the path from `stepGuidance.nextStep.outputPath`
+4. **Notify completion**:
+   ```bash
+   curl -X POST http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/steps/{step_id}/complete \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```
+5. **Repeat** for each step until all done, then write the final artifact
+
+> **Recovery**: If the agent disconnects, Harmonia auto-detects completed step files on reconnect. Just call `GET /status` and follow the updated `stepGuidance`.
 
 See [artifact-writing.md](artifact-writing.md) for detailed writing protocol.
 

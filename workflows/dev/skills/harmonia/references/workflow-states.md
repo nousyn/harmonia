@@ -156,7 +156,7 @@ Harmonia workflow is a state machine driven by `nextAction` field. The current s
 ```
 1. Agent checks status → nextAction = "write_artifact"
 2. Agent queries artifact schema:
-   curl /projects/{project}/artifacts/{id}/schema
+   curl /projects/{project_name}/artifacts/{id}/schema
 3. Agent writes artifact to provided path
 4. Harmonia validates automatically
 5. Status updates with new nextAction
@@ -167,11 +167,11 @@ Harmonia workflow is a state machine driven by `nextAction` field. The current s
 ```
 1. Agent checks status → nextAction = "approve_artifact"
 2. Agent checks pending reviews:
-   curl /projects/{project}/reviews
+   curl /projects/{project_name}/reviews
 3. Agent prompts user for decision
 4. User decides (approve/reject)
 5. Agent submits decision:
-   curl -X POST /projects/{project}/artifacts/{id}/approve \
+   curl -X POST /projects/{project_name}/artifacts/{id}/approve \
      -d '{"approved": true, "comment": "..."}'
 6. Status updates with new nextAction
 ```
@@ -195,7 +195,7 @@ Harmonia workflow is a state machine driven by `nextAction` field. The current s
 Before any action, always verify current status:
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project_name}/status
 ```
 
 The `nextAction` field is the **source of truth**.
@@ -214,18 +214,18 @@ Harmonia supports context parameters for filtering workflow scope:
 1. **Querying artifacts within iteration**: Include context to get iteration-specific artifacts
 
    ```bash
-   curl /projects/{project}/artifacts?context=iter-1
+   curl /projects/{project_name}/artifacts?context=iter-1
    ```
 
 2. **Checking iteration-specific status**: Focus on one iteration's progress
 
    ```bash
-   curl /projects/{project}/status?context=iter-1
+   curl /projects/{project_name}/status?context=iter-1
    ```
 
 3. **Hotfix isolation**: Work on specific patch without affecting main iteration
    ```bash
-   curl /projects/{project}/status?context=patch-1
+   curl /projects/{project_name}/status?context=patch-1
    ```
 
 **Behavior without context**: Returns the current active iteration or most recent patch.
@@ -273,7 +273,7 @@ When `nextAction.parallelDispatch` is present, multiple tasks execute simultaneo
 **Tracking parallel progress:**
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project_name}/status
 ```
 
 Look for `parallelTasks` section:
@@ -348,7 +348,7 @@ When encountering `evaluate_gate`:
 
 When workflow seems stuck:
 
-1. Check status: `GET /projects/{project}/status`
+1. Check status: `GET /projects/{project_name}/status`
 2. Look at `activeNodeId`: Which task is stuck?
 3. Look at `nodes`: Which nodes are failed/pending?
 4. Check `error` fields: Error messages explain why

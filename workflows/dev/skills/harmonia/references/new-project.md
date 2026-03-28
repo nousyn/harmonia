@@ -214,18 +214,18 @@ Tasks are dispatched separately by Harmonia based on workflow state.
 
 After connecting agents, verify connections are working:
 
-| Checklist Item               | Verification Method              | Expected Result                            |
-| ---------------------------- | -------------------------------- | ------------------------------------------ |
-| Coordinator connected        | `GET /projects/{project}/status` | `connectedAgents.coordinator` present      |
-| All required roles connected | Check `connectedAgents` object   | All workflow roles have entries            |
-| Agent type correct           | Check `agentType` in status      | Expected agent type (opencode/claude-code) |
-| Connection timestamp valid   | Check `connectedAt` field        | Recent timestamp (within session)          |
-| Agent responsive             | Try dispatch if available        | Agent receives and processes task          |
+| Checklist Item               | Verification Method                   | Expected Result                            |
+| ---------------------------- | ------------------------------------- | ------------------------------------------ |
+| Coordinator connected        | `GET /projects/{project_name}/status` | `connectedAgents.coordinator` present      |
+| All required roles connected | Check `connectedAgents` object        | All workflow roles have entries            |
+| Agent type correct           | Check `agentType` in status           | Expected agent type (opencode/claude-code) |
+| Connection timestamp valid   | Check `connectedAt` field             | Recent timestamp (within session)          |
+| Agent responsive             | Try dispatch if available             | Agent receives and processes task          |
 
 **Verification command:**
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project_name}/status
 ```
 
 Look for `connectedAgents` section:
@@ -319,12 +319,12 @@ At each stage, check status and follow the indicated `nextAction`.
 
 ### Common Issues
 
-| Issue                     | Symptom                            | Solution                                                      |
-| ------------------------- | ---------------------------------- | ------------------------------------------------------------- |
-| Project not found         | 404 response                       | Check project_name spelling, register project first           |
-| Agent not connected       | Push notifications missing         | Verify agent connection with `GET /projects/{project}/status` |
-| Workflow stuck            | `nextAction = "wait" for long time | Check agent status, verify agent is executing task            |
-| Artifact validation fails | `error` in status                  | Fix schema violations and rewrite artifact                    |
+| Issue                     | Symptom                            | Solution                                                           |
+| ------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
+| Project not found         | 404 response                       | Check project_name spelling, register project first                |
+| Agent not connected       | Push notifications missing         | Verify agent connection with `GET /projects/{project_name}/status` |
+| Workflow stuck            | `nextAction = "wait" for long time | Check agent status, verify agent is executing task                 |
+| Artifact validation fails | `error` in status                  | Fix schema violations and rewrite artifact                         |
 
 ### Status Check Pattern
 

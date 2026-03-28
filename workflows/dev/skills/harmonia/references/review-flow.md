@@ -28,7 +28,7 @@ This means an artifact is awaiting user approval before workflow can proceed.
 Query which artifacts are awaiting review.
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/reviews
+curl http://127.0.0.1:4600/projects/{project_name}/reviews
 ```
 
 ### Response
@@ -70,7 +70,7 @@ Read the artifact content and present it for user review.
 ### Read Artifact
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}
+curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}
 ```
 
 ### Response
@@ -166,7 +166,7 @@ Submit the approval decision to Harmonia.
 ### Approve (Accepted)
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}/approve \
+curl -X POST http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/approve \
   -H "Content-Type: application/json" \
   -d '{
     "approved": true,
@@ -177,7 +177,7 @@ curl -X POST http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}/ap
 ### Reject (Requires Revision)
 
 ```bash
-curl -X POST http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}/approve \
+curl -X POST http://127.0.0.1:4600/projects/{project_name}/artifacts/{artifact_id}/approve \
   -H "Content-Type: application/json" \
   -d '{
     "approved": false,
@@ -219,7 +219,7 @@ curl -X POST http://127.0.0.1:4600/projects/{project}/artifacts/{artifact_id}/ap
 After submitting decision, **check status**:
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project}/status
+curl http://127.0.0.1:4600/projects/{project_name}/status
 ```
 
 - If approved → `nextAction` should show next stage

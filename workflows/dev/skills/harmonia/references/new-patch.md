@@ -172,17 +172,17 @@ Follow the hotfix workflow by executing the active task.
 
 Hotfix approval process:
 
-1. **Check pending reviews**: `GET /projects/{project}/reviews?context=patch-1`
+1. **Check pending reviews**: `GET /projects/{project_name}/reviews?context=patch-1`
 2. **Prompt user**: Present the fix for review
 3. **Submit decision**:
    ```bash
-   curl -X POST /projects/{project}/artifacts/{artifact_id}/approve \
+   curl -X POST /projects/{project_name}/artifacts/{artifact_id}/approve \
      -H "Content-Type: application/json" \
      -d '{"approved": true, "comment": "Bug fixed and tested."}'
    ```
 4. **Link to issue** (if `issue_id` was provided): Update issue as resolved:
    ```bash
-   curl -X PATCH /projects/{project}/issues/{issue_id} \
+   curl -X PATCH /projects/{project_name}/issues/{issue_id} \
      -H "Content-Type: application/json" \
      -d '{"status": "closed", "resolved_by_type": "patch", "resolved_by_number": 1}'
    ```

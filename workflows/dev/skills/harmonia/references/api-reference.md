@@ -42,6 +42,14 @@ Get project workflow status. The most important endpoint — always start here.
   - `type`: `dispatch` | `write_artifact` | `approve_artifact` | `evaluate_gate` | `wait` | `completed` | `failed` | `none`
   - `nodeId`: related workflow node
   - `instructions`: human-readable guidance
+- `stepGuidance` — guidance for the active stepped artifact (if applicable):
+  - `artifactId`, `artifactName` — which artifact
+  - `completedSteps[]` — steps already done (with paths)
+  - `nextStep` — next step to complete (`id`, `name`, `format`, `description`, `outputPath`)
+  - `progressText` — human-readable progress (e.g. `[✓] Requirements → [→] Completeness Check → [ ] Draft`)
+  - `finalPath` — path to the final artifact file
+  - `finalized` — whether all steps are done
+- `stepGuidances[]` — all in-progress stepped artifacts (same structure as `stepGuidance`)
 
 ---
 
@@ -57,13 +65,66 @@ List project artifacts.
 
 ### GET /projects/:name/artifacts/:id
 
-Read artifact content.
+Read artifact content, or a specific step of a stepped artifact.
 
 ```bash
+# Read main artifact
 curl http://127.0.0.1:4600/projects/my-app/artifacts/prd
+
+# Read a specific step (for stepped artifacts)
+curl http://127.0.0.1:4600/projects/my-app/artifacts/prd?step=requirements
 ```
 
-**Response:** `{"artifactId": "prd", "content": "..."}`
+| Query param | Type   | Description                             |
+| ----------- | ------ | --------------------------------------- |
+| `step`      | string | Step ID to read (for stepped artifacts) |
+| `context`   | string | Iteration context (e.g. `iter-1`)       |
+
+**Response (main):** `{"artifactId": "prd", "content": "..."}`
+
+**Response (step):**
+
+```json
+{
+  "artifactId": "prd",
+  "stepId": "requirements",
+  "format": "json",
+  "content": "...",
+  "path": "/absolute/path/to/prd.requirements.json"
+}
+```
+
+### POST /projects/:name/artifacts/:id/steps/:stepId/complete
+
+Mark a step as completed. After writing a step file, call this to notify Harmonia.
+
+> **Parameter discovery:** Call `GET /projects/:name/status` first. The response's `stepGuidance.nextStep.id` provides the `stepId`, and `stepGuidance.artifactId` provides the `:id`.
+
+```bash
+curl -X POST http://127.0.0.1:4600/projects/my-app/artifacts/prd/steps/requirements/complete \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+| Param  | Type   | Required | Description                               |
+| ------ | ------ | -------- | ----------------------------------------- |
+| `path` | string | no       | Step file path (auto-inferred if omitted) |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "artifactId": "prd",
+  "stepId": "requirements",
+  "completedAt": "2026-03-28T12:00:00Z",
+  "progress": {
+    "completedSteps": ["requirements"],
+    "totalSteps": 3,
+    "nextStep": { "id": "completeness-check", "name": "Completeness Check", "format": "json" }
+  }
+}
+```
 
 ### GET /projects/:name/artifacts/:id/schema
 
