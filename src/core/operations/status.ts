@@ -7,14 +7,18 @@
 import { getProject, listProjects, resolveContextDir } from '../registry.js';
 import { readState } from '../state.js';
 import { loadWorkflow } from '../plugin.js';
-import { listArtifacts } from '../artifacts.js';
+import { listArtifacts, resolveArtifactDir } from '../artifacts.js';
 import type { ArtifactIOContext } from '../artifacts.js';
 import { readReviews } from '../reviews.js';
-import { getCompletedStepIds, readSteps } from '../steps.js';
+import { getCompletedStepIds, readSteps, recordStepCompletion } from '../steps.js';
 import { readDispatches, readSessions } from '../dispatch.js';
 import { readIssues } from '../issues.js';
-import { processWorkflowEvent, formatNextAction } from '../engine-helpers.js';
+import { processWorkflowEvent, formatNextAction, loadWorkflowForContext, findTaskNode } from '../engine-helpers.js';
+import { loadArtifactSchema, validateArtifact } from '../schema.js';
 import type { ResolvedContext } from '../engine-helpers.js';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type {
     ArtifactDefinition,
     WorkflowNode,
@@ -240,6 +244,160 @@ export function formatInProgressArtifacts(
     return inProgress.length > 0 ? inProgress.join('\n') : '';
 }
 
+// ─── Step Guidance Building ───
+
+/**
+ * Build step guidance for a stepped artifact in status context.
+ */
+async function buildStepGuidanceForStatus(
+    artifactId: string,
+    projectName: string,
+    iteration: number,
+    wf: { artifactDefinitions: Record<string, ArtifactDefinition> },
+    ioCtx: ArtifactIOContext,
+    contextDir: string,
+): Promise<import('../types.js').StepGuidance | null> {
+    const artifactDef = wf.artifactDefinitions[artifactId];
+    if (!artifactDef?.steps?.length) return null;
+
+    const stepState = await readSteps(projectName, iteration, contextDir);
+    const artifactState = stepState[artifactId];
+    const completedIds = getCompletedStepIds(artifactState ?? null);
+    const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+
+    // Build completed steps info
+    const completedSteps: import('../types.js').CompletedStepInfo[] = [];
+    for (const step of artifactDef.steps) {
+        if (completedIds.has(step.id)) {
+            const ext = step.format === 'json' ? '.json' : '.md';
+            completedSteps.push({
+                stepId: step.id,
+                stepName: step.name,
+                format: step.format,
+                path: `${dir}/${artifactId}.${step.id}${ext}`,
+            });
+        }
+    }
+
+    // Find next step
+    let nextStep: import('../types.js').NextStepInfo | null = null;
+    for (const step of artifactDef.steps) {
+        if (!completedIds.has(step.id)) {
+            const ext = step.format === 'json' ? '.json' : '.md';
+            nextStep = {
+                id: step.id,
+                name: step.name,
+                format: step.format,
+                description: step.description,
+                outputPath: `${dir}/${artifactId}.${step.id}${ext}`,
+            };
+            break;
+        }
+    }
+
+    // Progress text
+    const progressParts = artifactDef.steps.map((s) => {
+        const done = completedIds.has(s.id);
+        return done ? `[✓] ${s.name}` : `[ ] ${s.name}`;
+    });
+
+    // Final artifact path
+    const getFormatExtension = (format?: 'md' | 'html' | 'json'): string => {
+        switch (format) {
+            case 'html':
+                return '.html';
+            case 'json':
+                return '.json';
+            default:
+                return '.md';
+        }
+    };
+    const finalExt = getFormatExtension(artifactDef.format);
+    const finalPath = `${dir}/${artifactId}${finalExt}`;
+
+    return {
+        artifactId,
+        artifactName: artifactDef.name,
+        completedSteps,
+        totalSteps: artifactDef.steps.length,
+        nextStep,
+        progressText: progressParts.join(' → '),
+        finalPath,
+        finalized: artifactState?.finalized ?? false,
+    };
+}
+
+// ─── Step Auto-Detection ───
+
+/**
+ * Detect and sync completed steps by scanning step files on disk.
+ *
+ * This enables recovery when agent disconnects and reconnects - Harmonia
+ * automatically detects which steps have been completed by checking:
+ * 1. Step file exists
+ * 2. Step file passes schema validation
+ *
+ * @param workflowsDir - Workflows directory
+ * @param projectName - Project name
+ * @param iteration - Iteration number
+ * @param wf - Workflow plugin
+ * @param ioCtx - Artifact I/O context
+ * @param contextDir - Context directory
+ */
+export async function detectAndSyncCompletedSteps(
+    workflowsDir: string,
+    projectName: string,
+    iteration: number,
+    wf: { artifactDefinitions: Record<string, ArtifactDefinition> },
+    ioCtx: ArtifactIOContext,
+    contextDir: string,
+): Promise<void> {
+    for (const [artifactId, artifactDef] of Object.entries(wf.artifactDefinitions)) {
+        if (!artifactDef.steps?.length) continue;
+
+        const stepState = await readSteps(projectName, iteration, contextDir);
+        const artifactState = stepState[artifactId];
+        const completedIds = getCompletedStepIds(artifactState ?? null);
+        const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+
+        for (const step of artifactDef.steps) {
+            if (completedIds.has(step.id)) continue; // Already recorded
+
+            const ext = step.format === 'json' ? '.json' : '.md';
+            const filePath = join(dir, `${artifactId}.${step.id}${ext}`);
+
+            if (!existsSync(filePath)) continue; // File doesn't exist
+
+            // File exists, validate against schema
+            try {
+                const content = await readFile(filePath, 'utf-8');
+                const schema = await loadArtifactSchema(workflowsDir, 'dev', `${artifactId}.${step.id}`);
+
+                if (schema) {
+                    const isJson = step.format === 'json';
+                    const validation = validateArtifact(content, schema, false, isJson);
+                    if (!validation.valid) continue; // Validation failed, not complete
+                }
+
+                // Validation passed (or no schema), auto-record
+                const allStepIds = artifactDef.steps.map((s) => s.id);
+                await recordStepCompletion(
+                    projectName,
+                    iteration,
+                    artifactId,
+                    step.id,
+                    filePath,
+                    allStepIds,
+                    contextDir,
+                );
+                console.log(`[Harmonia] Auto-detected completed step: ${artifactId}.${step.id}`);
+            } catch {
+                // Read or validation error, skip
+            }
+        }
+    }
+}
+
 // ─── getProjectStatus / getProjectList ───
 
 /**
@@ -281,8 +439,14 @@ export async function getProjectStatus(workflowsDir: string, projectName: string
     const reviews = await readReviews(projectName, contextNumber, contextDir);
     const dispatches = await readDispatches(projectName, contextNumber, contextDir);
     const sessions = await readSessions(projectName, contextNumber, contextDir);
-    const stepsData = await readSteps(projectName, contextNumber, contextDir);
+    let stepsData = await readSteps(projectName, contextNumber, contextDir);
     const issues = await readIssues(projectName);
+
+    // Auto-detect completed steps (for recovery after disconnect)
+    await detectAndSyncCompletedSteps(workflowsDir, projectName, contextNumber, wf, statusIoCtx, contextDir);
+
+    // Re-read stepsData after sync
+    stepsData = await readSteps(projectName, contextNumber, contextDir);
 
     // Workflow tree view
     const treeLines = formatNodeTree(wf.definition.root, state.nodes, dispatches);
@@ -301,6 +465,7 @@ export async function getProjectStatus(workflowsDir: string, projectName: string
 
     // Engine nextAction
     let nextActionText = '';
+    let stepGuidance: import('../types.js').StepGuidance | undefined;
     try {
         const ctx: ResolvedContext = {
             entry,
@@ -313,6 +478,26 @@ export async function getProjectStatus(workflowsDir: string, projectName: string
             type: 'query_status',
         });
         nextActionText = formatNextAction(engineResult.nextAction);
+
+        // Build step guidance if active node has a stepped artifact
+        if (state.activeNodeId) {
+            const activeNode = findTaskNode(wf, state.activeNodeId);
+            if (activeNode?.role) {
+                const roleDef = wf.roles[activeNode.role];
+                const artifactId = roleDef?.frontmatter?.capabilities?.find((c) => c.artifact)?.artifact;
+                if (artifactId) {
+                    const guidance = await buildStepGuidanceForStatus(
+                        artifactId,
+                        projectName,
+                        contextNumber,
+                        wf,
+                        statusIoCtx,
+                        contextDir,
+                    );
+                    if (guidance) stepGuidance = guidance;
+                }
+            }
+        }
     } catch {
         nextActionText = '\n[Next Action] (could not compute — engine error)';
     }
@@ -340,6 +525,7 @@ export async function getProjectStatus(workflowsDir: string, projectName: string
         sessions,
         issues,
         nextAction: nextActionText,
+        stepGuidance,
     };
 }
 

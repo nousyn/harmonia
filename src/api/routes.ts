@@ -12,10 +12,12 @@ import {
     beginIteration,
     beginPatch,
     readArtifactOrchestrated,
+    readArtifactStepOrchestrated,
     listArtifactsOrchestrated,
     approveArtifactOrchestrated,
     listPendingReviewsOrchestrated,
     getArtifactSchemaInfo,
+    completeArtifactStep,
     getProjectStatus,
     getProjectList,
     WorkflowSelectionRequired,
@@ -131,12 +133,27 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
         }
     });
 
-    /** GET /projects/:name/artifacts/:id — Read an artifact */
+    /** GET /projects/:name/artifacts/:id — Read an artifact (or step) */
     api.get('/projects/:name/artifacts/:id', async (c) => {
         try {
             const name = c.req.param('name');
             const artifactId = c.req.param('id');
             const context = c.req.query('context');
+            const step = c.req.query('step');
+
+            // If step is specified, read step artifact
+            if (step) {
+                const result = await readArtifactStepOrchestrated(workflowsDir, name, artifactId, step, context);
+                return c.json({
+                    artifactId,
+                    stepId: step,
+                    format: result.format,
+                    content: result.content,
+                    path: result.path,
+                });
+            }
+
+            // Otherwise read the main artifact
             const content = await readArtifactOrchestrated(workflowsDir, name, artifactId, context);
             return c.json({ artifactId, content });
         } catch (err) {
@@ -160,6 +177,26 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
                 body.approved,
                 body.comment,
             );
+            return c.json(result);
+        } catch (err) {
+            return handleError(c, err);
+        }
+    });
+
+    /** POST /projects/:name/artifacts/:id/steps/:stepId/complete — Mark step as completed */
+    api.post('/projects/:name/artifacts/:id/steps/:stepId/complete', async (c) => {
+        try {
+            const name = c.req.param('name');
+            const artifactId = c.req.param('id');
+            const stepId = c.req.param('stepId');
+            const body = await c.req.json();
+            const artifactPath = body.path;
+
+            if (!artifactPath) {
+                return c.json({ error: 'path is required' }, 400);
+            }
+
+            const result = await completeArtifactStep(workflowsDir, name, artifactId, stepId, artifactPath);
             return c.json(result);
         } catch (err) {
             return handleError(c, err);

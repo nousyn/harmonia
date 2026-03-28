@@ -360,6 +360,54 @@ export type NextActionType =
     | 'evaluate_gate'
     | 'none';
 
+// ─── Step Guidance (for stepped artifacts) ───
+
+/** Information about a completed step */
+export interface CompletedStepInfo {
+    /** Step ID */
+    stepId: string;
+    /** Step name (human-readable) */
+    stepName: string;
+    /** Output format */
+    format: 'json' | 'md';
+    /** Absolute path to the step file */
+    path: string;
+}
+
+/** Information about the next step to complete */
+export interface NextStepInfo {
+    /** Step ID */
+    id: string;
+    /** Step name (human-readable) */
+    name: string;
+    /** Output format */
+    format: 'json' | 'md';
+    /** Step description */
+    description: string;
+    /** Absolute path where the step should be written */
+    outputPath: string;
+}
+
+/** Step guidance for stepped artifacts - helps agent know what to do next */
+export interface StepGuidance {
+    /** Artifact ID */
+    artifactId: string;
+    /** Artifact name (human-readable) */
+    artifactName: string;
+    /** Completed steps with their paths (for agent to read) */
+    completedSteps: CompletedStepInfo[];
+    /** Total number of steps */
+    totalSteps: number;
+    /** Next step to complete (null if all done) */
+    nextStep: NextStepInfo | null;
+    /** Human-readable progress text */
+    progressText: string;
+    /** Path to the final artifact */
+    finalPath: string;
+    /** Whether the artifact has been finalized */
+    finalized: boolean;
+}
+
 /** Unified nextAction return structure */
 export interface NextAction {
     /** What the coordinator should do */
@@ -376,6 +424,8 @@ export interface NextAction {
     gateResults?: GateEvaluationResult;
     /** Parallel dispatch targets (when dispatching multiple tasks simultaneously) */
     parallelDispatch?: Array<{ nodeId: string; role: string }>;
+    /** Step guidance for stepped artifacts (helps agent know next step) */
+    stepGuidance?: StepGuidance;
 }
 
 /** Events that trigger engine state transitions */

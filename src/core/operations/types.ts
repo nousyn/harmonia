@@ -82,6 +82,8 @@ export interface ProjectStatusData {
     sessions: SessionRecord[];
     issues: import('../types.js').Issue[];
     nextAction: string;
+    /** Step guidance for the active stepped artifact (if applicable) */
+    stepGuidance?: import('../types.js').StepGuidance;
 }
 
 export interface ProjectListItem {

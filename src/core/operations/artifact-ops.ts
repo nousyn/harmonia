@@ -7,14 +7,19 @@
 import { getProject, resolveContextDir } from '../registry.js';
 import { readState } from '../state.js';
 import { loadWorkflow } from '../plugin.js';
-import { readArtifact, listArtifacts } from '../artifacts.js';
+import { readArtifact, listArtifacts, readStepArtifact, resolveArtifactDir } from '../artifacts.js';
 import type { ArtifactIOContext } from '../artifacts.js';
-import { loadArtifactSchema, formatSchemaGuidance } from '../schema.js';
+import { loadArtifactSchema, formatSchemaGuidance, validateArtifact } from '../schema.js';
 import type { StepSchemaEntry } from '../schema.js';
 import { resolveReview, getPendingReviews } from '../reviews.js';
 import { resolveActive, processWorkflowEvent, loadWorkflowForContext, formatNextAction } from '../engine-helpers.js';
+import { getArtifactStepState, getCompletedStepIds, recordStepCompletion } from '../steps.js';
+import type { CompletedStepInfo, NextStepInfo, StepGuidance } from '../types.js';
 import type { ApproveArtifactResult, PendingReviewItem, ArtifactSchemaResult } from './types.js';
 import { ValidationError } from './types.js';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 // ─── readArtifactOrchestrated / listArtifactsOrchestrated ───
 
@@ -250,4 +255,232 @@ export async function getArtifactSchemaInfo(
 
     const guidance = formatSchemaGuidance(artifactId, artifactDef, schema, stepSchemas);
     return { text: guidance };
+}
+
+// ─── Step Reading & Completion ───
+
+/**
+ * Read a specific step artifact.
+ *
+ * @param workflowsDir - Workflows directory
+ * @param projectName - Project name
+ * @param artifactId - Artifact ID
+ * @param stepId - Step ID
+ * @param context - Optional context (iter-1, patch-2)
+ */
+export async function readArtifactStepOrchestrated(
+    workflowsDir: string,
+    projectName: string,
+    artifactId: string,
+    stepId: string,
+    context?: string,
+): Promise<{ content: string; format: 'json' | 'md'; path: string }> {
+    const ctx = await resolveActive(projectName);
+    const { wf } = await loadWorkflowForContext(workflowsDir, projectName, ctx);
+
+    const artifactDef = wf.artifactDefinitions[artifactId];
+    if (!artifactDef) {
+        throw new ValidationError(`Artifact "${artifactId}" not found in workflow`);
+    }
+
+    const stepDef = artifactDef.steps?.find((s) => s.id === stepId);
+    if (!stepDef) {
+        const availableSteps = artifactDef.steps?.map((s) => s.id).join(', ') ?? '(无分步)';
+        throw new ValidationError(
+            `Step "${stepId}" not found in artifact "${artifactId}". Available: ${availableSteps}`,
+        );
+    }
+
+    const ioCtx: ArtifactIOContext = {
+        contextDir: ctx.dir,
+        projectDir: ctx.entry.dir,
+        contextLabel: ctx.activeContext,
+    };
+
+    const content = await readStepArtifact(artifactId, stepId, ioCtx, artifactDef);
+    const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+    const ext = stepDef.format === 'json' ? '.json' : '.md';
+    const path = `${dir}/${artifactId}.${stepId}${ext}`;
+
+    return {
+        content,
+        format: stepDef.format,
+        path,
+    };
+}
+
+/**
+ * Mark a step as completed.
+ *
+ * @param workflowsDir - Workflows directory
+ * @param projectName - Project name
+ * @param artifactId - Artifact ID
+ * @param stepId - Step ID that was completed
+ * @param artifactPath - Path to the step artifact file
+ */
+export async function completeArtifactStep(
+    workflowsDir: string,
+    projectName: string,
+    artifactId: string,
+    stepId: string,
+    artifactPath: string,
+): Promise<{
+    success: true;
+    artifactId: string;
+    stepId: string;
+    completedAt: string;
+    progress: {
+        completedSteps: string[];
+        totalSteps: number;
+        nextStep: { id: string; name: string; format: string } | null;
+    };
+}> {
+    const ctx = await resolveActive(projectName);
+    const { wf } = await loadWorkflowForContext(workflowsDir, projectName, ctx);
+
+    const artifactDef = wf.artifactDefinitions[artifactId];
+    if (!artifactDef?.steps) {
+        throw new ValidationError(`Artifact "${artifactId}" has no steps`);
+    }
+
+    const stepDef = artifactDef.steps.find((s) => s.id === stepId);
+    if (!stepDef) {
+        throw new ValidationError(`Step "${stepId}" not found in artifact "${artifactId}"`);
+    }
+
+    // Get all step IDs
+    const allStepIds = artifactDef.steps.map((s) => s.id);
+
+    // Record completion
+    const stepState = await recordStepCompletion(
+        projectName,
+        ctx.number,
+        artifactId,
+        stepId,
+        artifactPath,
+        allStepIds,
+        ctx.dir,
+    );
+
+    // Calculate next step
+    const completedIds = getCompletedStepIds(stepState);
+    let nextStep: { id: string; name: string; format: string } | null = null;
+    for (const step of artifactDef.steps) {
+        if (!completedIds.has(step.id)) {
+            nextStep = { id: step.id, name: step.name, format: step.format };
+            break;
+        }
+    }
+
+    return {
+        success: true,
+        artifactId,
+        stepId,
+        completedAt: new Date().toISOString(),
+        progress: {
+            completedSteps: Array.from(completedIds),
+            totalSteps: artifactDef.steps.length,
+            nextStep,
+        },
+    };
+}
+
+/**
+ * Build step guidance for a stepped artifact.
+ *
+ * @param artifactId - Artifact ID
+ * @param projectName - Project name
+ * @param wf - Workflow plugin
+ * @param ioCtx - Artifact I/O context
+ * @param contextDir - Context directory
+ */
+export async function buildStepGuidance(
+    artifactId: string,
+    projectName: string,
+    wf: {
+        artifactDefinitions: Record<
+            string,
+            {
+                name: string;
+                steps?: { id: string; name: string; format: 'json' | 'md'; description: string }[];
+                format?: 'md' | 'html' | 'json';
+                output?: string;
+            }
+        >;
+    },
+    ioCtx: ArtifactIOContext,
+    contextDir: string,
+): Promise<StepGuidance | null> {
+    const artifactDef = wf.artifactDefinitions[artifactId];
+    if (!artifactDef?.steps?.length) return null;
+
+    const stepState = await getArtifactStepState(
+        projectName,
+        ioCtx.contextDir ? 0 : 0,
+        artifactId,
+        ioCtx.contextDir || undefined,
+    );
+    const completedIds = getCompletedStepIds(stepState);
+    const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+
+    // Build completed steps info
+    const completedSteps: CompletedStepInfo[] = [];
+    for (const step of artifactDef.steps) {
+        if (completedIds.has(step.id)) {
+            const ext = step.format === 'json' ? '.json' : '.md';
+            completedSteps.push({
+                stepId: step.id,
+                stepName: step.name,
+                format: step.format,
+                path: `${dir}/${artifactId}.${step.id}${ext}`,
+            });
+        }
+    }
+
+    // Find next step
+    let nextStep: NextStepInfo | null = null;
+    for (const step of artifactDef.steps) {
+        if (!completedIds.has(step.id)) {
+            const ext = step.format === 'json' ? '.json' : '.md';
+            nextStep = {
+                id: step.id,
+                name: step.name,
+                format: step.format,
+                description: step.description,
+                outputPath: `${dir}/${artifactId}.${step.id}${ext}`,
+            };
+            break;
+        }
+    }
+
+    // Progress text
+    const progressParts = artifactDef.steps.map((s) => {
+        const done = completedIds.has(s.id);
+        return done ? `[✓] ${s.name}` : `[ ] ${s.name}`;
+    });
+
+    // Final artifact path
+    const getFormatExtension = (format?: 'md' | 'html' | 'json'): string => {
+        switch (format) {
+            case 'html':
+                return '.html';
+            case 'json':
+                return '.json';
+            default:
+                return '.md';
+        }
+    };
+    const finalExt = getFormatExtension(artifactDef.format);
+    const finalPath = `${dir}/${artifactId}${finalExt}`;
+
+    return {
+        artifactId,
+        artifactName: artifactDef.name,
+        completedSteps,
+        totalSteps: artifactDef.steps.length,
+        nextStep,
+        progressText: progressParts.join(' → '),
+        finalPath,
+        finalized: stepState?.finalized ?? false,
+    };
 }
