@@ -189,12 +189,8 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
             const name = c.req.param('name');
             const artifactId = c.req.param('id');
             const stepId = c.req.param('stepId');
-            const body = await c.req.json();
-            const artifactPath = body.path;
-
-            if (!artifactPath) {
-                return c.json({ error: 'path is required' }, 400);
-            }
+            const body = await c.req.json().catch(() => ({}));
+            const artifactPath = body.path; // optional — auto-inferred if omitted
 
             const result = await completeArtifactStep(workflowsDir, name, artifactId, stepId, artifactPath);
             return c.json(result);

@@ -7,7 +7,16 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import type { ArtifactStepState, ArtifactStepRecord } from './types.js';
+import type {
+    ArtifactStepState,
+    ArtifactStepRecord,
+    ArtifactDefinition,
+    StepGuidance,
+    CompletedStepInfo,
+    NextStepInfo,
+} from './types.js';
+import { resolveArtifactDir } from './artifacts.js';
+import type { ArtifactIOContext } from './artifacts.js';
 
 const STEPS_FILE = 'steps.json';
 
@@ -161,4 +170,84 @@ export async function isArtifactFinalized(
 ): Promise<boolean> {
     const state = await getArtifactStepState(projectName, iteration, artifactId, contextDir);
     return state?.finalized ?? false;
+}
+
+// ─── Shared Step Guidance Builder ───
+
+/**
+ * Build StepGuidance from a pre-fetched ArtifactStepState.
+ *
+ * Shared by artifact-ops.ts and status.ts to avoid duplication.
+ */
+export function buildStepGuidanceFromState(
+    artifactId: string,
+    artifactDef: ArtifactDefinition,
+    stepState: ArtifactStepState | null,
+    ioCtx: ArtifactIOContext,
+): StepGuidance | null {
+    if (!artifactDef.steps?.length) return null;
+
+    const completedIds = getCompletedStepIds(stepState);
+    const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+
+    // Build completed steps info
+    const completedSteps: CompletedStepInfo[] = [];
+    for (const step of artifactDef.steps) {
+        if (completedIds.has(step.id)) {
+            const ext = step.format === 'json' ? '.json' : '.md';
+            completedSteps.push({
+                stepId: step.id,
+                stepName: step.name,
+                format: step.format,
+                path: `${dir}/${artifactId}.${step.id}${ext}`,
+            });
+        }
+    }
+
+    // Find next step
+    let nextStep: NextStepInfo | null = null;
+    for (const step of artifactDef.steps) {
+        if (!completedIds.has(step.id)) {
+            const ext = step.format === 'json' ? '.json' : '.md';
+            nextStep = {
+                id: step.id,
+                name: step.name,
+                format: step.format,
+                description: step.description,
+                outputPath: `${dir}/${artifactId}.${step.id}${ext}`,
+            };
+            break;
+        }
+    }
+
+    // Progress text
+    const progressParts = artifactDef.steps.map((s) => {
+        const done = completedIds.has(s.id);
+        return done ? `[✓] ${s.name}` : `[ ] ${s.name}`;
+    });
+
+    // Final artifact path
+    const getFormatExtension = (format?: 'md' | 'html' | 'json'): string => {
+        switch (format) {
+            case 'html':
+                return '.html';
+            case 'json':
+                return '.json';
+            default:
+                return '.md';
+        }
+    };
+    const finalExt = getFormatExtension(artifactDef.format);
+    const finalPath = `${dir}/${artifactId}${finalExt}`;
+
+    return {
+        artifactId,
+        artifactName: artifactDef.name,
+        completedSteps,
+        totalSteps: artifactDef.steps.length,
+        nextStep,
+        progressText: progressParts.join(' → '),
+        finalPath,
+        finalized: stepState?.finalized ?? false,
+    };
 }

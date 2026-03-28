@@ -84,6 +84,8 @@ export interface ProjectStatusData {
     nextAction: string;
     /** Step guidance for the active stepped artifact (if applicable) */
     stepGuidance?: import('../types.js').StepGuidance;
+    /** All step guidances for in-progress stepped artifacts */
+    stepGuidances?: import('../types.js').StepGuidance[];
 }
 
 export interface ProjectListItem {

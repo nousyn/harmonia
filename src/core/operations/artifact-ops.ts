@@ -13,7 +13,12 @@ import { loadArtifactSchema, formatSchemaGuidance, validateArtifact } from '../s
 import type { StepSchemaEntry } from '../schema.js';
 import { resolveReview, getPendingReviews } from '../reviews.js';
 import { resolveActive, processWorkflowEvent, loadWorkflowForContext, formatNextAction } from '../engine-helpers.js';
-import { getArtifactStepState, getCompletedStepIds, recordStepCompletion } from '../steps.js';
+import {
+    getArtifactStepState,
+    getCompletedStepIds,
+    recordStepCompletion,
+    buildStepGuidanceFromState,
+} from '../steps.js';
 import type { CompletedStepInfo, NextStepInfo, StepGuidance } from '../types.js';
 import type { ApproveArtifactResult, PendingReviewItem, ArtifactSchemaResult } from './types.js';
 import { ValidationError } from './types.js';
@@ -323,7 +328,7 @@ export async function completeArtifactStep(
     projectName: string,
     artifactId: string,
     stepId: string,
-    artifactPath: string,
+    artifactPath?: string,
 ): Promise<{
     success: true;
     artifactId: string;
@@ -350,6 +355,18 @@ export async function completeArtifactStep(
 
     // Get all step IDs
     const allStepIds = artifactDef.steps.map((s) => s.id);
+
+    // Auto-infer artifact path if not provided
+    const ioCtx: ArtifactIOContext = {
+        contextDir: ctx.dir,
+        projectDir: ctx.entry.dir,
+        contextLabel: ctx.activeContext,
+    };
+    if (!artifactPath) {
+        const dir = resolveArtifactDir(artifactDef.output, ioCtx);
+        const ext = stepDef.format === 'json' ? '.json' : '.md';
+        artifactPath = `${dir}/${artifactId}.${stepId}${ext}`;
+    }
 
     // Record completion
     const stepState = await recordStepCompletion(
@@ -390,6 +407,7 @@ export async function completeArtifactStep(
  *
  * @param artifactId - Artifact ID
  * @param projectName - Project name
+ * @param iteration - Iteration/context number
  * @param wf - Workflow plugin
  * @param ioCtx - Artifact I/O context
  * @param contextDir - Context directory
@@ -397,6 +415,7 @@ export async function completeArtifactStep(
 export async function buildStepGuidance(
     artifactId: string,
     projectName: string,
+    iteration: number,
     wf: {
         artifactDefinitions: Record<
             string,
@@ -414,73 +433,12 @@ export async function buildStepGuidance(
     const artifactDef = wf.artifactDefinitions[artifactId];
     if (!artifactDef?.steps?.length) return null;
 
-    const stepState = await getArtifactStepState(
-        projectName,
-        ioCtx.contextDir ? 0 : 0,
+    const stepState = await getArtifactStepState(projectName, iteration, artifactId, contextDir);
+
+    return buildStepGuidanceFromState(
         artifactId,
-        ioCtx.contextDir || undefined,
+        artifactDef as import('../types.js').ArtifactDefinition,
+        stepState,
+        ioCtx,
     );
-    const completedIds = getCompletedStepIds(stepState);
-    const dir = resolveArtifactDir(artifactDef.output, ioCtx);
-
-    // Build completed steps info
-    const completedSteps: CompletedStepInfo[] = [];
-    for (const step of artifactDef.steps) {
-        if (completedIds.has(step.id)) {
-            const ext = step.format === 'json' ? '.json' : '.md';
-            completedSteps.push({
-                stepId: step.id,
-                stepName: step.name,
-                format: step.format,
-                path: `${dir}/${artifactId}.${step.id}${ext}`,
-            });
-        }
-    }
-
-    // Find next step
-    let nextStep: NextStepInfo | null = null;
-    for (const step of artifactDef.steps) {
-        if (!completedIds.has(step.id)) {
-            const ext = step.format === 'json' ? '.json' : '.md';
-            nextStep = {
-                id: step.id,
-                name: step.name,
-                format: step.format,
-                description: step.description,
-                outputPath: `${dir}/${artifactId}.${step.id}${ext}`,
-            };
-            break;
-        }
-    }
-
-    // Progress text
-    const progressParts = artifactDef.steps.map((s) => {
-        const done = completedIds.has(s.id);
-        return done ? `[✓] ${s.name}` : `[ ] ${s.name}`;
-    });
-
-    // Final artifact path
-    const getFormatExtension = (format?: 'md' | 'html' | 'json'): string => {
-        switch (format) {
-            case 'html':
-                return '.html';
-            case 'json':
-                return '.json';
-            default:
-                return '.md';
-        }
-    };
-    const finalExt = getFormatExtension(artifactDef.format);
-    const finalPath = `${dir}/${artifactId}${finalExt}`;
-
-    return {
-        artifactId,
-        artifactName: artifactDef.name,
-        completedSteps,
-        totalSteps: artifactDef.steps.length,
-        nextStep,
-        progressText: progressParts.join(' → '),
-        finalPath,
-        finalized: stepState?.finalized ?? false,
-    };
 }
