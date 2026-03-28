@@ -351,6 +351,12 @@ export function formatSchemaGuidance(
                 }
             }
         }
+
+        // Add finalize guidance for stepped artifacts
+        lines.push('');
+        lines.push('**完成流程**：');
+        lines.push('完成所有步骤后，将最终内容写入正式产出路径（见 Output Paths 部分）。');
+        lines.push('Harmonia 会在检测到正式产出后自动推进工作流。');
     }
 
     return lines.join('\n');

@@ -320,23 +320,42 @@ function collectRoleOutputArtifacts(
 /**
  * Build output path hints for the prompt.
  * All artifacts use unified path resolution: directory + artifactId + extension.
+ * For stepped artifacts, shows step paths + final artifact path.
  */
 function buildOutputPaths(
     roleDef: RoleDefinition,
     artifactDefs: Record<string, ArtifactDefinition>,
     ioCtx: ArtifactIOContext,
 ): string[] {
-    const paths: string[] = [];
+    const lines: string[] = [];
     for (const cap of roleDef.frontmatter.capabilities ?? []) {
         if (!cap.artifact) continue;
         const def = artifactDefs[cap.artifact];
         if (!def) continue;
         const dir = resolveArtifactDir(def.output, ioCtx);
-        const ext = getFormatExtension(def.format);
-        const filePath = `${dir}/${cap.artifact}${ext}`;
-        paths.push(`- **${cap.artifact}** (${def.name}): \`${filePath}\``);
+
+        if (def.steps && def.steps.length > 0) {
+            // Stepped artifact: show step paths + final path
+            lines.push(`### ${cap.artifact} (${def.name})`);
+            lines.push('');
+            lines.push('**步骤产出**（按顺序写入）：');
+            for (const step of def.steps) {
+                const ext = step.format === 'json' ? '.json' : '.md';
+                lines.push(`- \`${cap.artifact}.${step.id}${ext}\` — ${step.name}`);
+            }
+            lines.push('');
+            const finalExt = getFormatExtension(def.format);
+            lines.push('**正式产出**（完成所有步骤后写入）：');
+            lines.push(`- \`${dir}/${cap.artifact}${finalExt}\` — Harmonia 追踪的最终产出`);
+            lines.push('');
+        } else {
+            // Regular artifact: single path
+            const ext = getFormatExtension(def.format);
+            const filePath = `${dir}/${cap.artifact}${ext}`;
+            lines.push(`- **${cap.artifact}** (${def.name}): \`${filePath}\``);
+        }
     }
-    return paths;
+    return lines;
 }
 
 // ─── Input Content Loading ───

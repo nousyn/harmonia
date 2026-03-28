@@ -243,12 +243,6 @@
                     "name": "PRD 文档草稿",
                     "format": "md",
                     "description": "基于结构化需求生成完整 PRD 文档"
-                },
-                {
-                    "id": "final",
-                    "name": "PRD 最终版",
-                    "format": "md",
-                    "description": "根据校验结果修订，产出最终 PRD"
                 }
             ]
         },
@@ -281,12 +275,6 @@
                     "name": "技术方案草稿",
                     "format": "md",
                     "description": "基于分析和预研结果，生成完整技术方案文档（含技术选型、架构决策、风险评估）"
-                },
-                {
-                    "id": "final",
-                    "name": "技术方案最终版",
-                    "format": "md",
-                    "description": "修订并产出最终技术方案"
                 }
             ]
         },
@@ -322,12 +310,6 @@
                     "name": "细化任务",
                     "format": "md",
                     "description": "将粗粒度任务细化为可执行的开发任务"
-                },
-                {
-                    "id": "final",
-                    "name": "任务拆解最终版",
-                    "format": "md",
-                    "description": "整合依赖关系，产出最终任务拆解文档"
                 }
             ]
         },
