@@ -98,7 +98,7 @@ Complete error handling and degradation strategies for Harmonia workflows.
 
 **Recovery**:
 
-1. Connect agent: `POST /connect`
+1. Connect agent: `POST /projects/:name/agents/connect`
 2. Verify connection in status response
 3. Retry dispatch if needed
 
@@ -153,8 +153,8 @@ curl http://127.0.0.1:4600/projects
 curl -X POST http://127.0.0.1:4600/projects \
   -H "Content-Type: application/json" \
   -d '{
-    "project_name": "{project_name}",
-    "project_dir": "/absolute/path/to/project"
+    "projectName": "{projectName}",
+    "projectDir": "/absolute/path/to/project"
   }'
 
 # Step 3: Verify registration
@@ -215,14 +215,13 @@ curl http://127.0.0.1:4600/projects/{project_name}/status
 # Look at connectedAgents section
 
 # Step 2: Disconnect stuck agent
-curl -X DELETE "http://127.0.0.1:4600/connect/{agent_key}?project_name={project_name}"
+curl -X DELETE "http://127.0.0.1:4600/projects/{projectName}/agents/{key}"
 
 # Step 3: Reconnect agent
-curl -X POST http://127.0.0.1:4600/connect \
+curl -X POST http://127.0.0.1:4600/projects/{projectName}/agents/connect \
   -H "Content-Type: application/json" \
   -d '{
-    "project_name": "{project_name}",
-    "agent": "{agent_type}",
+    "agentType": "{agent_type}",
     "role": "{role_name}"
   }'
 
@@ -239,11 +238,10 @@ curl http://127.0.0.1:4600/projects/{project_name}/status
 curl http://127.0.0.1:4600/agents
 
 # Step 2: Use valid agent type in connection
-curl -X POST http://127.0.0.1:4600/connect \
+curl -X POST http://127.0.0.1:4600/projects/{projectName}/agents/connect \
   -H "Content-Type: application/json" \
   -d '{
-    "project_name": "{project_name}",
-    "agent": "claude-code",
+    "agentType": "claude-code",
     "role": "{role_name}"
   }'
 ```
@@ -337,7 +335,7 @@ curl http://127.0.0.1:4600/projects/{project_name}/status
 **Recovery**:
 
 1. Check agent connection status
-2. Reconnect if needed: `DELETE /connect/{key}` then `POST /connect`
+2. Reconnect if needed: `DELETE /projects/:name/agents/:key` then `POST /projects/:name/agents/connect`
 3. Retry dispatch
 4. Consider different agent type if issue persists
 

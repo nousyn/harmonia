@@ -19,14 +19,14 @@ Initialize a new project.
 ```bash
 curl -X POST http://127.0.0.1:4600/projects \
   -H "Content-Type: application/json" \
-  -d '{"project_name": "my-app", "project_dir": "/path/to/project"}'
+  -d '{"projectName": "my-app", "projectDir": "/path/to/project"}'
 ```
 
-| Param          | Type   | Required | Description                                    |
-| -------------- | ------ | -------- | ---------------------------------------------- |
-| `project_name` | string | yes      | Project name                                   |
-| `project_dir`  | string | yes      | Absolute path to project directory             |
-| `workflow`     | string | no       | Workflow name (required if multiple available) |
+| Param         | Type   | Required | Description                                    |
+| ------------- | ------ | -------- | ---------------------------------------------- |
+| `projectName` | string | yes      | Project name                                   |
+| `projectDir`  | string | yes      | Absolute path to project directory             |
+| `workflow`    | string | no       | Workflow name (required if multiple available) |
 
 **Status codes:** `201` created, `200` already registered, `409` multiple workflows available but `workflow` not specified.
 
@@ -165,7 +165,7 @@ curl -X POST http://127.0.0.1:4600/projects/my-app/artifacts/prd/approve \
 
 List artifacts pending review.
 
-**Response:** `{"pending": [{"artifactId": "...", "name": "...", ...}]}`
+**Response:** `{"reviews": [{"artifactId": "...", "name": "...", ...}]}`
 
 ---
 
@@ -205,16 +205,16 @@ Update an issue.
 ```bash
 curl -X PATCH http://127.0.0.1:4600/projects/my-app/issues/abc123 \
   -H "Content-Type: application/json" \
-  -d '{"status": "resolved", "resolved_by_type": "commit", "resolved_by_number": "a1b2c3d"}'
+  -d '{"status": "resolved", "resolvedByType": "commit", "resolvedByNumber": "a1b2c3d"}'
 ```
 
-| Param                | Type   | Required | Description                       |
-| -------------------- | ------ | -------- | --------------------------------- |
-| `status`             | string | no       | `open` or `resolved`              |
-| `resolved_by_type`   | string | no       | Resolution type (e.g. `commit`)   |
-| `resolved_by_number` | string | no       | Resolution ref (e.g. commit hash) |
+| Param              | Type   | Required | Description                       |
+| ------------------ | ------ | -------- | --------------------------------- |
+| `status`           | string | no       | `open` or `resolved`              |
+| `resolvedByType`   | string | no       | Resolution type (e.g. `commit`)   |
+| `resolvedByNumber` | string | no       | Resolution ref (e.g. commit hash) |
 
-> **Note:** `resolved_by_type` and `resolved_by_number` must be provided together. Do not send a plain `resolvedBy` string — it will be ignored.
+> **Note:** `resolvedByType` and `resolvedByNumber` must be provided together. Do not send a plain `resolvedBy` string — it will be ignored.
 
 ---
 
@@ -253,32 +253,30 @@ curl -X POST http://127.0.0.1:4600/projects/my-app/patches \
 
 ## Agent Connection
 
-### POST /connect
+### POST /projects/:name/agents/connect
 
 Register an agent connection.
 
 ```bash
-curl -X POST http://127.0.0.1:4600/connect \
+curl -X POST http://127.0.0.1:4600/projects/:name/agents/connect \
   -H "Content-Type: application/json" \
-  -d '{"project_name": "my-app", "agent": "openclaw", "role": "developer"}'
+  -d '{"agentType": "openclaw", "role": "developer"}'
 ```
 
-| Param          | Type   | Required | Description                                                |
-| -------------- | ------ | -------- | ---------------------------------------------------------- |
-| `project_name` | string | yes      | Project to connect to                                      |
-| `agent`        | string | yes      | Agent type: `opencode`, `claude-code`, `openclaw`, `codex` |
-| `sessionId`    | string | no       | Agent-side session ID                                      |
-| `role`         | string | no       | Workflow role override                                     |
+| Param       | Type   | Required | Description                                                |
+| ----------- | ------ | -------- | ---------------------------------------------------------- |
+| `agentType` | string | yes      | Agent type: `opencode`, `claude-code`, `openclaw`, `codex` |
+| `sessionId` | string | no       | Agent-side session ID                                      |
+| `role`      | string | no       | Workflow role override                                     |
 
 **Status codes:** `200` connected, `422` unknown agent type, `501` orchestration not available.
 
-### DELETE /connect/:key
+### DELETE /projects/:name/agents/:key
 
 Disconnect an agent.
 
-| Query param    | Type   | Required | Description  |
-| -------------- | ------ | -------- | ------------ |
-| `project_name` | string | yes      | Project name |
+| Query param | Type | Required | Description |
+| ----------- | ---- | -------- | ----------- |
 
 ---
 

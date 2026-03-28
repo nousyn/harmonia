@@ -100,8 +100,8 @@ failed            Workflow failed         Diagnose via status response
 | Update an issue | `PATCH /projects/{project}/issues/{id}` |
 | Start a new iteration | `POST /projects/{project}/iterations` |
 | Start a hotfix patch | `POST /projects/{project}/patches` |
-| Register agent connection | `POST /connect` |
-| Disconnect agent | `DELETE /connect/{key}?project_name={project}` |
+| Register agent connection | `POST /projects/:name/agents/connect` |
+| Disconnect agent | `DELETE /projects/:name/agents/:key` |
 
 See `{baseDir}/references/api-reference.md` for full request/response details when you need exact parameter names, body formats, or status codes.
 

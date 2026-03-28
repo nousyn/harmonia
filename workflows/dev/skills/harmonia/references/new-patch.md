@@ -96,10 +96,10 @@ Proceed to Step 2.
 Check current workflow status to understand what to do next.
 
 ```bash
-curl http://127.0.0.1:4600/projects/{project_name}/status?context=patch-1
+curl http://127.0.0.1:4600/projects/{project_name}/status?patch=1
 ```
 
-**Note**: The `context=patch-N` query parameter ensures you're looking at the correct patch iteration.
+**Note**: The `patch=N` query parameter ensures you're looking at the correct patch iteration.
 
 ### Response Structure
 
@@ -110,7 +110,7 @@ curl http://127.0.0.1:4600/projects/{project_name}/status?context=patch-1
   "iteration": "patch-1",
   "type": "patch",
   "description": "Fix: {original description}",
-  "activeNodeId": "hotfix-coding",
+  "activeTaskId": "hotfix-coding",
   "nextAction": {
     "type": "dispatch",
     "nodeId": "hotfix-coding",
@@ -172,7 +172,7 @@ Follow the hotfix workflow by executing the active task.
 
 Hotfix approval process:
 
-1. **Check pending reviews**: `GET /projects/{project_name}/reviews?context=patch-1`
+1. **Check pending reviews**: `GET /projects/{project_name}/reviews?patch=1`
 2. **Prompt user**: Present the fix for review
 3. **Submit decision**:
    ```bash
@@ -184,7 +184,7 @@ Hotfix approval process:
    ```bash
    curl -X PATCH /projects/{project_name}/issues/{issue_id} \
      -H "Content-Type: application/json" \
-     -d '{"status": "closed", "resolved_by_type": "patch", "resolved_by_number": 1}'
+     -d '{"status": "closed", "resolvedByType": "patch", "resolvedByNumber": 1}'
    ```
 
 ---
@@ -219,10 +219,10 @@ Always verify status with correct context:
 
 ```bash
 # For patch iteration
-curl http://127.0.0.1:4600/projects/{project_name}/status?context=patch-1
+curl http://127.0.0.1:4600/projects/{project_name}/status?patch=1
 
 # For specific patch artifacts
-curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{id}?context=patch-1
+curl http://127.0.0.1:4600/projects/{project_name}/artifacts/{id}?patch=1
 ```
 
 ---

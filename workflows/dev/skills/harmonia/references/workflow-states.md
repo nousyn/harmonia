@@ -214,18 +214,18 @@ Harmonia supports context parameters for filtering workflow scope:
 1. **Querying artifacts within iteration**: Include context to get iteration-specific artifacts
 
    ```bash
-   curl /projects/{project_name}/artifacts?context=iter-1
+   curl /projects/{project_name}/artifacts?iteration=1
    ```
 
 2. **Checking iteration-specific status**: Focus on one iteration's progress
 
    ```bash
-   curl /projects/{project_name}/status?context=iter-1
+   curl /projects/{project_name}/status?iteration=1
    ```
 
 3. **Hotfix isolation**: Work on specific patch without affecting main iteration
    ```bash
-   curl /projects/{project_name}/status?context=patch-1
+   curl /projects/{project_name}/status?patch=1
    ```
 
 **Behavior without context**: Returns the current active iteration or most recent patch.
@@ -335,12 +335,12 @@ When encountering `evaluate_gate`:
 
 ### Common Error Scenarios
 
-| Scenario                   | nextAction         | Recovery                                   |
-| -------------------------- | ------------------ | ------------------------------------------ |
-| Agent not connected        | `wait`             | Ensure agent is connected: `POST /connect` |
-| Artifact validation failed | `write_artifact`   | Fix schema violations and rewrite          |
-| Approval timeout           | `approve_artifact` | Prompt user again for decision             |
-| Dispatch failed            | `dispatch`         | Check agent status, retry or escalate      |
+| Scenario                   | nextAction         | Recovery                                                         |
+| -------------------------- | ------------------ | ---------------------------------------------------------------- |
+| Agent not connected        | `wait`             | Ensure agent is connected: `POST /projects/:name/agents/connect` |
+| Artifact validation failed | `write_artifact`   | Fix schema violations and rewrite                                |
+| Approval timeout           | `approve_artifact` | Prompt user again for decision                                   |
+| Dispatch failed            | `dispatch`         | Check agent status, retry or escalate                            |
 
 ---
 
@@ -349,7 +349,7 @@ When encountering `evaluate_gate`:
 When workflow seems stuck:
 
 1. Check status: `GET /projects/{project_name}/status`
-2. Look at `activeNodeId`: Which task is stuck?
+2. Look at `activeTaskId`: Which task is stuck?
 3. Look at `nodes`: Which nodes are failed/pending?
 4. Check `error` fields: Error messages explain why
 5. Propose next step based on actual state

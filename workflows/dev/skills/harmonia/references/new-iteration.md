@@ -110,7 +110,7 @@ curl http://127.0.0.1:4600/projects/{project_name}/status
   "totalIterations": 2,
   "currentPatch": 0,
   "totalPatches": 0,
-  "activeNodeId": "collect-requirements",
+  "activeTaskId": "collect-requirements",
   "createdAt": "2026-03-27T12:00:00Z",
   "updatedAt": "2026-03-28T08:30:00Z",
   "treeLines": ["● collect-requirements (task, coordinator) — active", "  ○ write-prd (task, coordinator) — pending"],
@@ -301,12 +301,12 @@ See [review-flow.md](review-flow.md) for detailed approval process.
 
 ### Common Iteration Issues
 
-| Issue                        | Symptom                               | Solution                                               |
-| ---------------------------- | ------------------------------------- | ------------------------------------------------------ |
-| Agents not connected         | `connectedAgents` empty               | Connect agents first: `POST /connect`                  |
-| Task stuck in dispatch       | `nextAction = dispatch` for long time | Check agent status, ensure agent is running            |
-| Artifact rejected repeatedly | Multiple rejects                      | Gather user feedback, revise approach                  |
-| Gate won't pass              | `evaluate_gate` persists              | Check what condition is failing, fix blocking artifact |
+| Issue                        | Symptom                               | Solution                                                    |
+| ---------------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| Agents not connected         | `connectedAgents` empty               | Connect agents first: `POST /projects/:name/agents/connect` |
+| Task stuck in dispatch       | `nextAction = dispatch` for long time | Check agent status, ensure agent is running                 |
+| Artifact rejected repeatedly | Multiple rejects                      | Gather user feedback, revise approach                       |
+| Gate won't pass              | `evaluate_gate` persists              | Check what condition is failing, fix blocking artifact      |
 
 ### Status Check Pattern
 

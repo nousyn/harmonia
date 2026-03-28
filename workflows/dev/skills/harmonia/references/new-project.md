@@ -42,8 +42,8 @@ Register the project with Harmonia.
 curl -X POST http://127.0.0.1:4600/projects \
   -H "Content-Type: application/json" \
   -d '{
-    "project_name": "{project_name}",
-    "project_dir": "/absolute/path/to/project",
+    "projectName": "{project_name}",
+    "projectDir": "/absolute/path/to/project",
     "workflow": "{workflow_name}"
   }'
 ```
@@ -53,7 +53,7 @@ curl -X POST http://127.0.0.1:4600/projects \
 | Parameter      | Type   | Required | Description                                    |
 | -------------- | ------ | -------- | ---------------------------------------------- |
 | `project_name` | string | yes      | Unique project identifier                      |
-| `project_dir`  | string | yes      | Absolute path to project directory             |
+| `projectDir`   | string | yes      | Absolute path to project directory             |
 | `workflow`     | string | no       | Workflow name (required if multiple available) |
 
 ### Response
@@ -62,8 +62,8 @@ curl -X POST http://127.0.0.1:4600/projects \
 
 ```json
 {
-  "project_name": "{project_name}",
-  "project_dir": "/absolute/path/to/project",
+  "projectName": "{project_name}",
+  "projectDir": "/absolute/path/to/project",
   "workflow": "dev",
   "created": true
 }
@@ -73,8 +73,8 @@ curl -X POST http://127.0.0.1:4600/projects \
 
 ```json
 {
-  "project_name": "{project_name}",
-  "project_dir": "/absolute/path/to/project",
+  "projectName": "{project_name}",
+  "projectDir": "/absolute/path/to/project",
   "workflow": "dev",
   "alreadyRegistered": true
 }
@@ -118,7 +118,7 @@ curl -X POST http://127.0.0.1:4600/projects/{project_name}/iterations \
 
 ```json
 {
-  "project_name": "{project_name}",
+  "projectName": "{project_name}",
   "iteration": 1,
   "type": "iteration",
   "status": "active",
@@ -159,11 +159,11 @@ Register agents for Harmonia to dispatch tasks and send notifications.
 The coordinator agent is the central communication bridge:
 
 ```bash
-curl -X POST http://127.0.0.1:4600/connect \
+curl -X POST http://127.0.0.1:4600/projects/:name/agents/connect \
   -H "Content-Type: application/json" \
   -d '{
-    "project_name": "{project_name}",
-    "agent": "{agent_type}",
+    "projectName": "{project_name}",
+    "agentType": "{agent_type}",
     "role": "coordinator"
   }'
 ```
@@ -276,11 +276,11 @@ curl http://127.0.0.1:4600/projects/{project_name}/status
 
 ```json
 {
-  "project_name": "{project_name}",
+  "projectName": "{project_name}",
   "workflow": "dev",
   "iteration": 1,
   "type": "iteration",
-  "activeNodeId": "collect-requirements",
+  "activeTaskId": "collect-requirements",
   "nextAction": {
     "type": "dispatch",
     "nodeId": "collect-requirements",

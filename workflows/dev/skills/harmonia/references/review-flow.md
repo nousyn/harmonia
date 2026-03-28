@@ -36,7 +36,7 @@ curl http://127.0.0.1:4600/projects/{project_name}/reviews
 ```json
 {
   "project_name": "{project_name}",
-  "pending": [
+  "reviews": [
     {
       "artifactId": "prd",
       "artifactName": "Product Requirements Document",
