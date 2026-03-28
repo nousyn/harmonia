@@ -252,7 +252,8 @@
         "prototype": {
             "name": "高保真原型",
             "format": "html",
-            "review": true
+            "review": true,
+            "description": "完整实现所有功能与交互，mock 数据驱动，自适应设计风格"
         },
         "tech-design": {
             "name": "技术方案",
