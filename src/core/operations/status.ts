@@ -484,7 +484,7 @@ export async function getProjectStatus(workflowsDir: string, projectName: string
         totalIterations: entry.totalIterations,
         currentPatch: entry.currentPatch,
         totalPatches: entry.totalPatches,
-        activeNodeId: state.activeNodeId ?? null,
+        activeTaskId: state.activeNodeId ?? null,
         createdAt: state.createdAt,
         updatedAt: state.updatedAt,
         treeLines,
@@ -535,7 +535,7 @@ export async function getProjectList(): Promise<ProjectListItem[]> {
                 name,
                 dir: state.projectDir,
                 workflow: state.workflow,
-                activeNode: state.activeNodeId ?? undefined,
+                activeTask: state.activeNodeId ?? undefined,
                 activeContext: entry.activeContext,
                 updatedAt: state.updatedAt.split('T')[0],
             });

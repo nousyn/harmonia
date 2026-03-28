@@ -75,8 +75,8 @@ describe('API endpoints', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    project_name: 'my-app',
-                    project_dir: join(tempDir, 'src'),
+                    projectName: 'my-app',
+                    projectDir: join(tempDir, 'src'),
                     workflow: 'dev',
                 }),
             });
@@ -93,8 +93,8 @@ describe('API endpoints', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    project_name: 'my-app',
-                    project_dir: join(tempDir, 'src'),
+                    projectName: 'my-app',
+                    projectDir: join(tempDir, 'src'),
                     workflow: 'dev',
                 }),
             });
@@ -307,7 +307,7 @@ describe('API endpoints', () => {
             const res = await app.request('/projects/my-app/reviews');
             expect(res.status).toBe(200);
             const body = await res.json();
-            expect(body.pending).toBeDefined();
+            expect(body.reviews).toBeDefined();
         });
     });
 
@@ -418,9 +418,9 @@ describe('API endpoints', () => {
 
     // ─── Connect placeholders ───
 
-    describe('POST /connect', () => {
+    describe('POST /projects/:name/agents/connect', () => {
         it('should return 501 not implemented', async () => {
-            const res = await app.request('/connect', {
+            const res = await app.request('/projects/nonexistent/agents/connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}',

@@ -8,4 +8,5 @@
 export * from './types.js';
 export * from './project-lifecycle.js';
 export * from './artifact-ops.js';
+export * from './task-ops.js';
 export * from './status.js';

@@ -20,6 +20,9 @@ import {
     completeArtifactStep,
     getProjectStatus,
     getProjectList,
+    completeTask,
+    failTask,
+    signalLoopDone,
     WorkflowSelectionRequired,
     ValidationError,
     StepPrerequisiteError,
@@ -27,6 +30,16 @@ import {
 import { getProject } from '../core/registry.js';
 import { createIssue, updateIssue, listIssues } from '../core/issues.js';
 import type { OrchestratorPool } from '../core/orchestrator-pool.js';
+
+/**
+ * Convert iteration/patch query parameters to internal context string.
+ * Accepts ?iteration=N or ?patch=N, returns "iter-N" or "patch-N".
+ */
+function resolveContextParam(query: Record<string, string | undefined>): string | undefined {
+    if (query.iteration) return `iter-${query.iteration}`;
+    if (query.patch) return `patch-${query.patch}`;
+    return undefined;
+}
 
 /**
  * Create all API route handlers.
@@ -39,6 +52,7 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
     const api = new Hono();
 
     // ─── Error handler helper ───
+
     function handleError(c: any, err: unknown) {
         if (err instanceof WorkflowSelectionRequired) {
             return c.json({ error: err.message, available: err.available }, 409);
@@ -50,6 +64,10 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
         // "未注册" means not found
         if (message.includes('未注册') || message.includes('not found') || message.includes('not registered')) {
             return c.json({ error: message }, 404);
+        }
+        // Task not active → 409
+        if (message.includes("not in 'active' state")) {
+            return c.json({ error: message }, 409);
         }
         return c.json({ error: message }, 500);
     }
@@ -70,11 +88,11 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
     api.post('/projects', async (c) => {
         try {
             const body = await c.req.json();
-            const { project_name, project_dir, workflow } = body;
-            if (!project_name || !project_dir) {
-                return c.json({ error: 'project_name and project_dir are required' }, 400);
+            const { projectName, projectDir, workflow } = body;
+            if (!projectName || !projectDir) {
+                return c.json({ error: 'projectName and projectDir are required' }, 400);
             }
-            const result = await initProject(workflowsDir, project_name, project_dir, workflow);
+            const result = await initProject(workflowsDir, projectName, projectDir, workflow);
             const status = result.alreadyRegistered ? 200 : 201;
             return c.json(result, status);
         } catch (err) {
@@ -112,8 +130,51 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
         try {
             const name = c.req.param('name');
             const body = await c.req.json().catch(() => ({}));
-            const result = await beginPatch(workflowsDir, name, body.description, body.issue_id);
+            const result = await beginPatch(workflowsDir, name, body.description, body.issueId);
             return c.json(result, 201);
+        } catch (err) {
+            return handleError(c, err);
+        }
+    });
+
+    // ─── Tasks ───
+
+    /** POST /projects/:name/tasks/:taskId/complete — Mark a task as completed */
+    api.post('/projects/:name/tasks/:taskId/complete', async (c) => {
+        try {
+            const name = c.req.param('name');
+            const taskId = c.req.param('taskId');
+            const body = await c.req.json().catch(() => ({}));
+            const result = await completeTask(workflowsDir, name, taskId, body.result);
+            return c.json(result);
+        } catch (err) {
+            return handleError(c, err);
+        }
+    });
+
+    /** POST /projects/:name/tasks/:taskId/fail — Report a task as failed */
+    api.post('/projects/:name/tasks/:taskId/fail', async (c) => {
+        try {
+            const name = c.req.param('name');
+            const taskId = c.req.param('taskId');
+            const body = await c.req.json();
+            if (!body.error) {
+                return c.json({ error: 'error (string) is required' }, 400);
+            }
+            const result = await failTask(workflowsDir, name, taskId, body.error);
+            return c.json(result);
+        } catch (err) {
+            return handleError(c, err);
+        }
+    });
+
+    /** POST /projects/:name/tasks/:taskId/loop-done — Signal loop termination */
+    api.post('/projects/:name/tasks/:taskId/loop-done', async (c) => {
+        try {
+            const name = c.req.param('name');
+            const taskId = c.req.param('taskId');
+            const result = await signalLoopDone(workflowsDir, name, taskId);
+            return c.json(result);
         } catch (err) {
             return handleError(c, err);
         }
@@ -125,7 +186,10 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
     api.get('/projects/:name/artifacts', async (c) => {
         try {
             const name = c.req.param('name');
-            const context = c.req.query('context');
+            const context = resolveContextParam({
+                iteration: c.req.query('iteration'),
+                patch: c.req.query('patch'),
+            });
             const result = await listArtifactsOrchestrated(workflowsDir, name, context);
             return c.json(result);
         } catch (err) {
@@ -138,7 +202,10 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
         try {
             const name = c.req.param('name');
             const artifactId = c.req.param('id');
-            const context = c.req.query('context');
+            const context = resolveContextParam({
+                iteration: c.req.query('iteration'),
+                patch: c.req.query('patch'),
+            });
             const step = c.req.query('step');
 
             // If step is specified, read step artifact
@@ -218,8 +285,8 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
     api.get('/projects/:name/reviews', async (c) => {
         try {
             const name = c.req.param('name');
-            const pending = await listPendingReviewsOrchestrated(name);
-            return c.json({ pending });
+            const reviews = await listPendingReviewsOrchestrated(name);
+            return c.json({ reviews });
         } catch (err) {
             return handleError(c, err);
         }
@@ -281,8 +348,8 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
             const body = await c.req.json();
             const updates: Record<string, unknown> = {};
             if (body.status !== undefined) updates.status = body.status;
-            if (body.resolved_by_type && body.resolved_by_number) {
-                updates.resolvedBy = { type: body.resolved_by_type, number: body.resolved_by_number };
+            if (body.resolvedByType && body.resolvedByNumber) {
+                updates.resolvedBy = { type: body.resolvedByType, number: body.resolvedByNumber };
             }
             const issue = await updateIssue(name, issueId, updates as any);
             return c.json(issue);
@@ -294,35 +361,30 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
     // ─── Agent Connection ───
 
     /**
-     * POST /connect — Agent registration (002 §4.2)
+     * POST /projects/:name/agents/connect — Agent registration
      *
-     * Body: { project_name, agent, sessionId?, role?, ...params }
+     * Body: { agentType, sessionId?, role?, ...params }
      *
-     * - `project_name` — which project's Orchestrator to register with
-     * - `agent` — agent type string (e.g. "openclaw", "opencode")
+     * - `agentType` — agent type string (e.g. "claude-code")
      * - `sessionId` — optional session identifier on the agent side
-     * - `role` — optional workflow role override (defaults to agent type)
+     * - `role` — optional workflow role override (defaults to agentType)
      * - extra fields are forwarded as `params`
      *
      * When `pool` is not provided, returns 501.
      */
-    api.post('/connect', async (c) => {
+    api.post('/projects/:name/agents/connect', async (c) => {
         if (!pool) {
             return c.json({ error: 'Orchestration not available' }, 501);
         }
         try {
+            const projectName = c.req.param('name');
             const body = await c.req.json();
-            const { project_name, agent, sessionId, role, ...rest } = body;
-            if (!project_name || !agent) {
-                return c.json({ error: 'project_name and agent are required' }, 400);
+            const { agentType, sessionId, role, ...rest } = body;
+            if (!agentType) {
+                return c.json({ error: 'agentType is required' }, 400);
             }
 
             // SECURITY: Whitelist safe adapter params only.
-            // CliAdapterConfig allows `command`, `extraArgs`, and `env` which
-            // could be abused for arbitrary command injection if passed through
-            // from untrusted HTTP input. `env` is also dangerous because
-            // overriding PATH/LD_PRELOAD/NODE_OPTIONS enables indirect code
-            // execution. Only forward known-safe fields.
             const SAFE_PARAMS = new Set(['timeout', 'cwd']);
             const params: Record<string, unknown> = {};
             for (const [k, v] of Object.entries(rest)) {
@@ -331,25 +393,17 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
                 }
             }
 
-            const orch = await pool.getOrCreate(project_name);
+            const orch = await pool.getOrCreate(projectName);
 
-            // Resolve adapter from the pool's adapter registry.
-            //
-            // DESIGN NOTE: The adapter created here is attached to connectedAgents
-            // and used exclusively for pushMessage() (e.g. coordinator notifications).
-            // dispatchTask() creates its OWN adapter instance per dispatch via
-            // registry.getFactory().create() — this is intentional because CLI
-            // dispatches are stateless one-shot executions, whereas the connected
-            // adapter represents a persistent session (e.g. OpenClaw's --deliver).
-            const factory = pool.adapterRegistry.getFactory(agent);
+            const factory = pool.adapterRegistry.getFactory(agentType);
             if (!factory) {
-                return c.json({ error: `Unknown agent type: "${agent}"` }, 422);
+                return c.json({ error: `Unknown agent type: "${agentType}"` }, 422);
             }
             const adapter = factory.create(params ?? {});
 
-            const key = role ?? agent;
+            const key = role ?? agentType;
             orch.connectAgent({
-                agentType: agent,
+                agentType,
                 sessionId,
                 role,
                 adapter,
@@ -360,8 +414,8 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
                 {
                     connected: true,
                     key,
-                    agentType: agent,
-                    project: project_name,
+                    agentType,
+                    project: projectName,
                 },
                 200,
             );
@@ -371,21 +425,15 @@ export function createApiRoutes(workflowsDir: string, pool?: OrchestratorPool): 
     });
 
     /**
-     * DELETE /connect/:id — Agent disconnect
-     *
-     * Query: ?project_name=xxx
-     * Param: :id — the agent key (role or agentType used at connect time)
+     * DELETE /projects/:name/agents/:key — Agent disconnect
      */
-    api.delete('/connect/:id', async (c) => {
+    api.delete('/projects/:name/agents/:key', async (c) => {
         if (!pool) {
             return c.json({ error: 'Orchestration not available' }, 501);
         }
         try {
-            const key = c.req.param('id');
-            const projectName = c.req.query('project_name');
-            if (!projectName) {
-                return c.json({ error: 'project_name query parameter is required' }, 400);
-            }
+            const projectName = c.req.param('name');
+            const key = c.req.param('key');
 
             const orch = pool.get(projectName);
             if (!orch) {

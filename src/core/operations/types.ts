@@ -70,7 +70,7 @@ export interface ProjectStatusData {
     totalIterations: number;
     currentPatch: number;
     totalPatches: number;
-    activeNodeId: string | null;
+    activeTaskId: string | null;
     createdAt: string;
     updatedAt: string;
     treeLines: string[];
@@ -92,7 +92,7 @@ export interface ProjectListItem {
     name: string;
     dir: string;
     workflow?: string;
-    activeNode?: string;
+    activeTask?: string;
     activeContext?: string;
     updatedAt?: string;
     error?: string;
